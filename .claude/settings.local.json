@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker --version)",
+      "Bash(createdb -U postgres zhidianai)",
+      "Bash(npx prisma generate)",
+      "Bash(curl http://localhost:3003/api/test-db)",
+      "Bash(curl http://localhost:3003/api/test-db -X POST)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(npx prisma:*)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\ADMIN\\AppData\\Roaming",
+      "D:\\c\\Users\\ADMIN\\.claude"
+    ]
+  }
+}

@@ -1,0 +1,572 @@
+{
+  "timestamp": "2025-09-02T08:14:04.959Z",
+  "totalRemoved": 1395,
+  "filesModified": 141,
+  "totalFilesChecked": 282,
+  "modifiedFiles": [
+    {
+      "file": "scripts\\generate-invite-codes.js",
+      "removed": 50
+    },
+    {
+      "file": "scripts\\rollback.js",
+      "removed": 45
+    },
+    {
+      "file": "test-usage-recording.js",
+      "removed": 42
+    },
+    {
+      "file": "scripts\\check-invite-codes.js",
+      "removed": 42
+    },
+    {
+      "file": "scripts\\diagnose-usage-stats.ts",
+      "removed": 40
+    },
+    {
+      "file": "scripts\\test-merchant-features.ts",
+      "removed": 39
+    },
+    {
+      "file": "hooks\\use-conversations.ts",
+      "removed": 39
+    },
+    {
+      "file": "update-feedback-status.js",
+      "removed": 38
+    },
+    {
+      "file": "scripts\\automated-test-runner.js",
+      "removed": 38
+    },
+    {
+      "file": "debug-recent-usage.js",
+      "removed": 37
+    },
+    {
+      "file": "tests\\connection-monitoring\\connection-monitor-hook.test.ts",
+      "removed": 36
+    },
+    {
+      "file": "scripts\\import-local-folder.ts",
+      "removed": 36
+    },
+    {
+      "file": "test-multi-key-architecture.js",
+      "removed": 35
+    },
+    {
+      "file": "scripts\\generate-secure-invite-codes.js",
+      "removed": 34
+    },
+    {
+      "file": "scripts\\check-data.ts",
+      "removed": 30
+    },
+    {
+      "file": "final-usage-verification.js",
+      "removed": 30
+    },
+    {
+      "file": "scripts\\test-input-reset-fix.js",
+      "removed": 30
+    },
+    {
+      "file": "scripts\\env-config.js",
+      "removed": 30
+    },
+    {
+      "file": "tests\\api-model-validation.test.ts",
+      "removed": 29
+    },
+    {
+      "file": "scripts\\fix-usage-tracking.ts",
+      "removed": 29
+    },
+    {
+      "file": "scripts\\test-api-stability.ts",
+      "removed": 28
+    },
+    {
+      "file": "scripts\\performance-monitor.js",
+      "removed": 28
+    },
+    {
+      "file": "scripts\\quick-optimize.ts",
+      "removed": 27
+    },
+    {
+      "file": "test-model-upsert.js",
+      "removed": 25
+    },
+    {
+      "file": "final-test.js",
+      "removed": 25
+    },
+    {
+      "file": "scripts\\security-check.js",
+      "removed": 22
+    },
+    {
+      "file": "scripts\\pre-deploy.js",
+      "removed": 21
+    },
+    {
+      "file": "scripts\\import-merchant-data.ts",
+      "removed": 20
+    },
+    {
+      "file": "scripts\\verify-import.ts",
+      "removed": 19
+    },
+    {
+      "file": "scripts\\pre-test-check.ts",
+      "removed": 18
+    },
+    {
+      "file": "test-feedback.js",
+      "removed": 18
+    },
+    {
+      "file": "scripts\\check-tags-format.ts",
+      "removed": 17
+    },
+    {
+      "file": "lib\\model-validator.ts",
+      "removed": 16
+    },
+    {
+      "file": "lib\\ai\\key-manager.ts",
+      "removed": 15
+    },
+    {
+      "file": "hooks\\use-chat-actions-fixed.ts",
+      "removed": 15
+    },
+    {
+      "file": "scripts\\project-health-check.js",
+      "removed": 14
+    },
+    {
+      "file": "scripts\\temp-fix-usage.ts",
+      "removed": 13
+    },
+    {
+      "file": "fix-feedback.js",
+      "removed": 13
+    },
+    {
+      "file": "lib\\import\\local-folder-importer.ts",
+      "removed": 12
+    },
+    {
+      "file": "hooks\\api\\use-conversations-query.ts",
+      "removed": 12
+    },
+    {
+      "file": "app\\api\\chat\\route.ts",
+      "removed": 12
+    },
+    {
+      "file": "scripts\\remove-dev-configs.js",
+      "removed": 12
+    },
+    {
+      "file": "auth.ts",
+      "removed": 11
+    },
+    {
+      "file": "hooks\\use-model-state.ts",
+      "removed": 11
+    },
+    {
+      "file": "components\\chat\\smart-chat-center-v2-fixed.tsx",
+      "removed": 11
+    },
+    {
+      "file": "tests\\connection-monitoring\\health-api.test.ts",
+      "removed": 10
+    },
+    {
+      "file": "middleware.ts",
+      "removed": 9
+    },
+    {
+      "file": "scripts\\import-external-resources.ts",
+      "removed": 6
+    },
+    {
+      "file": "lib\\title-utils.ts",
+      "removed": 6
+    },
+    {
+      "file": "app\\workspace\\page.tsx",
+      "removed": 6
+    },
+    {
+      "file": "app\\merchants\\[id]\\page.tsx",
+      "removed": 6
+    },
+    {
+      "file": "app\\documents\\page.tsx",
+      "removed": 5
+    },
+    {
+      "file": "test-db.js",
+      "removed": 5
+    },
+    {
+      "file": "scripts\\test-server-restart-scenario.js",
+      "removed": 5
+    },
+    {
+      "file": "scripts\\test-connection-status-optimized.js",
+      "removed": 5
+    },
+    {
+      "file": "scripts\\test-connection-monitoring-integration.js",
+      "removed": 5
+    },
+    {
+      "file": "scripts\\comprehensive-reliability-test.js",
+      "removed": 5
+    },
+    {
+      "file": "utils\\performance-benchmark.ts",
+      "removed": 4
+    },
+    {
+      "file": "prisma\\seed.ts",
+      "removed": 4
+    },
+    {
+      "file": "lib\\storage.ts",
+      "removed": 4
+    },
+    {
+      "file": "lib\\utils\\smart-fetch.ts",
+      "removed": 4
+    },
+    {
+      "file": "lib\\monitoring\\api-monitor.ts",
+      "removed": 4
+    },
+    {
+      "file": "hooks\\use-network-status.ts",
+      "removed": 4
+    },
+    {
+      "file": "hooks\\use-connection-monitor.ts",
+      "removed": 4
+    },
+    {
+      "file": "app\\test-input-reset\\page.tsx",
+      "removed": 4
+    },
+    {
+      "file": "hooks\\use-page-visibility.ts",
+      "removed": 3
+    },
+    {
+      "file": "app\\api\\users\\[id]\\route.ts",
+      "removed": 3
+    },
+    {
+      "file": "app\\api\\documents\\[id]\\route.ts",
+      "removed": 3
+    },
+    {
+      "file": "app\\api\\conversations\\[id]\\route.ts",
+      "removed": 3
+    },
+    {
+      "file": "app\\api\\analytics\\metrics\\route.ts",
+      "removed": 3
+    },
+    {
+      "file": "app\\api\\analytics\\events\\route.ts",
+      "removed": 3
+    },
+    {
+      "file": "components\\ui\\connection-recovery.tsx",
+      "removed": 3
+    },
+    {
+      "file": "components\\test\\connection-monitor-test.tsx",
+      "removed": 3
+    },
+    {
+      "file": "app\\settings\\page.tsx",
+      "removed": 3
+    },
+    {
+      "file": "app\\merchants\\page.tsx",
+      "removed": 3
+    },
+    {
+      "file": "lib\\analytics.ts",
+      "removed": 2
+    },
+    {
+      "file": "hooks\\use-safe-local-storage.ts",
+      "removed": 2
+    },
+    {
+      "file": "hooks\\use-chat-effects.ts",
+      "removed": 2
+    },
+    {
+      "file": "hooks\\use-auto-resize-textarea.ts",
+      "removed": 2
+    },
+    {
+      "file": "app\\api\\users\\route.ts",
+      "removed": 2
+    },
+    {
+      "file": "app\\api\\merchants\\route.ts",
+      "removed": 2
+    },
+    {
+      "file": "app\\api\\keyword-data\\route.ts",
+      "removed": 2
+    },
+    {
+      "file": "app\\api\\invite-codes\\route.ts",
+      "removed": 2
+    },
+    {
+      "file": "app\\api\\invite-codes\\create-test\\route.ts",
+      "removed": 2
+    },
+    {
+      "file": "app\\api\\import\\external-resources\\route.ts",
+      "removed": 2
+    },
+    {
+      "file": "app\\api\\feedback\\route.ts",
+      "removed": 2
+    },
+    {
+      "file": "app\\api\\feedback\\[id]\\route.ts",
+      "removed": 2
+    },
+    {
+      "file": "app\\api\\documents\\route.ts",
+      "removed": 2
+    },
+    {
+      "file": "app\\api\\conversations\\route.ts",
+      "removed": 2
+    },
+    {
+      "file": "app\\api\\admin\\users\\route.ts",
+      "removed": 2
+    },
+    {
+      "file": "app\\api\\admin\\keys\\route.ts",
+      "removed": 2
+    },
+    {
+      "file": "components\\providers\\storage-provider.tsx",
+      "removed": 2
+    },
+    {
+      "file": "components\\merchants\\tag-analysis-modal.tsx",
+      "removed": 2
+    },
+    {
+      "file": "components\\feedback\\feedback-list.tsx",
+      "removed": 2
+    },
+    {
+      "file": "components\\documents\\document-list.tsx",
+      "removed": 2
+    },
+    {
+      "file": "components\\chat\\chat-input.tsx",
+      "removed": 2
+    },
+    {
+      "file": "components\\chat\\chat-error-boundary.tsx",
+      "removed": 2
+    },
+    {
+      "file": "components\\admin\\user-management.tsx",
+      "removed": 2
+    },
+    {
+      "file": "components\\admin\\key-management.tsx",
+      "removed": 2
+    },
+    {
+      "file": "app\\test-copy-functionality\\page.tsx",
+      "removed": 2
+    },
+    {
+      "file": "app\\merchants\\[id]\\analytics\\page.tsx",
+      "removed": 2
+    },
+    {
+      "file": "app\\inspiration\\page.tsx",
+      "removed": 2
+    },
+    {
+      "file": "scripts\\verify-model-consistency.js",
+      "removed": 2
+    },
+    {
+      "file": "scripts\\test-multi-key.js",
+      "removed": 2
+    },
+    {
+      "file": "scripts\\test-models.js",
+      "removed": 2
+    },
+    {
+      "file": "tests\\chat\\copy-functionality.test.ts",
+      "removed": 1
+    },
+    {
+      "file": "scripts\\db-integrity-check.ts",
+      "removed": 1
+    },
+    {
+      "file": "lib\\performance-utils.ts",
+      "removed": 1
+    },
+    {
+      "file": "lib\\error-handler.ts",
+      "removed": 1
+    },
+    {
+      "file": "lib\\utils\\tag-parser.ts",
+      "removed": 1
+    },
+    {
+      "file": "lib\\utils\\retry.ts",
+      "removed": 1
+    },
+    {
+      "file": "lib\\security\\invite-code-security.ts",
+      "removed": 1
+    },
+    {
+      "file": "lib\\import\\external-resource-importer.ts",
+      "removed": 1
+    },
+    {
+      "file": "hooks\\use-local-storage.ts",
+      "removed": 1
+    },
+    {
+      "file": "app\\api\\users\\[id]\\model-stats\\route.ts",
+      "removed": 1
+    },
+    {
+      "file": "app\\api\\metrics\\route.ts",
+      "removed": 1
+    },
+    {
+      "file": "app\\api\\merchants\\[id]\\route.ts",
+      "removed": 1
+    },
+    {
+      "file": "app\\api\\merchants\\[id]\\tags\\route.ts",
+      "removed": 1
+    },
+    {
+      "file": "app\\api\\merchants\\[id]\\export\\route.ts",
+      "removed": 1
+    },
+    {
+      "file": "app\\api\\merchants\\[id]\\contents\\route.ts",
+      "removed": 1
+    },
+    {
+      "file": "app\\api\\merchants\\[id]\\analytics\\route.ts",
+      "removed": 1
+    },
+    {
+      "file": "app\\api\\merchants\\stats\\route.ts",
+      "removed": 1
+    },
+    {
+      "file": "app\\api\\merchants\\categories\\route.ts",
+      "removed": 1
+    },
+    {
+      "file": "app\\api\\invite-codes\\verify\\route.ts",
+      "removed": 1
+    },
+    {
+      "file": "app\\api\\invite-codes\\register\\route.ts",
+      "removed": 1
+    },
+    {
+      "file": "app\\api\\invite-codes\\generate\\route.ts",
+      "removed": 1
+    },
+    {
+      "file": "app\\api\\auth\\verify-invite-code\\route.ts",
+      "removed": 1
+    },
+    {
+      "file": "app\\api\\auth\\me\\route.ts",
+      "removed": 1
+    },
+    {
+      "file": "app\\api\\admin\\stats\\route.ts",
+      "removed": 1
+    },
+    {
+      "file": "components\\ui\\retry-wrapper.tsx",
+      "removed": 1
+    },
+    {
+      "file": "components\\ui\\error-boundary.tsx",
+      "removed": 1
+    },
+    {
+      "file": "components\\performance\\preloader.tsx",
+      "removed": 1
+    },
+    {
+      "file": "components\\monitoring\\system-monitor.tsx",
+      "removed": 1
+    },
+    {
+      "file": "components\\feedback\\feedback-form.tsx",
+      "removed": 1
+    },
+    {
+      "file": "components\\documents\\markdown-editor.tsx",
+      "removed": 1
+    },
+    {
+      "file": "components\\documents\\document-editor.tsx",
+      "removed": 1
+    },
+    {
+      "file": "components\\admin\\admin-overview.tsx",
+      "removed": 1
+    },
+    {
+      "file": "components\\admin\\admin-dashboard.tsx",
+      "removed": 1
+    },
+    {
+      "file": "scripts\\db-check.js",
+      "removed": 1
+    },
+    {
+      "file": "scripts\\comprehensive-test.js",
+      "removed": 1
+    },
+    {
+      "file": "scripts\\check-env-fix.js",
+      "removed": 1
+    }
+  ]
+}

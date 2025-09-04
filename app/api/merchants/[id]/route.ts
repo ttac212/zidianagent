@@ -1,0 +1,89 @@
+/**
+ * 商家详情API路由
+ * GET /api/merchants/[id] - 获取商家详情
+ */
+
+import { NextRequest, NextResponse } from 'next/server'
+import { getToken } from 'next-auth/jwt'
+import { PrismaClient } from '@prisma/client'
+import type { MerchantDetailResponse } from '@/types/merchant'
+
+const prisma = new PrismaClient()
+
+// GET /api/merchants/[id] - 获取商家详情
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const token = await getToken({ req: request as any })
+  if (!token?.sub) return NextResponse.json({ error: '未认证' }, { status: 401 })
+  try {
+    const { id } = await params
+    
+    if (!id) {
+      return NextResponse.json(
+        { error: '商家ID不能为空' },
+        { status: 400 }
+      )
+    }
+
+    const merchant = await prisma.merchant.findUnique({
+      where: { id },
+      include: {
+        category: true,
+        contents: {
+          orderBy: {
+            publishedAt: 'desc'
+          },
+          take: 20 // 默认只返回最新的20条内容
+        },
+        _count: {
+          select: { contents: true }
+        }
+      }
+    })
+
+    if (!merchant) {
+      return NextResponse.json(
+        { error: '商家不存在' },
+        { status: 404 }
+      )
+    }
+
+    // 处理内容数据，解析JSON字段
+    const processedContents = merchant.contents.map(content => ({
+      ...content,
+      parsedTags: (() => {
+        try {
+          return JSON.parse(content.tags)
+        } catch {
+          return []
+        }
+      })(),
+      parsedTextExtra: (() => {
+        try {
+          return JSON.parse(content.textExtra)
+        } catch {
+          return []
+        }
+      })()
+    }))
+
+    const response: MerchantDetailResponse = {
+      merchant: {
+        ...merchant,
+        contents: processedContents
+      }
+    }
+
+    return NextResponse.json(response)
+    
+  } catch (error) {
+    return NextResponse.json(
+      { error: '获取商家详情失败' },
+      { status: 500 }
+    )
+  }
+}
+
+export const dynamic = 'force-dynamic'

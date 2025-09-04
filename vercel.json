@@ -1,0 +1,30 @@
+{
+  "functions": {
+    "app/api/chat/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/conversations/[id]/route.ts": {
+      "maxDuration": 30
+    },
+    "app/api/users/[id]/route.ts": {
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, max-age=0"
+        }
+      ]
+    }
+  ]
+}

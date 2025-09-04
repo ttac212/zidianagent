@@ -1,0 +1,152 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { getToken } from 'next-auth/jwt'
+
+// 获取用户列表（受保护）
+export async function GET(request: NextRequest) {
+  try {
+    const token = await getToken({ req: request as any })
+    if (!token?.sub) return NextResponse.json({ error: '未认证' }, { status: 401 })
+    const { searchParams } = new URL(request.url)
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '10')
+    const search = searchParams.get('search') || ''
+    
+    const skip = (page - 1) * limit
+    
+    // 构建查询条件
+    const where = search ? {
+      OR: [
+        { email: { contains: search } },
+        { displayName: { contains: search } },
+        { username: { contains: search } },
+      ]
+    } : {}
+    
+    // 获取用户列表
+    const users = await prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        displayName: true,
+        role: true,
+        status: true,
+        monthlyTokenLimit: true,
+        currentMonthUsage: true,
+        totalTokenUsed: true,
+        createdAt: true,
+        lastActiveAt: true,
+        _count: {
+          select: {
+            conversations: true,
+            documents: true,
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      skip,
+      take: limit,
+    })
+    
+    // 获取总数
+    const total = await prisma.user.count({ where })
+    
+    return NextResponse.json({
+      success: true,
+      data: {
+        users,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit)
+        }
+      }
+    })
+  } catch (error) {
+    return NextResponse.json(
+      { error: '获取用户列表失败' },
+      { status: 500 }
+    )
+  }
+}
+
+// 创建新用户
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { email, username, displayName, role = 'USER', monthlyTokenLimit = 100000 } = body
+    
+    // 验证必填字段
+    if (!email) {
+      return NextResponse.json(
+        { error: '邮箱是必填项' },
+        { status: 400 }
+      )
+    }
+    
+    // 检查邮箱是否已存在
+    const existingUser = await prisma.user.findUnique({
+      where: { email }
+    })
+    
+    if (existingUser) {
+      return NextResponse.json(
+        { error: '邮箱已存在' },
+        { status: 409 }
+      )
+    }
+    
+    // 检查用户名是否已存在（如果提供了）
+    if (username) {
+      const existingUsername = await prisma.user.findUnique({
+        where: { username }
+      })
+      
+      if (existingUsername) {
+        return NextResponse.json(
+          { error: '用户名已存在' },
+          { status: 409 }
+        )
+      }
+    }
+    
+    // 创建用户
+    const user = await prisma.user.create({
+      data: {
+        email,
+        username,
+        displayName,
+        role,
+        monthlyTokenLimit,
+      },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        displayName: true,
+        role: true,
+        status: true,
+        monthlyTokenLimit: true,
+        currentMonthUsage: true,
+        totalTokenUsed: true,
+        createdAt: true,
+      }
+    })
+    
+    return NextResponse.json({
+      success: true,
+      data: user,
+      message: '用户创建成功'
+    }, { status: 201 })
+  } catch (error) {
+    return NextResponse.json(
+      { error: '创建用户失败' },
+      { status: 500 }
+    )
+  }
+}

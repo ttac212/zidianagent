@@ -1,0 +1,63 @@
+import type React from "react"
+import type { Metadata } from "next"
+import { Inter } from "next/font/google"
+import "./globals.css"
+import { ThemeProvider } from "@/components/theme-provider"
+import { ErrorBoundary } from "@/components/ui/error-boundary"
+import { PerformanceMonitor } from "@/components/performance/performance-monitor"
+import { Preloader } from "@/components/performance/preloader"
+import { SessionProvider } from "@/components/providers/session-provider"
+import { QueryProvider } from "@/lib/providers/query-provider"
+import { Toaster } from "@/components/ui/toaster"
+
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+  fallback: ["system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
+})
+
+export const metadata: Metadata = {
+  title: "支点有星辰 - AI创作平台",
+  description: "专业的AI内容创作平台，助力短视频文案创作",
+  generator: "ZDZD",
+}
+
+// 移除API预加载，只预加载静态资源
+const criticalResources: string[] = []
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode
+}>) {
+  return (
+    <html lang="zh-CN" suppressHydrationWarning>
+      <head>
+        <style>{`
+html {
+  font-family: ${inter.style.fontFamily};
+  --font-sans: ${inter.variable};
+}
+        `}</style>
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      </head>
+      <body className={inter.className}>
+        <ErrorBoundary>
+          <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
+            <SessionProvider>
+              <QueryProvider>
+                <Preloader resources={criticalResources} />
+                {children}
+                <Toaster />
+                {process.env.NODE_ENV === "development" && <PerformanceMonitor />}
+              </QueryProvider>
+            </SessionProvider>
+          </ThemeProvider>
+        </ErrorBoundary>
+      </body>
+    </html>
+  )
+}

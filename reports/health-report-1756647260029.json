@@ -1,0 +1,180 @@
+{
+  "timestamp": "2025-08-31T13:34:10.967Z",
+  "checks": {
+    "security": {
+      "passed": false,
+      "issues": [
+        {
+          "severity": "high",
+          "message": "可能的敏感信息泄露: scripts\\test-multi-key.js",
+          "fix": "将敏感信息移至环境变量"
+        }
+      ],
+      "score": 80
+    },
+    "codeQuality": {
+      "passed": false,
+      "issues": [
+        {
+          "severity": "low",
+          "message": "文件过大: app\\dev\\test\\page.tsx (511行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: app\\documents\\page.tsx (670行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: app\\inspiration\\page.tsx (608行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: app\\merchants\\[id]\\page.tsx (610行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: app\\settings\\enhanced-page.tsx (599行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: app\\settings\\page.tsx (575行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: components\\ui\\sidebar.tsx (727行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: hooks\\use-chat-actions-fixed.ts (540行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: lib\\import\\local-folder-importer.ts (550行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: scripts\\comprehensive-reliability-test.js (654行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: scripts\\comprehensive-test.js (501行)",
+          "fix": "考虑拆分为更小的模块"
+        }
+      ],
+      "score": 0
+    },
+    "performance": {
+      "passed": false,
+      "issues": [
+        {
+          "severity": "low",
+          "message": "发现 1 个未优化的大图片",
+          "fix": "使用图片压缩工具或Next.js Image组件"
+        }
+      ],
+      "score": 85
+    },
+    "dependencies": {
+      "passed": true,
+      "issues": [],
+      "score": 100
+    },
+    "testing": {
+      "passed": false,
+      "issues": [
+        {
+          "severity": "high",
+          "message": "测试覆盖率低: 8.2%的文件有测试",
+          "fix": "增加单元测试和集成测试"
+        }
+      ],
+      "score": 8.21917808219178
+    }
+  },
+  "score": 55,
+  "issues": [
+    {
+      "severity": "high",
+      "message": "可能的敏感信息泄露: scripts\\test-multi-key.js",
+      "fix": "将敏感信息移至环境变量"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: app\\dev\\test\\page.tsx (511行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: app\\documents\\page.tsx (670行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: app\\inspiration\\page.tsx (608行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: app\\merchants\\[id]\\page.tsx (610行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: app\\settings\\enhanced-page.tsx (599行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: app\\settings\\page.tsx (575行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: components\\ui\\sidebar.tsx (727行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: hooks\\use-chat-actions-fixed.ts (540行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: lib\\import\\local-folder-importer.ts (550行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: scripts\\comprehensive-reliability-test.js (654行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: scripts\\comprehensive-test.js (501行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "发现 1 个未优化的大图片",
+      "fix": "使用图片压缩工具或Next.js Image组件"
+    },
+    {
+      "severity": "high",
+      "message": "测试覆盖率低: 8.2%的文件有测试",
+      "fix": "增加单元测试和集成测试"
+    }
+  ],
+  "suggestions": [
+    "项目健康度较低，建议立即处理严重问题"
+  ]
+}
