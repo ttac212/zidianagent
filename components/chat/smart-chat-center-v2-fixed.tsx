@@ -226,7 +226,7 @@ export const SmartChatCenterV2Fixed = React.memo<SmartChatCenterProps>(({
       {/* 消息列表 - 可滚动区域，明确设置 flex-grow 和 overflow */}
       <div className="flex-1 overflow-hidden" style={{ flexGrow: 1, flexShrink: 1, minHeight: 0, overflow: 'hidden' }}>
         {/* 根据消息数量自动选择普通或虚拟滚动组件 */}
-        {state.messages.length > 50 ? (
+        {state.messages.length > 100 ? (
           <ChatMessagesVirtual
             ref={scrollAreaRef}
             messages={state.messages}
