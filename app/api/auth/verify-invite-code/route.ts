@@ -43,7 +43,8 @@ export async function POST(request: NextRequest) {
     }
     
     // 4. 获取请求数据
-    const { inviteCode, captchaToken: _captchaToken } = await request.json()
+    const { inviteCode, captchaToken } = await request.json()
+    void captchaToken // 为未来验证码功能预留，暂时未使用
     
     if (!inviteCode) {
       return NextResponse.json(
@@ -68,8 +69,8 @@ export async function POST(request: NextRequest) {
     }
     
     // 6. TODO: 验证验证码（如果需要）
-    // if (_captchaToken) {
-    //   const captchaValid = await verifyCaptcha(_captchaToken)
+    // if (captchaToken) {
+    //   const captchaValid = await verifyCaptcha(captchaToken)
     //   if (!captchaValid) {
     //     return NextResponse.json(
     //       { success: false, error: 'Invalid captcha' },
