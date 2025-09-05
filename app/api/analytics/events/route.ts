@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
     const data = await response.json()
     return NextResponse.json(data, { status: response.status })
   } catch (error) {
+    void error
     return NextResponse.json({ success: false, error: "记录事件失败" }, { status: 500 })
   }
 }

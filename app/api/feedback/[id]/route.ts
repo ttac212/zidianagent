@@ -42,9 +42,9 @@ function mapPriorityToString(priority: FeedbackPriority): string {
   return priority.toLowerCase()
 }
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params
+    const { id } = await params
 
     // 从数据库获取反馈详情
     const feedback = await prisma.feedback.findUnique({
@@ -94,6 +94,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       data: formattedFeedback,
     })
   } catch (error) {
+    void error
     return NextResponse.json(
       { success: false, error: "获取反馈详情失败" },
       { status: 500 }
@@ -101,9 +102,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params
+    const { id } = await params
     const body = await request.json()
     const { status, reply, priority } = body
 
@@ -182,6 +183,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       message: "反馈更新成功",
     })
   } catch (error) {
+    void error
     return NextResponse.json(
       { success: false, error: "更新反馈失败" },
       { status: 500 }

@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server"
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params
+    const { id } = await params
 
     // 模拟获取单个文档
     const document = {
@@ -33,13 +33,14 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       data: document,
     })
   } catch (error) {
+    void error
     return Response.json({ success: false, error: "获取文档失败" }, { status: 500 })
   }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params
+    const { id } = await params
     const { title, content, category, tags, versionComment } = await request.json()
 
     // 模拟更新文档
@@ -61,13 +62,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       message: "文档更新成功",
     })
   } catch (error) {
+    void error
     return Response.json({ success: false, error: "更新文档失败" }, { status: 500 })
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params
+    const { id } = await params
 
     // 模拟删除文档
     return Response.json({
@@ -75,6 +77,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       message: "文档删除成功",
     })
   } catch (error) {
+    void error
     return Response.json({ success: false, error: "删除文档失败" }, { status: 500 })
   }
 }

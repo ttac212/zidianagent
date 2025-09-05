@@ -79,6 +79,7 @@ export async function GET(
       data: conversation
     })
   } catch (error) {
+    void error
     return NextResponse.json(
       { error: '获取对话详情失败' },
       { status: 500 }
@@ -160,6 +161,7 @@ export async function PATCH(
       message: '对话更新成功'
     })
   } catch (error) {
+    void error
     return NextResponse.json(
       { error: '更新对话失败' },
       { status: 500 }
@@ -214,6 +216,7 @@ export async function DELETE(
       message: '对话删除成功'
     })
   } catch (error) {
+    void error
     return NextResponse.json(
       { error: '删除对话失败' },
       { status: 500 }

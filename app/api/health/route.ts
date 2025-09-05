@@ -68,6 +68,7 @@ async function performHealthChecks(): Promise<{ healthy: boolean; checks: string
     }
 
   } catch (error) {
+    void error
     checks.push(`✗ Health check error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     healthy = false;
   }
@@ -132,6 +133,7 @@ export async function GET() {
     });
 
   } catch (error) {
+    void error
     const responseTime = Math.max(1, Math.round(performance.now() - startTime));
     
     return NextResponse.json({
@@ -163,6 +165,7 @@ export async function HEAD() {
       }
     });
   } catch (error) {
+    void error
     return new NextResponse(null, { status: 503 });
   }
 }

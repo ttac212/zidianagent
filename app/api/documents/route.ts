@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
     
     return response
   } catch (error) {
+    void error
     return Response.json({ success: false, error: "获取文档失败" }, { status: 500 })
   }
 }
@@ -74,6 +75,7 @@ export async function POST(request: NextRequest) {
       message: "文档创建成功",
     })
   } catch (error) {
+    void error
     return Response.json({ success: false, error: "创建文档失败" }, { status: 500 })
   }
 }

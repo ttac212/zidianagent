@@ -82,10 +82,10 @@ export async function GET(
 // 更新用户
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params
+    const { id } = await params
     const body = await request.json()
     const { 
       username, 
@@ -158,6 +158,7 @@ export async function PATCH(
       message: '用户更新成功'
     })
   } catch (error) {
+    void error
     return NextResponse.json(
       { error: '更新用户失败' },
       { status: 500 }
@@ -168,10 +169,10 @@ export async function PATCH(
 // 删除用户
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params
+    const { id } = await params
     
     // 检查用户是否存在
     const existingUser = await prisma.user.findUnique({
@@ -199,6 +200,7 @@ export async function DELETE(
       message: '用户删除成功'
     })
   } catch (error) {
+    void error
     return NextResponse.json(
       { error: '删除用户失败' },
       { status: 500 }

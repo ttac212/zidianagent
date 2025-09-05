@@ -4,12 +4,13 @@
   ],
   "rules": {
     "@next/next/no-img-element": "error",
-    "@next/next/no-html-link-for-pages": "error",
+    "@next/next/no-html-link-for-pages": "error", 
     "react-hooks/exhaustive-deps": "warn",
     "no-unused-vars": ["warn", { 
       "argsIgnorePattern": "^_",
       "varsIgnorePattern": "^_"
     }],
     "no-console": "warn"
-  }
+  },
+  "ignorePatterns": ["node_modules/", ".next/", "dist/", "*.d.ts"]
 }

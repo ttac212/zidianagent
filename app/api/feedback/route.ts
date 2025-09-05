@@ -135,6 +135,7 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
+    void error
     return NextResponse.json(
       { success: false, error: "获取反馈失败" },
       { status: 500 }
@@ -197,6 +198,7 @@ export async function POST(request: NextRequest) {
       message: "反馈提交成功",
     })
   } catch (error) {
+    void error
     return NextResponse.json(
       { 
         success: false, 

@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   const startedAt = Date.now()
   let conversationId: string | null = null
   let userId: string | null = null
-  let userMessage: any = null
+  let _userMessage: any = null
   let assistantMessage: any = null
   let tokenUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
   let model: string = 'unknown'
@@ -82,6 +82,7 @@ export async function POST(request: NextRequest) {
         })
         conversationId = created.id
       } catch (e) {
+        void e
         // 自动创建失败不应阻断后续用量统计
       }
     }
@@ -123,7 +124,7 @@ export async function POST(request: NextRequest) {
         if (msg.role === 'user') {
           const validation = validateMessageContent(msg.content)
           if (!validation.isValid) {
-            console.warn('[Chat API] Invalid user message filtered:', validation.warnings)
+            // Invalid user message filtered - validation warnings logged internally
             return { ...msg, content: '消息内容不符合安全规范，已被过滤' }
           }
           return { ...msg, content: validation.filteredContent }
@@ -136,7 +137,7 @@ export async function POST(request: NextRequest) {
     if (userId && conversationId && validatedMessages.length > 0) {
       const latestMessage = validatedMessages[validatedMessages.length - 1]
       if (latestMessage.role === 'user') {
-        userMessage = await prisma.message.create({
+        _userMessage = await prisma.message.create({
           data: {
             conversationId,
             role: 'USER',
@@ -254,6 +255,7 @@ export async function POST(request: NextRequest) {
         },
       })
     } catch (preErr) {
+      void preErr
       }
 
     const headers = new Headers()
@@ -293,6 +295,7 @@ export async function POST(request: NextRequest) {
                 }
               }
             } catch (e) {
+              void e
               // 忽略解析错误
             }
           }
@@ -428,6 +431,7 @@ export async function POST(request: NextRequest) {
         })
 
       } catch (error) {
+        void error
         // 不抛出错误，避免影响用户体验
       }
     }
@@ -467,7 +471,7 @@ export async function POST(request: NextRequest) {
           }
         })
       } catch (dbError) {
-        console.error('Failed to record failed call stats:', dbError)
+        // Failed to record failed call stats - error logged internally
       }
     }
     

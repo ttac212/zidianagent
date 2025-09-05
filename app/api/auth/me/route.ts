@@ -60,6 +60,7 @@ export async function GET(request: NextRequest) {
       })
     }
   } catch (error) {
+    void error
     return NextResponse.json({
       authenticated: false,
       error: '获取会话信息失败'

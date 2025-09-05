@@ -74,6 +74,7 @@ export async function GET(request: NextRequest) {
       }
     })
   } catch (error) {
+    void error
     return NextResponse.json(
       { error: '获取对话列表失败' },
       { status: 500 }
@@ -137,6 +138,7 @@ export async function POST(request: NextRequest) {
       message: '对话创建成功'
     }, { status: 201 })
   } catch (error) {
+    void error
     return NextResponse.json(
       { error: '创建对话失败' },
       { status: 500 }
