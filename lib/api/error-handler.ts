@@ -218,7 +218,7 @@ export function generateRequestId(): string {
  * 错误处理装饰器（用于包装API处理函数）
  */
 export function withErrorHandler<T extends any[], R>(
-  handler: (...args: T) => Promise<NextResponse<R>>
+  handler: (...args: T) => Promise<NextResponse<R | ApiErrorResponse>>
 ) {
   return async (...args: T): Promise<NextResponse<R | ApiErrorResponse>> => {
     const requestId = generateRequestId()

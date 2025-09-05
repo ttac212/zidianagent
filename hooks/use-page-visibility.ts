@@ -14,6 +14,8 @@ export interface PageVisibilityOptions {
   autoRefreshOnVisible?: boolean
   /** 页面隐藏时是否暂停定时器 */
   pauseTimersWhenHidden?: boolean
+  /** 是否开启调试模式 */
+  debug?: boolean
 }
 
 export interface PageVisibilityState {
@@ -35,7 +37,8 @@ const DEFAULT_OPTIONS: Required<PageVisibilityOptions> = {
   recoveryDelay: 500,
   longAbsenceThreshold: 5 * 60 * 1000, // 5分钟
   autoRefreshOnVisible: true,
-  pauseTimersWhenHidden: true
+  pauseTimersWhenHidden: true,
+  debug: false
 }
 
 /**
@@ -56,7 +59,7 @@ export function usePageVisibility(
     isLongAbsence: false
   })
 
-  const recoveryTimeoutRef = useRef<NodeJS.Timeout>()
+  const recoveryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const hiddenStartTimeRef = useRef<number>(0)
 
   /**
@@ -78,9 +81,13 @@ export function usePageVisibility(
         }
         hiddenStartTimeRef.current = 0
 
-        }秒`,
-          isLongAbsence
-        })
+        // 可选：记录页面重新可见的调试信息
+        if (opts.debug) {
+          console.log(`页面变为可见，隐藏了 ${(hiddenDuration / 1000).toFixed(1)}秒`, {
+            hiddenDuration,
+            isLongAbsence
+          })
+        }
       } else {
         // 页面变为隐藏
         hiddenStartTimeRef.current = now
@@ -206,8 +213,6 @@ export function useVisibilityAwareData<T>(
         (state.wasHidden && (!options.forceRefreshOnLongAbsence || state.isLongAbsence))
 
       if (shouldRefresh) {
-        }秒`
-        })
         fetchData(true)
       }
     }
@@ -242,7 +247,7 @@ export function useVisibilityAwareInterval(
 ) {
   const { pauseWhenHidden = true } = options
   const callbackRef = useRef(callback)
-  const intervalRef = useRef<NodeJS.Timeout>()
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   callbackRef.current = callback
 

@@ -1,0 +1,113 @@
+app/api/admin/users/route.ts(14,37): error TS2345: Argument of type '(request: NextRequest) => Promise<NextResponse<ApiErrorResponse> | NextResponse<ApiSuccessResponse<{ users: { id: string; username: string | null; email: string; displayName: string | null; ... 11 more ...; permissions: string[]; }[]; }>>>' is not assignable to parameter of type '(request: NextRequest) => Promise<NextResponse<ApiErrorResponse>>'.
+  Type 'Promise<NextResponse<ApiErrorResponse> | NextResponse<ApiSuccessResponse<{ users: { id: string; username: string | null; email: string; displayName: string | null; role: string; status: string; ... 9 more ...; permissions: string[]; }[]; }>>>' is not assignable to type 'Promise<NextResponse<ApiErrorResponse>>'.
+    Type 'NextResponse<ApiErrorResponse> | NextResponse<ApiSuccessResponse<{ users: { id: string; username: string | null; email: string; displayName: string | null; role: string; status: string; ... 9 more ...; permissions: string[]; }[]; }>>' is not assignable to type 'NextResponse<ApiErrorResponse>'.
+      Type 'NextResponse<ApiSuccessResponse<{ users: { id: string; username: string | null; email: string; displayName: string | null; role: string; status: string; monthlyTokenLimit: number; currentMonthUsage: number; totalTokensUsed: number; ... 6 more ...; permissions: string[]; }[]; }>>' is not assignable to type 'NextResponse<ApiErrorResponse>'.
+        Property 'error' is missing in type 'ApiSuccessResponse<{ users: { id: string; username: string | null; email: string; displayName: string | null; role: string; status: string; monthlyTokenLimit: number; currentMonthUsage: number; totalTokensUsed: number; ... 6 more ...; permissions: string[]; }[]; }>' but required in type 'ApiErrorResponse'.
+app/api/admin/users/route.ts(67,13): error TS2353: Object literal may only specify known properties, and 'messages' does not exist in type 'UserCountOutputTypeSelect<DefaultArgs>'.
+app/api/admin/users/route.ts(92,32): error TS2339: Property '_count' does not exist on type '{ status: UserStatus; id: string; email: string; emailVerified: Date | null; username: string | null; displayName: string | null; avatar: string | null; role: UserRole; ... 6 more ...; lastActiveAt: Date | null; }'.
+app/api/admin/users/route.ts(93,27): error TS2339: Property '_count' does not exist on type '{ status: UserStatus; id: string; email: string; emailVerified: Date | null; username: string | null; displayName: string | null; avatar: string | null; role: UserRole; ... 6 more ...; lastActiveAt: Date | null; }'.
+app/api/admin/users/route.ts(94,27): error TS2339: Property '_count' does not exist on type '{ status: UserStatus; id: string; email: string; emailVerified: Date | null; username: string | null; displayName: string | null; avatar: string | null; role: UserRole; ... 6 more ...; lastActiveAt: Date | null; }'.
+app/api/admin/users/route.ts(112,38): error TS2345: Argument of type '(request: NextRequest) => Promise<NextResponse<ApiErrorResponse> | NextResponse<ApiSuccessResponse<{ id: string; username: string | null; email: string; displayName: string | null; ... 11 more ...; permissions: string[]; }>>>' is not assignable to parameter of type '(request: NextRequest) => Promise<NextResponse<ApiErrorResponse>>'.
+  Type 'Promise<NextResponse<ApiErrorResponse> | NextResponse<ApiSuccessResponse<{ id: string; username: string | null; email: string; displayName: string | null; role: string; status: string; ... 9 more ...; permissions: string[]; }>>>' is not assignable to type 'Promise<NextResponse<ApiErrorResponse>>'.
+    Type 'NextResponse<ApiErrorResponse> | NextResponse<ApiSuccessResponse<{ id: string; username: string | null; email: string; displayName: string | null; role: string; status: string; ... 9 more ...; permissions: string[]; }>>' is not assignable to type 'NextResponse<ApiErrorResponse>'.
+      Type 'NextResponse<ApiSuccessResponse<{ id: string; username: string | null; email: string; displayName: string | null; role: string; status: string; monthlyTokenLimit: number; currentMonthUsage: number; totalTokensUsed: number; ... 6 more ...; permissions: string[]; }>>' is not assignable to type 'NextResponse<ApiErrorResponse>'.
+        Property 'error' is missing in type 'ApiSuccessResponse<{ id: string; username: string | null; email: string; displayName: string | null; role: string; status: string; monthlyTokenLimit: number; currentMonthUsage: number; totalTokensUsed: number; ... 6 more ...; permissions: string[]; }>' but required in type 'ApiErrorResponse'.
+app/api/chat/route.ts(122,40): error TS7006: Parameter 'msg' implicitly has an 'any' type.
+app/api/import/external-resources/route.ts(8,10): error TS2459: Module '"../../auth/[...nextauth]/route"' declares 'authOptions' locally, but it is not exported.
+app/api/invite-codes/create-test/route.ts(39,11): error TS2322: Type '{ code: string; description: string; maxUses: number; expiresAt: Date; defaultRole: string; monthlyTokenLimit: number; createdBy: string; }' is not assignable to type '(Without<InviteCodeCreateInput, InviteCodeUncheckedCreateInput> & InviteCodeUncheckedCreateInput) | (Without<...> & InviteCodeCreateInput)'.
+  Type '{ code: string; description: string; maxUses: number; expiresAt: Date; defaultRole: string; monthlyTokenLimit: number; createdBy: string; }' is not assignable to type 'Without<InviteCodeUncheckedCreateInput, InviteCodeCreateInput> & InviteCodeCreateInput'.
+    Type '{ code: string; description: string; maxUses: number; expiresAt: Date; defaultRole: string; monthlyTokenLimit: number; createdBy: string; }' is not assignable to type 'InviteCodeCreateInput'.
+      Types of property 'defaultRole' are incompatible.
+        Type 'string' is not assignable to type 'UserRole | undefined'.
+app/api/invite-codes/generate/route.ts(65,7): error TS2322: Type 'true' is not assignable to type 'never'.
+app/settings/enhanced-page.tsx(594,33): error TS2339: Property 'isConnected' does not exist on type 'NetworkStatus'.
+components/chat/chat-error-boundary.tsx(137,19): error TS2345: Argument of type 'Error' is not assignable to parameter of type 'ErrorEvent'.
+  Type 'Error' is missing the following properties from type 'ErrorEvent': colno, error, filename, lineno, and 22 more.
+components/chat/chat-error-boundary.tsx(141,19): error TS2345: Argument of type 'Error' is not assignable to parameter of type 'ErrorEvent'.
+  Type 'Error' is missing the following properties from type 'ErrorEvent': colno, error, filename, lineno, and 22 more.
+components/chat/chat-header.tsx(16,3): error TS2339: Property 'onCreateConversation' does not exist on type 'ChatHeaderProps'.
+components/chat/chat-header.tsx(20,3): error TS2339: Property 'onDeleteConversation' does not exist on type 'ChatHeaderProps'.
+components/chat/chat-input.tsx(172,34): error TS2345: Argument of type '() => (HTMLTextAreaElement & { adjustHeight: (reset?: boolean) => void; }) | null' is not assignable to parameter of type '() => HTMLTextAreaElement'.
+  Type '(HTMLTextAreaElement & { adjustHeight: (reset?: boolean | undefined) => void; }) | null' is not assignable to type 'HTMLTextAreaElement'.
+    Type 'null' is not assignable to type 'HTMLTextAreaElement'.
+components/chat/smart-chat-center-v2-fixed.tsx(87,5): error TS2322: Type '() => void' is not assignable to type '(model?: string | undefined) => Promise<Conversation | null>'.
+  Type 'void' is not assignable to type 'Promise<Conversation | null>'.
+components/chat/smart-chat-center-v2-fixed.tsx(180,29): error TS2349: This expression is not callable.
+  Type '{}' has no call signatures.
+components/documents/document-list.tsx(102,24): error TS2339: Property 'createElement' does not exist on type 'Document'.
+components/performance/performance-monitor.tsx(27,61): error TS2551: Property 'navigationStart' does not exist on type 'PerformanceNavigationTiming'. Did you mean 'activationStart'?
+components/performance/performance-monitor.tsx(28,75): error TS2551: Property 'navigationStart' does not exist on type 'PerformanceNavigationTiming'. Did you mean 'activationStart'?
+components/ui/chart.tsx(109,3): error TS2339: Property 'payload' does not exist on type 'Omit<Props<ValueType, NameType>, PropertiesReadFromContext> & { active?: boolean | undefined; includeHidden?: boolean | undefined; ... 17 more ...; axisId?: AxisId | undefined; } & ClassAttributes<...> & HTMLAttributes<...> & { ...; }'.
+components/ui/chart.tsx(114,3): error TS2339: Property 'label' does not exist on type 'Omit<Props<ValueType, NameType>, PropertiesReadFromContext> & { active?: boolean | undefined; includeHidden?: boolean | undefined; ... 17 more ...; axisId?: AxisId | undefined; } & ClassAttributes<...> & HTMLAttributes<...> & { ...; }'.
+components/ui/chart.tsx(182,23): error TS7006: Parameter 'item' implicitly has an 'any' type.
+components/ui/chart.tsx(182,29): error TS7006: Parameter 'index' implicitly has an 'any' type.
+components/ui/chart.tsx(260,39): error TS2344: Type '"payload" | "verticalAlign"' does not satisfy the constraint '"string" | "cursor" | "name" | "result" | "id" | "type" | "role" | "content" | "version" | "color" | "key" | "filter" | "fill" | "values" | "children" | "style" | "clipPath" | "mask" | ... 428 more ... | "onBBoxUpdate"'.
+  Type '"payload"' is not assignable to type '"string" | "cursor" | "name" | "result" | "id" | "type" | "role" | "content" | "version" | "color" | "key" | "filter" | "fill" | "values" | "children" | "style" | "clipPath" | "mask" | ... 428 more ... | "onBBoxUpdate"'.
+components/ui/chart.tsx(266,17): error TS2339: Property 'length' does not exist on type '{}'.
+components/ui/chart.tsx(278,16): error TS2339: Property 'map' does not exist on type '{}'.
+components/ui/chart.tsx(278,21): error TS7006: Parameter 'item' implicitly has an 'any' type.
+components/ui/connection-status.tsx(73,29): error TS2554: Expected 1 arguments, but got 0.
+components/ui/keyboard-shortcuts.tsx(63,29): error TS2339: Property 'icon' does not exist on type '{ keys: string[]; description: string; icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>; } | { ...; }'.
+  Property 'icon' does not exist on type '{ keys: string[]; description: string; }'.
+components/ui/keyboard-shortcuts.tsx(63,43): error TS2339: Property 'icon' does not exist on type '{ keys: string[]; description: string; icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>; } | { ...; }'.
+  Property 'icon' does not exist on type '{ keys: string[]; description: string; }'.
+components/ui/sidebar.tsx(8,10): error TS2724: '"@/hooks/use-mobile"' has no exported member named 'useIsMobile'. Did you mean 'useMobile'?
+hooks/use-connection-monitor.ts(79,23): error TS2554: Expected 1 arguments, but got 0.
+hooks/use-connection-monitor.ts(80,30): error TS2554: Expected 1 arguments, but got 0.
+hooks/use-connection-monitor.ts(203,11): error TS18046: 'error' is of type 'unknown'.
+hooks/use-network-status.ts(51,23): error TS2554: Expected 1 arguments, but got 0.
+hooks/use-network-status.ts(52,31): error TS2554: Expected 1 arguments, but got 0.
+hooks/use-page-visibility.ts(59,30): error TS2554: Expected 1 arguments, but got 0.
+hooks/use-page-visibility.ts(82,18): error TS2339: Property 'debug' does not exist on type '{ recoveryDelay: number; longAbsenceThreshold: number; autoRefreshOnVisible: boolean; pauseTimersWhenHidden: boolean; }'.
+hooks/use-page-visibility.ts(247,23): error TS2554: Expected 1 arguments, but got 0.
+lib/mcp/client-manager.ts(143,11): error TS2353: Object literal may only specify known properties, and 'timeout' does not exist in type 'ZodType<object, ZodTypeDef, object>'.
+lib/mcp/client-manager.ts(147,20): error TS2339: Property 'tools' does not exist on type 'object'.
+lib/mcp/client-manager.ts(148,37): error TS2339: Property 'tools' does not exist on type 'object'.
+lib/mcp/client-manager.ts(204,16): error TS2353: Object literal may only specify known properties, and 'timeout' does not exist in type 'ZodType<object, ZodTypeDef, object>'.
+lib/mcp/client-manager.ts(285,15): error TS2353: Object literal may only specify known properties, and 'timeout' does not exist in type 'ZodType<object, ZodTypeDef, object>'.
+lib/providers/query-provider.tsx(45,11): error TS2322: Type '"bottom-right"' is not assignable to type 'DevtoolsPosition | undefined'.
+lib/security/rate-limiter.ts(220,34): error TS2345: Argument of type '[NextRequest, ...any[]]' is not assignable to parameter of type 'T'.
+  '[NextRequest, ...any[]]' is assignable to the constraint of type 'T', but 'T' could be instantiated with a different subtype of constraint 'any[]'.
+scripts/check-tags-format.ts(28,50): error TS2339: Property 'merchant' does not exist on type '{ id: string; title: string; tags: string; textExtra: string; }'.
+scripts/check-tags-format.ts(38,34): error TS18046: 'error' is of type 'unknown'.
+scripts/check-tags-format.ts(47,34): error TS18046: 'error' is of type 'unknown'.
+scripts/check-tags-format.ts(55,34): error TS18046: 'error' is of type 'unknown'.
+scripts/db-integrity-check.ts(53,25): error TS18046: 'error' is of type 'unknown'.
+scripts/db-integrity-check.ts(57,27): error TS18046: 'error' is of type 'unknown'.
+scripts/db-integrity-check.ts(96,25): error TS18046: 'error' is of type 'unknown'.
+scripts/db-integrity-check.ts(100,27): error TS18046: 'error' is of type 'unknown'.
+scripts/db-integrity-check.ts(150,28): error TS18046: 'error' is of type 'unknown'.
+scripts/db-integrity-check.ts(154,27): error TS18046: 'error' is of type 'unknown'.
+scripts/db-integrity-check.ts(203,29): error TS18046: 'error' is of type 'unknown'.
+scripts/db-integrity-check.ts(207,27): error TS18046: 'error' is of type 'unknown'.
+scripts/db-integrity-check.ts(262,28): error TS18046: 'error' is of type 'unknown'.
+scripts/db-integrity-check.ts(266,27): error TS18046: 'error' is of type 'unknown'.
+scripts/db-integrity-check.ts(279,11): error TS2322: Type 'null' is not assignable to type '(Without<ConversationScalarRelationFilter, ConversationWhereInput> & ConversationWhereInput) | (Without<...> & ConversationScalarRelationFilter) | undefined'.
+scripts/db-integrity-check.ts(286,11): error TS2322: Type 'null' is not assignable to type '(Without<UserScalarRelationFilter, UserWhereInput> & UserWhereInput) | (Without<UserWhereInput, UserScalarRelationFilter> & UserScalarRelationFilter) | undefined'.
+scripts/db-integrity-check.ts(293,11): error TS2322: Type 'null' is not assignable to type '(Without<UserScalarRelationFilter, UserWhereInput> & UserWhereInput) | (Without<UserWhereInput, UserScalarRelationFilter> & UserScalarRelationFilter) | undefined'.
+scripts/db-integrity-check.ts(320,26): error TS18046: 'error' is of type 'unknown'.
+scripts/db-integrity-check.ts(324,27): error TS18046: 'error' is of type 'unknown'.
+scripts/db-integrity-check.ts(379,26): error TS18046: 'error' is of type 'unknown'.
+scripts/db-integrity-check.ts(383,27): error TS18046: 'error' is of type 'unknown'.
+scripts/db-integrity-check.ts(413,25): error TS18046: 'error' is of type 'unknown'.
+scripts/db-integrity-check.ts(423,9): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+scripts/db-integrity-check.ts(423,9): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+scripts/db-integrity-check.ts(475,23): error TS18046: 'error' is of type 'unknown'.
+scripts/diagnose-usage-stats.ts(51,35): error TS2339: Property 'user' does not exist on type '{ id: string; createdAt: Date; userId: string; modelId: string | null; totalTokens: number; date: Date; modelProvider: string | null; apiCalls: number; }'.
+scripts/diagnose-usage-stats.ts(51,108): error TS2339: Property 'tokenCount' does not exist on type '{ id: string; createdAt: Date; userId: string; modelId: string | null; totalTokens: number; date: Date; modelProvider: string | null; apiCalls: number; }'.
+scripts/diagnose-usage-stats.ts(64,13): error TS2322: Type 'null' is not assignable to type 'number | IntFilter<"Message"> | undefined'.
+scripts/diagnose-usage-stats.ts(84,32): error TS2339: Property 'conversation' does not exist on type '{ id: string; createdAt: Date; modelId: string; totalTokens: number; promptTokens: number; completionTokens: number; }'.
+scripts/import-local-folder.ts(69,64): error TS2551: Property 'files' does not exist on type '{ file: FileInfo; categoryName?: string | undefined; estimatedRecords: number; }'. Did you mean 'file'?
+scripts/import-local-folder.ts(71,35): error TS2551: Property 'files' does not exist on type '{ file: FileInfo; categoryName?: string | undefined; estimatedRecords: number; }'. Did you mean 'file'?
+scripts/import-local-folder.ts(71,45): error TS7006: Parameter 'f' implicitly has an 'any' type.
+scripts/import-local-folder.ts(78,64): error TS2339: Property 'totalCount' does not exist on type 'BatchImportResult'.
+scripts/import-local-folder.ts(78,135): error TS2339: Property 'totalCount' does not exist on type 'BatchImportResult'.
+scripts/import-local-folder.ts(94,44): error TS2339: Property 'fileName' does not exist on type 'ImportResult'.
+scripts/import-merchant-data.ts(387,34): error TS2552: Cannot find name 'externalId'. Did you mean 'external'?
+tests/api-model-validation.test.ts(238,7): error TS7053: Element implicitly has an 'any' type because expression of type '"response"' can't be used to index type '{ status: number; ok: boolean; model: string; apiKey: string; timestamp: string; }'.
+  Property 'response' does not exist on type '{ status: number; ok: boolean; model: string; apiKey: string; timestamp: string; }'.
+tests/api-model-validation.test.ts(241,7): error TS7053: Element implicitly has an 'any' type because expression of type '"error"' can't be used to index type '{ status: number; ok: boolean; model: string; apiKey: string; timestamp: string; }'.
+  Property 'error' does not exist on type '{ status: number; ok: boolean; model: string; apiKey: string; timestamp: string; }'.
+tests/api-model-validation.test.ts(248,14): error TS18046: 'error' is of type 'unknown'.
+tests/connection-monitoring/connection-monitor-hook.test.ts(57,16): error TS18046: 'error' is of type 'unknown'.
+tests/connection-monitoring/health-api.test.ts(142,16): error TS18046: 'error' is of type 'unknown'.

@@ -101,11 +101,12 @@ if (!fs.existsSync('.babelrc')) {
     }
   }
   fs.writeFileSync('.babelrc', JSON.stringify(babelConfig, null, 2))
-  }
+}
 
 // 6. 提供优化建议
-\n`)
+console.log(`${colors.cyan}优化建议:${colors.reset}`)
+console.log(`${colors.yellow}• 使用动态导入延迟加载大型组件${colors.reset}`)
+console.log(`${colors.yellow}• 考虑使用React.memo优化重渲染${colors.reset}`)
+console.log(`${colors.yellow}• 监控构建大小并进行代码分割${colors.reset}`)
 
-\n`)
-
-加载大型组件')
+console.log(`\n${colors.green}快速优化完成！${colors.reset}\n`)

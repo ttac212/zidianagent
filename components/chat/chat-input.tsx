@@ -171,7 +171,13 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
   // 暴露 textarea 引用和高度调整函数给外部
   React.useImperativeHandle(ref, () => {
     const element = textareaRef.current
-    if (!element) return null
+    if (!element) {
+      // 如果element不存在，创建一个空的textarea作为fallback
+      const fallback = document.createElement('textarea')
+      return Object.assign(fallback, {
+        adjustHeight: () => {}
+      })
+    }
     
     // 创建代理对象，包含textarea的所有方法和属性，以及我们的adjustHeight
     return Object.assign(element, {

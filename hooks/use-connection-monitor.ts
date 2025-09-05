@@ -76,8 +76,8 @@ export function useConnectionMonitor(options: UseConnectionMonitorOptions = {}) 
   const [isMounted, setIsMounted] = useState(false);
 
   // 资源管理 - 防止内存泄漏的关键
-  const intervalRef = useRef<NodeJS.Timeout>();
-  const abortControllerRef = useRef<AbortController>();
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const cleanupRef = useRef<(() => void)[]>([]);
   const isUnmountedRef = useRef(false);
   const statsRef = useRef({ totalChecks: 0, successfulChecks: 0 });
@@ -200,7 +200,7 @@ export function useConnectionMonitor(options: UseConnectionMonitorOptions = {}) 
       }
 
     } catch (error) {
-      if (error.name !== 'AbortError' && !isUnmountedRef.current) {
+      if (error instanceof Error && error.name !== 'AbortError' && !isUnmountedRef.current) {
         const newFailures = state.consecutiveFailures + 1;
         const newInterval = getAdaptiveInterval(newFailures);
         

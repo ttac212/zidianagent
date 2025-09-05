@@ -50,11 +50,11 @@ class DatabaseIntegrityChecker {
         details: '连接测试成功'
       }
     } catch (error) {
-      log(`❌ 数据库连接失败: ${error.message}`, 'red')
+      log(`❌ 数据库连接失败: ${error instanceof Error ? error.message : '未知错误'}`, 'red')
       return {
         name: '数据库连接',
         passed: false,
-        details: `连接失败: ${error.message}`
+        details: `连接失败: ${error instanceof Error ? error.message : '未知错误'}`
       }
     }
   }
@@ -93,11 +93,11 @@ class DatabaseIntegrityChecker {
         details: `所有表正常访问，总记录数: ${counts.reduce((a, b) => a + b, 0)}`
       }
     } catch (error) {
-      log(`❌ 表结构检查失败: ${error.message}`, 'red')
+      log(`❌ 表结构检查失败: ${error instanceof Error ? error.message : '未知错误'}`, 'red')
       return {
         name: '表结构',
         passed: false,
-        details: `检查失败: ${error.message}`
+        details: `检查失败: ${error instanceof Error ? error.message : '未知错误'}`
       }
     }
   }
@@ -147,11 +147,11 @@ class DatabaseIntegrityChecker {
         }
       }
     } catch (error) {
-      log(`❌ 对话消息计数检查失败: ${error.message}`, 'red')
+      log(`❌ 对话消息计数检查失败: ${error instanceof Error ? error.message : '未知错误'}`, 'red')
       return {
         name: '对话消息计数',
         passed: false,
-        details: `检查失败: ${error.message}`
+        details: `检查失败: ${error instanceof Error ? error.message : '未知错误'}`
       }
     }
   }
@@ -200,11 +200,11 @@ class DatabaseIntegrityChecker {
         }
       }
     } catch (error) {
-      log(`❌ Token统计检查失败: ${error.message}`, 'red')
+      log(`❌ Token统计检查失败: ${error instanceof Error ? error.message : '未知错误'}`, 'red')
       return {
         name: 'Token统计',
         passed: false,
-        details: `检查失败: ${error.message}`
+        details: `检查失败: ${error instanceof Error ? error.message : '未知错误'}`
       }
     }
   }
@@ -259,11 +259,11 @@ class DatabaseIntegrityChecker {
         }
       }
     } catch (error) {
-      log(`❌ 用户配额统计检查失败: ${error.message}`, 'red')
+      log(`❌ 用户配额统计检查失败: ${error instanceof Error ? error.message : '未知错误'}`, 'red')
       return {
         name: '用户配额统计',
         passed: false,
-        details: `检查失败: ${error.message}`
+        details: `检查失败: ${error instanceof Error ? error.message : '未知错误'}`
       }
     }
   }
@@ -276,21 +276,21 @@ class DatabaseIntegrityChecker {
       // 检查没有对话的消息
       const orphanMessages = await prisma.message.count({
         where: {
-          conversation: null
+          conversation: undefined
         }
       })
 
       // 检查没有用户的对话
       const orphanConversations = await prisma.conversation.count({
         where: {
-          user: null
+          user: undefined
         }
       })
 
       // 检查没有用户的统计记录
       const orphanStats = await prisma.usageStats.count({
         where: {
-          user: null
+          user: undefined
         }
       })
 
@@ -317,11 +317,11 @@ class DatabaseIntegrityChecker {
         }
       }
     } catch (error) {
-      log(`❌ 孤儿记录检查失败: ${error.message}`, 'red')
+      log(`❌ 孤儿记录检查失败: ${error instanceof Error ? error.message : '未知错误'}`, 'red')
       return {
         name: '孤儿记录',
         passed: false,
-        details: `检查失败: ${error.message}`
+        details: `检查失败: ${error instanceof Error ? error.message : '未知错误'}`
       }
     }
   }
@@ -376,11 +376,11 @@ class DatabaseIntegrityChecker {
         }
       }
     } catch (error) {
-      log(`❌ 数据约束检查失败: ${error.message}`, 'red')
+      log(`❌ 数据约束检查失败: ${error instanceof Error ? error.message : '未知错误'}`, 'red')
       return {
         name: '数据约束',
         passed: false,
-        details: `检查失败: ${error.message}`
+        details: `检查失败: ${error instanceof Error ? error.message : '未知错误'}`
       }
     }
   }
@@ -410,7 +410,7 @@ class DatabaseIntegrityChecker {
       return this.results
 
     } catch (error) {
-      log(`💥 检查过程异常: ${error.message}`, 'red')
+      log(`💥 检查过程异常: ${error instanceof Error ? error.message : '未知错误'}`, 'red')
       throw error
     } finally {
       await prisma.$disconnect()
@@ -420,7 +420,7 @@ class DatabaseIntegrityChecker {
   // 生成检查报告
   generateReport() {
     log('\n📊 数据库完整性检查报告', 'magenta')
-    log('=' * 50, 'blue')
+    log('='.repeat(50), 'blue')
 
     const passedCount = this.results.filter(r => r.passed).length
     const failedCount = this.results.length - passedCount
@@ -472,7 +472,7 @@ async function main() {
     await checker.runAllChecks()
     log('\n🏁 数据库完整性检查完成!', 'magenta')
   } catch (error) {
-    log(`💥 检查执行失败: ${error.message}`, 'red')
+    log(`💥 检查执行失败: ${error instanceof Error ? error.message : '未知错误'}`, 'red')
     process.exit(1)
   }
 }

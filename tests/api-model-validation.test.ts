@@ -96,8 +96,6 @@ describe('API模型验证测试', () => {
 
   describe('API连接测试', () => {
     test.each(MODEL_CONFIGS)('测试 $modelId API连接', async (config) => {
-      }...`)
-      
       const payload = {
         model: config.modelId,
         messages: [
@@ -128,7 +126,6 @@ describe('API模型验证测试', () => {
           expect(response.status).toBeOneOf([200, 401, 404, 429])
         } else {
           const data = await response.json()
-          || 'no content'}...`)
           
           expect(data.choices).toBeDefined()
           expect(data.choices.length).toBeGreaterThan(0)
@@ -228,7 +225,7 @@ export async function manualTestModel(modelId: string, apiKey: string) {
       body: JSON.stringify(payload),
     })
 
-    const result = {
+    const result: any = {
       status: response.status,
       ok: response.ok,
       model: modelId,
@@ -248,7 +245,7 @@ export async function manualTestModel(modelId: string, apiKey: string) {
   } catch (error) {
     const errorResult = {
       model: modelId,
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
       timestamp: new Date().toISOString()
     }
     return errorResult

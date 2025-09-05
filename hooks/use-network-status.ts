@@ -48,8 +48,8 @@ export function useNetworkStatus(options: NetworkStatusOptions = {}) {
     lastCheck: Date.now()
   })
 
-  const intervalRef = useRef<NodeJS.Timeout>()
-  const lastNotificationRef = useRef<string>()
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const lastNotificationRef = useRef<string | null>(null)
 
   /**
    * 执行服务器健康检查

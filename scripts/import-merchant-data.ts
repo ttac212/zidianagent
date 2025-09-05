@@ -190,12 +190,12 @@ async function parseCSV(filePath: string): Promise<CSVRow[]> {
     })
 
     parser.on('error', function(err) {
-      }:`, err.message)
-      // 继续处理其他文件
+      console.error(`解析CSV文件失败:`, err.message)
+      reject(err)
     })
 
     parser.on('end', function() {
-      }: ${results.length} 条记录`)
+      console.log(`CSV文件解析完成: ${results.length} 条记录`)
       resolve(results)
     })
 
@@ -222,19 +222,21 @@ async function initializeCategories() {
           sortOrder: Object.keys(CATEGORY_MAPPING).indexOf(key),
         },
       })
-      } catch (error) {
-      }
+    } catch (error) {
+      console.error(`创建分类失败: ${categoryInfo.name}`, error)
+    }
   }
 }
 
 // 导入单个商家数据
 async function importMerchantData(filePath: string) {
-  }`)
+  console.log(`正在导入商家数据: ${filePath}`)
   
   try {
     const csvData = await parseCSV(filePath)
     
     if (csvData.length === 0) {
+      console.log(`跳过空文件: ${filePath}`)
       return
     }
 
@@ -244,6 +246,7 @@ async function importMerchantData(filePath: string) {
     const merchantName = firstRow['商家名称']
     
     if (!merchantUID || !merchantName) {
+      console.log(`跳过无效文件 (缺少必要字段): ${filePath}`)
       return
     }
 
@@ -314,13 +317,13 @@ async function importMerchantData(filePath: string) {
       },
     })
 
-    `)
+    console.log(`商家 ${merchantName} 已创建/更新`)
 
     // 导入内容数据
     let contentCount = 0
     for (const row of csvData) {
+      const externalId = row['id']
       try {
-        const externalId = row['id']
         if (!externalId || externalId.trim() === '') continue
 
         // 解析时间，处理无效日期
@@ -381,13 +384,16 @@ async function importMerchantData(filePath: string) {
         })
         contentCount++
       } catch (error) {
-        }
+        console.error(`导入内容失败 (${externalId}):`, error)
+      }
     }
 
     return { merchantName, contentCount }
     
   } catch (error) {
-    }
+    console.error(`导入商家数据失败 (${filePath}):`, error)
+    return null
+  }
 }
 
 // 主函数
@@ -409,7 +415,7 @@ async function main() {
       }
     }
     
-    => sum + r.contentCount, 0)} 条`)
+    console.log(`导入完成! 共导入 ${results.length} 个商家，总计 ${results.reduce((sum, r) => sum + r.contentCount, 0)} 条内容`)
     
     // 统计信息
     const categories = await prisma.merchantCategory.findMany({
@@ -421,10 +427,12 @@ async function main() {
     })
     
     categories.forEach(category => {
-      })
+      console.log(`分类 ${category.name}: ${category._count.merchants} 个商家`)
+    })
     
   } catch (error) {
-    } finally {
+    console.error('导入过程中出错:', error)
+  } finally {
     await prisma.$disconnect()
   }
 }

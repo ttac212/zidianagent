@@ -137,16 +137,16 @@ export function useChatErrorHandler() {
       handleError(new Error(event.reason))
     }
 
-    const handleError = (event: ErrorEvent) => {
+    const handleErrorEvent = (event: ErrorEvent) => {
       handleError(new Error(event.message))
     }
 
     window.addEventListener('unhandledrejection', handleUnhandledRejection)
-    window.addEventListener('error', handleError)
+    window.addEventListener('error', handleErrorEvent)
 
     return () => {
       window.removeEventListener('unhandledrejection', handleUnhandledRejection)
-      window.removeEventListener('error', handleError)
+      window.removeEventListener('error', handleErrorEvent)
     }
   }, [handleError])
 

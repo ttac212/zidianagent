@@ -43,13 +43,18 @@ async function diagnoseUsageStats() {
         modelProvider: true,
         totalTokens: true,
         apiCalls: true,
-        createdAt: true
+        createdAt: true,
+        user: {
+          select: {
+            email: true
+          }
+        }
       }
     })
     
     for (const record of recentRecords) {
-      }]`)
-      }
+      console.log(`  用户: ${record.user.email}, 模型: ${record.modelId}, 日期: ${record.date}, tokens: ${record.totalTokens}`)
+    }
     
     // 3. 检查Message表的token记录
     const messagesWithTokens = await prisma.message.count({
@@ -59,10 +64,9 @@ async function diagnoseUsageStats() {
     })
     const messagesWithoutTokens = await prisma.message.count({
       where: {
-        OR: [
-          { totalTokens: 0 },
-          { totalTokens: null }
-        ]
+        totalTokens: {
+          lte: 0
+        }
       }
     })
     // 4. 查看最近的AI消息
@@ -76,13 +80,18 @@ async function diagnoseUsageStats() {
         promptTokens: true,
         completionTokens: true,
         totalTokens: true,
-        createdAt: true
+        createdAt: true,
+        conversation: {
+          select: {
+            title: true
+          }
+        }
       }
     })
     
     for (const msg of recentAIMessages) {
-      }]`)
-      }
+      console.log(`  对话: ${msg.conversation.title}, tokens: ${msg.totalTokens}, 创建时间: ${msg.createdAt}`)
+    }
     
     // 5. 用户使用量统计
     const users = await prisma.user.findMany({
@@ -97,20 +106,30 @@ async function diagnoseUsageStats() {
     
     for (const user of users) {
       const percentage = (user.currentMonthUsage / user.monthlyTokenLimit * 100).toFixed(2)
-      }
+      console.log(`  用户: ${user.email}, 本月使用: ${user.currentMonthUsage}/${user.monthlyTokenLimit} (${percentage}%)`)
+    }
     
     // 6. 诊断结论
     if (totalRecords === 0) {
-      } else if (modelSpecificRecords === 0) {
+      console.log('没有使用量统计记录，可能是统计功能未启用')
+    } else if (modelSpecificRecords === 0) {
+      console.log('没有按模型的统计记录，只有总量统计')
       } else if (messagesWithTokens === 0) {
+        console.log('没有Message记录token信息，请检查聊天API是否正确记录token')
       } else {
+        console.log('Message表token记录正常')
       }
     
-    // 建议
-    函数返回的日期格式')
+    console.log(`\n总用户数: ${users.length}`)
+    console.log('👆 以上是使用量统计诊断结果')
+    console.log('\n建议:')
+    console.log('- 检查日期格式是否一致')
+    console.log('- 验证token统计流程')
+    console.log('- 确认数据库约束正确')
     
   } catch (error) {
-    } finally {
+    console.error('诊断使用量统计时出错:', error)
+  } finally {
     await prisma.$disconnect()
   }
 }
