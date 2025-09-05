@@ -1,12 +1,12 @@
 import type { NextRequest } from "next/server"
-import { ALLOWED_MODEL_IDS, isAllowed } from "@/lib/ai/models"
-import { validateModelId, createModelValidationMiddleware } from "@/lib/model-validator"
+import { ALLOWED_MODEL_IDS } from "@/lib/ai/models"
+import { validateModelId } from "@/lib/model-validator"
 import { selectApiKey } from "@/lib/ai/key-manager"
 import { prisma } from "@/lib/prisma"
 import { getToken } from "next-auth/jwt"
 import { getModelProvider, getTodayDate } from "@/lib/ai/model-stats-helper"
 import { createSafeContextMessage, validateMessageContent } from "@/lib/security/content-filter"
-import { withRateLimit, checkMultipleRateLimits } from "@/lib/security/rate-limiter"
+import { checkMultipleRateLimits } from "@/lib/security/rate-limiter"
 import { createErrorResponse } from "@/lib/api/error-handler"
 
 // 支持 GET 方法用于健康检查

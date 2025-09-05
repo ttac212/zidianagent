@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
       success: true,
       data: stats,
     })
-  } catch (error) {
+  } catch (_error) {
     return Response.json({ success: false, error: "获取统计数据失败" }, { status: 500 })
   }
 }

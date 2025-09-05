@@ -5,7 +5,7 @@ import { Header } from "@/components/header"
 import { AdminOverview } from "@/components/admin/admin-overview"
 import { UserManagement } from "@/components/admin/user-management"
 import { KeyManagement } from "@/components/admin/key-management"
-import { Users, Key, Settings, Shield } from "lucide-react"
+import { Users, Key, Settings } from "lucide-react"
 
 export default function AdminPage() {
   return (

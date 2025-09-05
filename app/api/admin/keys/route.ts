@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
       success: true,
       data: keys,
     })
-  } catch (error) {
+  } catch (_error) {
     return Response.json({ success: false, error: "获取密钥列表失败" }, { status: 500 })
   }
 }
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       data: newKey,
       message: "API密钥创建成功",
     })
-  } catch (error) {
+  } catch (_error) {
     return Response.json({ success: false, error: "创建API密钥失败" }, { status: 500 })
   }
 }
