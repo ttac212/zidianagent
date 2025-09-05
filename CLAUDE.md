@@ -21,6 +21,7 @@ pnpm dev:fast              # Turbopack快速启动 (编译速度19倍，0.75s完
 pnpm dev                   # 传统webpack启动 (端口3007，支持局域网)
 pnpm dev:debug             # 调试模式启动
 pnpm build                 # 构建生产版本
+pnpm build:safe            # 安全构建（验证后构建）
 pnpm build:prod            # 生产环境构建（完整检查）
 pnpm start                 # 启动生产服务器
 pnpm lint                  # 代码检查
@@ -104,6 +105,17 @@ pnpm env:toggle                    # 切换环境配置
 pnpm health:check                  # 完整健康度检查（安全、代码质量、性能、依赖、测试）
 pnpm health:quick                  # 快速健康检查（跳过耗时项）
 pnpm debt:track                    # 技术债务追踪（TODO/FIXME统计）
+```
+
+### 数据备份和恢复
+```bash
+pnpm backup:db                     # 备份数据库
+pnpm backup:full                   # 完整备份（压缩）
+pnpm backup:schema                 # 仅备份数据库结构
+pnpm backup:auto                   # 自动备份调度器
+pnpm backup:test                   # 测试备份功能
+pnpm restore:db                    # 还原数据库
+pnpm restore:help                  # 查看还原帮助
 ```
 
 ## 核心架构
@@ -291,9 +303,10 @@ NEXT_PUBLIC_CONNECTION_MONITORING=enabled  # 连接监控功能开关 (enabled/d
 
 ### 编译性能优化
 - **Turbopack**: 使用`pnpm dev:fast`启动，编译速度提升19倍 (0.75s vs 14.6s)
-- **文件系统缓存**: 二次启动更快
+- **内存缓存**: 开发环境使用内存缓存而非持久缓存，适配Windows环境
 - **代码分包**: radix-ui、three、gsap独立打包优化加载
 - **内存配置**: NODE_OPTIONS="--max-old-space-size=8192"
+- **局域网访问**: 配置allowedDevOrigins支持局域网设备访问开发服务器
 
 ### Z-Index层级规范
 ```
@@ -390,6 +403,8 @@ node final-usage-verification.js          # 完整验证使用量流程
 ```bash
 node scripts/comprehensive-test.js        # 综合功能测试
 npx tsx scripts/check-tags-format.ts     # 检查标签格式
+npx tsx scripts/check-data.ts            # 检查数据一致性
+npx tsx scripts/diagnose-usage-stats.ts  # 诊断使用量统计
 ```
 
 ## 常见问题排查
