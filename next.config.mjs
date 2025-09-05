@@ -3,6 +3,14 @@ const nextConfig = {
   eslint: { ignoreDuringBuilds: false },
   typescript: { ignoreBuildErrors: false },
   images: { unoptimized: true },
+  
+  // 生产环境自动清理console语句
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production' ? {
+      exclude: ['error', 'warn']  // 保留重要的错误和警告日志
+    } : false,
+  },
+  
   // 允许在开发环境从指定来源（如同一局域网的设备）访问开发服务器
   // 参考: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
   allowedDevOrigins: ["192.168.0.3"],
