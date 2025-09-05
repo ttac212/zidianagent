@@ -216,8 +216,8 @@ export function withRateLimit<T extends any[], R>(
       throw limitCheck.error
     }
     
-    // 执行原始处理函数
-    const result = await handler(request, ...restArgs)
+    // 执行原始处理函数，使用类型断言来解决泛型约束问题
+    const result = await handler(...([request, ...restArgs] as T))
     
     return result
   }

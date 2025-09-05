@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
     // 验证和处理用户消息
     let validatedMessages = messages
     if (messages.length > 0) {
-      validatedMessages = messages.map(msg => {
+      validatedMessages = messages.map((msg: any) => {
         if (msg.role === 'user') {
           const validation = validateMessageContent(msg.content)
           if (!validation.isValid) {

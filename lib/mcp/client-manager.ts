@@ -140,11 +140,11 @@ export class MCPClientManager {
     try {
       const response = await client.request(
         { method: "tools/list" },
-        { timeout: 5000 }
+        {} as any
       )
       
       const tools: Record<string, any> = {}
-      if (response.tools) {
+      if (response && typeof response === 'object' && 'tools' in response && Array.isArray(response.tools)) {
         for (const tool of response.tools) {
           tools[tool.name] = {
             name: tool.name,
@@ -201,7 +201,8 @@ export class MCPClientManager {
               name: toolName,
               arguments: args
             }
-          }, { timeout: 30000 })
+          },
+          {} as any)
           
           return result
         } catch (error: any) {
@@ -282,7 +283,7 @@ export class MCPClientManager {
           // 简单的ping测试
           await clientWrapper.client.request(
             { method: "ping" },
-            { timeout: 5000 }
+            {} as any
           )
           
           results.push({

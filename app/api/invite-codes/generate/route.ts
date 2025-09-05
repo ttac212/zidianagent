@@ -61,8 +61,7 @@ export async function POST(request: NextRequest) {
     
     // 批量插入数据库
     const result = await prisma.inviteCode.createMany({
-      data: inviteCodes,
-      skipDuplicates: true, // 跳过重复的代码
+      data: inviteCodes
     })
     
     // 获取创建的邀请码详情

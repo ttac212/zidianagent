@@ -60,7 +60,7 @@ export function KeyboardShortcuts({ open, onOpenChange }: KeyboardShortcutsProps
                 {category.items.map((item, index) => (
                   <div key={index} className="flex items-center justify-between py-2">
                     <div className="flex items-center gap-2">
-                      {item.icon && <item.icon className="h-4 w-4 text-muted-foreground" />}
+                      {"icon" in item && item.icon && <item.icon className="h-4 w-4 text-muted-foreground" />}
                       <span className="text-sm">{item.description}</span>
                     </div>
                     <div className="flex items-center gap-1">

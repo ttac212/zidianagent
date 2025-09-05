@@ -135,6 +135,8 @@
     "@vitest/coverage-v8": "3.2.4",
     "dotenv": "^17.2.1",
     "dotenv-cli": "^10.0.0",
+    "eslint": "^9.34.0",
+    "eslint-config-next": "^15.5.2",
     "glob": "^11.0.3",
     "jsdom": "^26.1.0",
     "postcss": "^8.5",

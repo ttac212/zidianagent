@@ -24,8 +24,8 @@ export function PerformanceMonitor() {
       const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming
       const memory = (performance as any).memory
 
-      const loadTime = navigation.loadEventEnd - navigation.navigationStart
-      const renderTime = navigation.domContentLoadedEventEnd - navigation.navigationStart
+      const loadTime = navigation.loadEventEnd - navigation.startTime
+      const renderTime = navigation.domContentLoadedEventEnd - navigation.startTime
       const memoryUsage = memory ? memory.usedJSHeapSize / 1024 / 1024 : 0
       const networkLatency = navigation.responseStart - navigation.requestStart
 

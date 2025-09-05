@@ -590,8 +590,8 @@ export default function EnhancedSettingsPage() {
         }}
         onClose={() => setShowConnectionRecovery(false)}
         customRecoveryAction={async () => {
-          const networkHealthy = await checkNetworkStatus()
-          return networkHealthy.isConnected
+          const networkStatus = await checkNetworkStatus()
+          return networkStatus.isOnline && networkStatus.serverHealthy
         }}
       />
     </div>

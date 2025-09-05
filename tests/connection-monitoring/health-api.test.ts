@@ -114,8 +114,8 @@ describe('健康检查API测试', () => {
       const avgResponseTime = results.reduce((sum, r) => sum + r.responseTime, 0) / results.length;
       const maxResponseTime = Math.max(...results.map(r => r.responseTime));
       
-      .toFixed(1)}%`);
-      }ms`);
+      console.log(`负载测试完成: 成功率 ${(successCount / requestCount * 100).toFixed(1)}%`);
+      console.log(`平均响应时间: ${avgResponseTime.toFixed(1)}ms, 最大响应时间: ${maxResponseTime}ms`);
       // 验证性能指标
       expect(successCount / requestCount).toBeGreaterThan(0.95); // 95%成功率
       expect(avgResponseTime).toBeLessThan(100); // 平均100ms以内
@@ -139,7 +139,7 @@ describe('健康检查API测试', () => {
         await fetch(HEALTH_ENDPOINT, { signal: controller.signal });
         // 如果没有抛出错误，说明请求太快完成了
       } catch (error) {
-        expect(error.name).toBe('AbortError');
+        expect(error instanceof Error ? error.name : 'Unknown').toBe('AbortError');
       } finally {
         clearTimeout(timeoutId);
       }

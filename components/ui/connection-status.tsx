@@ -70,7 +70,7 @@ export function ConnectionStatus({
   const [previousStatus, setPreviousStatus] = useState<string>('unknown');
   const [tooltipPosition, setTooltipPosition] = useState<'top' | 'bottom'>('top');
   const [isMounted, setIsMounted] = useState(false);
-  const tooltipTimeoutRef = useRef<NodeJS.Timeout>();
+  const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const componentRef = useRef<HTMLDivElement>(null);
   
   const {

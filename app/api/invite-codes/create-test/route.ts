@@ -25,7 +25,7 @@ export async function POST() {
         description: `第一批测试邀请码 (${i}/50)`,
         maxUses: 1,
         expiresAt,
-        defaultRole: 'USER',
+        defaultRole: 'USER' as const,
         monthlyTokenLimit: 50000,
         createdBy: 'system',
       })

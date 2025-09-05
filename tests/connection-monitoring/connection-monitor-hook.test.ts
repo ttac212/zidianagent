@@ -54,7 +54,7 @@ describe('连接监控Hook测试', () => {
         expect(hookModule).toBeDefined();
         expect(typeof hookModule.useConnectionMonitor).toBe('function');
       } catch (error) {
-        expect(error.message).toContain('use-connection-monitor');
+        expect(error instanceof Error ? error.message : String(error)).toContain('use-connection-monitor');
       }
     });
 

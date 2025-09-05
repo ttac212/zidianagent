@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: { ignoreDuringBuilds: true },
-  typescript: { ignoreBuildErrors: true },
+  eslint: { ignoreDuringBuilds: false },
+  typescript: { ignoreBuildErrors: false },
   images: { unoptimized: true },
   // 允许在开发环境从指定来源（如同一局域网的设备）访问开发服务器
   // 参考: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins

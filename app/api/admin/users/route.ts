@@ -64,7 +64,6 @@ export const GET = withErrorHandler(async (request: NextRequest) => {
         _count: {
           select: {
             conversations: true,
-            messages: true,
             usageStats: true
           }
         }
@@ -90,7 +89,6 @@ export const GET = withErrorHandler(async (request: NextRequest) => {
       lastLoginAt: user.lastActiveAt?.toISOString() || null,
       // 统计数据
       totalConversations: user._count.conversations,
-      totalMessages: user._count.messages,
       totalSessions: user._count.usageStats,
       // 生成权限（基于角色）
       permissions: generatePermissions(user.role)

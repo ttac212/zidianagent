@@ -105,9 +105,11 @@ export interface ChatHeaderProps {
   editingTitle: boolean
   tempTitle: string
   isLoading: boolean
+  onCreateConversation?: (model?: string) => Promise<Conversation | null>
   onEditTitle: () => void
   onTitleChange: (title: string) => void
   onTitleSubmit: () => void
+  onDeleteConversation?: () => void
 }
 
 export interface ChatMessagesProps {

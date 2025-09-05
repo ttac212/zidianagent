@@ -5,7 +5,7 @@
 
 "use client"
 
-import React, { useEffect, useMemo, useRef } from 'react'
+import React, { useEffect, useMemo, useRef, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
 import { ALLOWED_MODELS } from '@/lib/ai/models'
@@ -24,7 +24,7 @@ import { useChatEffects } from '@/hooks/use-chat-effects'
 import { useModelState } from '@/hooks/use-model-state'
 
 // 导入类型和常量
-import type { SmartChatCenterProps } from '@/types/chat'
+import type { SmartChatCenterProps, Conversation } from '@/types/chat'
 import { DEFAULT_CHAT_SETTINGS } from '@/types/chat'
 
 /**
@@ -70,6 +70,12 @@ export const SmartChatCenterV2Fixed = React.memo<SmartChatCenterProps>(({
     messages: [], // 不从 conversation 初始化，避免循环
   })
 
+  // 包装onCreateConversation为Promise形式
+  const createConversationWrapper = useCallback(async (model?: string): Promise<Conversation | null> => {
+    onCreateConversation()
+    return null // 因为原始函数返回void，我们返回null
+  }, [onCreateConversation])
+
   // 操作管理
   const {
     sendMessage,
@@ -84,7 +90,7 @@ export const SmartChatCenterV2Fixed = React.memo<SmartChatCenterProps>(({
     conversation,
     onUpdateConversation,
     getCurrentModel, // 传递统一的模型获取函数
-    onCreateConversation, // 传递对话创建函数
+    onCreateConversation: createConversationWrapper, // 传递包装后的对话创建函数
     onSelectConversation, // 传递对话选择函数
   })
 
@@ -176,7 +182,7 @@ export const SmartChatCenterV2Fixed = React.memo<SmartChatCenterProps>(({
     }
     
     adjustHeightTimerRef.current = setTimeout(() => {
-      if (textareaRef.current && 'adjustHeight' in textareaRef.current && textareaRef.current.adjustHeight) {
+      if (textareaRef.current && 'adjustHeight' in textareaRef.current && typeof textareaRef.current.adjustHeight === 'function') {
         textareaRef.current.adjustHeight(true)
       }
       adjustHeightTimerRef.current = null
