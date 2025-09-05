@@ -118,21 +118,37 @@ export function useChatEffects({
     const currentMessageCount = state.messages.length
     const hasNewMessage = currentMessageCount > lastMessageCountRef.current
     
+    let scrollTimer: NodeJS.Timeout | null = null
+    
     if (hasNewMessage) {
       // 延迟滚动，确保 DOM 已更新
-      setTimeout(() => scrollToBottom(), 100)
+      scrollTimer = setTimeout(() => scrollToBottom(), 100)
     }
     
     lastMessageCountRef.current = currentMessageCount
+    
+    return () => {
+      if (scrollTimer) {
+        clearTimeout(scrollTimer)
+      }
+    }
   }, [state.messages.length, scrollToBottom])
 
   /**
    * 自动聚焦输入框（当加载完成时）
    */
   useEffect(() => {
+    let focusTimer: NodeJS.Timeout | null = null
+    
     if (!state.isLoading) {
       // 延迟聚焦，避免与其他操作冲突
-      setTimeout(() => focusInput(), 100)
+      focusTimer = setTimeout(() => focusInput(), 100)
+    }
+    
+    return () => {
+      if (focusTimer) {
+        clearTimeout(focusTimer)
+      }
     }
   }, [state.isLoading, focusInput])
 
@@ -206,14 +222,23 @@ export function useChatEffects({
    * 窗口大小变化处理
    */
   useEffect(() => {
+    let resizeTimer: NodeJS.Timeout | null = null
+    
     const handleResize = () => {
+      // 清除之前的定时器
+      if (resizeTimer) {
+        clearTimeout(resizeTimer)
+      }
       // 窗口大小变化时，重新滚动到底部
-      setTimeout(() => scrollToBottom(false), 100)
+      resizeTimer = setTimeout(() => scrollToBottom(false), 100)
     }
 
     window.addEventListener('resize', handleResize)
     return () => {
       window.removeEventListener('resize', handleResize)
+      if (resizeTimer) {
+        clearTimeout(resizeTimer)
+      }
     }
   }, [scrollToBottom])
 

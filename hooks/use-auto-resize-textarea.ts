@@ -9,6 +9,7 @@ export interface UseAutoResizeTextareaOptions {
 
 export function useAutoResizeTextarea({ minHeight, maxHeight }: UseAutoResizeTextareaOptions) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const scrollTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const adjustHeight = useCallback((reset?: boolean) => {
     const el = textareaRef.current
@@ -40,10 +41,16 @@ export function useAutoResizeTextarea({ minHeight, maxHeight }: UseAutoResizeTex
     
     // 如果内容超出最大高度，确保滚动到底部
     if (scrollHeight > (maxHeight ?? Number.POSITIVE_INFINITY)) {
-      setTimeout(() => {
+      // 清除之前的定时器
+      if (scrollTimerRef.current) {
+        clearTimeout(scrollTimerRef.current)
+      }
+      
+      scrollTimerRef.current = setTimeout(() => {
         if (el) {
           el.scrollTop = el.scrollHeight - el.clientHeight
         }
+        scrollTimerRef.current = null
       }, 0)
     }
   }, [minHeight, maxHeight])
@@ -63,6 +70,15 @@ export function useAutoResizeTextarea({ minHeight, maxHeight }: UseAutoResizeTex
     window.addEventListener("resize", handler)
     return () => window.removeEventListener("resize", handler)
   }, [adjustHeight])
+
+  // 组件卸载时清理定时器
+  useEffect(() => {
+    return () => {
+      if (scrollTimerRef.current) {
+        clearTimeout(scrollTimerRef.current)
+      }
+    }
+  }, [])
 
   return { textareaRef, adjustHeight }
 }

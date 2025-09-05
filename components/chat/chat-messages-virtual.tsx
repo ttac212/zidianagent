@@ -8,12 +8,13 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { MessageItem } from './message-item'
 import { TypingIndicator } from './typing-indicator'
 import type { ChatMessagesProps } from '@/types/chat'
+import { VIRTUAL_SCROLL_CONFIG } from '@/lib/config/chat-config'
 
-// 虚拟滚动配置
+// 使用统一配置，确保与主组件一致
 const VIRTUAL_CONFIG = {
-  itemHeight: 120, // 估计的消息项高度
-  overscan: 5, // 额外渲染的项数
-  threshold: 50, // 触发虚拟滚动的消息数量阈值
+  itemHeight: VIRTUAL_SCROLL_CONFIG.itemHeight,
+  overscan: VIRTUAL_SCROLL_CONFIG.overscan,
+  threshold: VIRTUAL_SCROLL_CONFIG.threshold,
 }
 
 // 错误状态组件
@@ -82,11 +83,11 @@ export const ChatMessagesVirtual = forwardRef<HTMLDivElement, ChatMessagesProps>
   useEffect(() => {
     if (scrollRef.current && messages.length > 0) {
       const scrollElement = scrollRef.current
-      // 检查是否接近底部（在底部100px内）
-      const isNearBottom = scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight < 100
+      // 检查是否接近底部（使用配置的阈值）
+      const isNearBottom = scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight < VIRTUAL_SCROLL_CONFIG.autoScrollThreshold
       
       // 如果接近底部或是新对话，自动滚动到底部
-      if (isNearBottom || messages.length <= 2) {
+      if (isNearBottom || messages.length <= VIRTUAL_SCROLL_CONFIG.newConversationScrollThreshold) {
         scrollElement.scrollTop = scrollElement.scrollHeight
       }
     }

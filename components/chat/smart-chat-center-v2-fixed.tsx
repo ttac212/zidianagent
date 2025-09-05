@@ -5,10 +5,11 @@
 
 "use client"
 
-import React, { useEffect, useMemo } from 'react'
+import React, { useEffect, useMemo, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
 import { ALLOWED_MODELS } from '@/lib/ai/models'
+import { VIRTUAL_SCROLL_CONFIG } from '@/lib/config/chat-config'
 
 // 导入子组件
 import { ChatHeader } from './chat-header'
@@ -50,6 +51,9 @@ export const SmartChatCenterV2Fixed = React.memo<SmartChatCenterProps>(({
     isInitialized: modelInitialized,
     validateModel
   } = useModelState(selectedModel)
+
+  // 定时器引用，用于防止内存泄漏
+  const adjustHeightTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // 初始化设置（使用统一的模型状态）
   const initialSettings = useMemo(() => {
@@ -167,10 +171,15 @@ export const SmartChatCenterV2Fixed = React.memo<SmartChatCenterProps>(({
     dispatch({ type: 'SET_INPUT', payload: '' })
     
     // 等待状态更新完成后再重置高度
-    setTimeout(() => {
+    if (adjustHeightTimerRef.current) {
+      clearTimeout(adjustHeightTimerRef.current)
+    }
+    
+    adjustHeightTimerRef.current = setTimeout(() => {
       if (textareaRef.current && 'adjustHeight' in textareaRef.current && textareaRef.current.adjustHeight) {
         textareaRef.current.adjustHeight(true)
       }
+      adjustHeightTimerRef.current = null
     }, 0)
     
     // 异步发送消息
@@ -197,6 +206,15 @@ export const SmartChatCenterV2Fixed = React.memo<SmartChatCenterProps>(({
       })
     }
   }, [currentModel, state.settings.modelId, modelInitialized, dispatch])
+
+  // 组件卸载时清理定时器
+  useEffect(() => {
+    return () => {
+      if (adjustHeightTimerRef.current) {
+        clearTimeout(adjustHeightTimerRef.current)
+      }
+    }
+  }, [])
 
   // 调试日志：检查组件渲染状态
   console.debug('SmartChatCenterV2Fixed render', {
@@ -226,7 +244,7 @@ export const SmartChatCenterV2Fixed = React.memo<SmartChatCenterProps>(({
       {/* 消息列表 - 可滚动区域，明确设置 flex-grow 和 overflow */}
       <div className="flex-1 overflow-hidden" style={{ flexGrow: 1, flexShrink: 1, minHeight: 0, overflow: 'hidden' }}>
         {/* 根据消息数量自动选择普通或虚拟滚动组件 */}
-        {state.messages.length > 100 ? (
+        {state.messages.length > VIRTUAL_SCROLL_CONFIG.threshold ? (
           <ChatMessagesVirtual
             ref={scrollAreaRef}
             messages={state.messages}

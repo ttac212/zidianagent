@@ -116,6 +116,8 @@ pnpm debt:track                    # 技术债务追踪（TODO/FIXME统计）
 3. **对话管理**: `use-conversations` hook 管理 LocalStorage + API 双重持久化
 4. **API端点**: `/api/chat` 代理转发请求到 302.AI，支持SSE流式响应
 5. **模型验证**: `lib/model-validator.ts` 确保对话中模型一致性
+6. **虚拟滚动**: `components/chat/chat-messages-virtual.tsx` 智能渲染长对话，阈值100条消息
+7. **配置管理**: `lib/config/chat-config.ts` 统一管理聊天系统性能参数
 
 ### 工作区架构设计
 主工作区页面位于 `app/workspace/page.tsx`，采用双栏布局：
@@ -254,11 +256,15 @@ NEXT_PUBLIC_CONNECTION_MONITORING=enabled  # 连接监控功能开关 (enabled/d
 
 ### 聊天核心
 - `components/chat/smart-chat-center-v2-fixed.tsx`: 主聊天组件
+- `components/chat/chat-messages-virtual.tsx`: 虚拟滚动消息列表（100条消息阈值）
 - `components/chat/chat-header.tsx`: 聊天头部（简化版，仅显示标题）
 - `hooks/use-chat-state.ts`: 聊天状态管理
 - `hooks/use-chat-actions-fixed.ts`: 聊天操作逻辑（纯fetch实现）
+- `hooks/use-auto-resize-textarea.ts`: 输入框自动调整高度
+- `hooks/use-chat-effects.ts`: 聊天副作用管理（滚动、焦点等）
 - `app/api/chat/route.ts`: 聊天API端点
 - `types/chat.ts`: 聊天相关类型定义
+- `lib/config/chat-config.ts`: 聊天系统统一配置
 - `app/workspace/page.tsx`: 工作区主页，包含对话管理功能
 
 ### 可靠性监控系统
@@ -320,8 +326,10 @@ z-10:    背景层
   - `use-chat-state.ts` 中的状态reducer
   - SSE流处理逻辑在 `use-chat-actions-fixed.ts`
   - 模型一致性检查在 `lib/model-validator.ts`
+  - **虚拟滚动配置**: `lib/config/chat-config.ts` 中的 `VIRTUAL_SCROLL_CONFIG`
 - **使用量记录流程**: 聊天API通过SSE流提取token使用量 → 保存到Message表 → 更新User总量 → 双重upsert到UsageStats表（总量+按模型）
 - **关键函数**: `saveAssistantMessage()` 负责异步保存AI响应和统计更新
+- **性能优化**: 长对话（>100条消息）自动启用虚拟滚动，估计项高度120px，缓冲区5项
 
 ### 组件开发
 - 新UI组件优先使用 Radix UI 封装
@@ -450,6 +458,12 @@ npx prisma generate                     # 重新生成客户端
 - 所有动画和交互已进行响应式优化
 
 # 最新修复记录
+- ✅ **长对话显示性能优化** (2025-09-04)：
+  - 虚拟滚动阈值从50条提升到100条，减少不必要的性能开销
+  - 优化消息项高度估算算法，提高滚动精度
+  - 完善边界值验证和配置管理系统
+  - 新增统一的聊天配置文件 `lib/config/chat-config.ts`
+  - 改进自动滚动逻辑和新消息标记机制
 - ✅ **连接状态组件z-index优化** (2025-08-31)：
   - 统一所有页面使用 `z-[45]` 层级
   - Tooltip提升至 `z-[60]` 避免遮挡
