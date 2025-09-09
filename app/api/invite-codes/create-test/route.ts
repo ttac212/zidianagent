@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
 // 创建测试邀请码 - 仅开发环境可用
@@ -40,6 +40,7 @@ export async function POST() {
         })
         created.push(invite)
       } catch (error) {
+        void error
         }
     }
 

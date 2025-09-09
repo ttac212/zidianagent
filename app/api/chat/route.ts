@@ -471,6 +471,7 @@ export async function POST(request: NextRequest) {
           }
         })
       } catch (dbError) {
+        void dbError
         // Failed to record failed call stats - error logged internally
       }
     }
@@ -478,7 +479,7 @@ export async function POST(request: NextRequest) {
     const payload = { error: error?.message || "请求处理失败" }
     return new Response(JSON.stringify(payload), { status: 500, headers: { "Content-Type": "application/json" } })
   } finally {
-    const cost = Date.now() - startedAt
-    console.debug('Request completed in', cost, 'ms')
+    const _cost = Date.now() - startedAt
+    // Request completed - timing logged internally
   }
 }

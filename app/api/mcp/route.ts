@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error: any) {
-    console.error('MCP Status API Error:', error)
+    void error
     
     return new Response(JSON.stringify({ 
       success: false,
@@ -197,7 +197,7 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error: any) {
-    console.error('MCP Action API Error:', error)
+    void error
     
     return new Response(JSON.stringify({ 
       success: false,

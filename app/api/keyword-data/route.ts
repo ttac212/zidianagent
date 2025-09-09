@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
         currentKeyword: keyword
       })
     } catch (error) {
+      void error
       // 如果文件不存在，返回可用关键字列表
       return NextResponse.json({
         success: false,
@@ -55,7 +56,7 @@ export async function GET(request: NextRequest) {
 }
 
 // 获取所有可用的关键字列表
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   try {
     const dataDir = path.join(process.cwd(), "keyword_search_aggregated")
     const files = await fs.readdir(dataDir)
@@ -77,6 +78,7 @@ export async function POST(request: NextRequest) {
             lastUpdated: data.metadata?.last_updated || null
           }
         } catch (error) {
+          void error
           return {
             keyword,
             videoCount: 0,

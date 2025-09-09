@@ -160,6 +160,7 @@ export async function POST(request: NextRequest) {
     })
     
   } catch (error) {
+    void error
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }
@@ -168,7 +169,7 @@ export async function POST(request: NextRequest) {
 }
 
 // 获取尝试次数（简化版，实际应从缓存获取）
-async function getAttemptCount(ipHash: string): Promise<number> {
+async function getAttemptCount(_ipHash: string): Promise<number> {
   // 这里应该从Redis或内存缓存获取
   // 暂时返回模拟值
   return 0
@@ -189,7 +190,7 @@ function generateRegistrationToken(inviteId: string, ipHash: string): string {
 }
 
 // OPTIONS请求处理（CORS）
-export async function OPTIONS(request: NextRequest) {
+export async function OPTIONS(_request: NextRequest) {
   return new NextResponse(null, {
     status: 200,
     headers: {

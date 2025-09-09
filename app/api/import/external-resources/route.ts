@@ -109,6 +109,7 @@ export async function POST(request: NextRequest) {
           fs.unlinkSync(tempFilePath)
         }
       } catch (error) {
+        void error
         }
     }
 

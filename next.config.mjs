@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: { ignoreDuringBuilds: true }, // 暂时忽略构建时ESLint警告，代码清理阶段
+  eslint: { ignoreDuringBuilds: true }, // 临时忽略少数非关键ESLint警告
   typescript: { ignoreBuildErrors: false },
   images: { unoptimized: true },
   

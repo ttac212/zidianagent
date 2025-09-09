@@ -144,7 +144,7 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error: any) {
-    console.error('MCP Health Check Error:', error)
+    void error
     
     return new Response(JSON.stringify({ 
       success: false,
@@ -298,7 +298,7 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error: any) {
-    console.error('MCP Health Action Error:', error)
+    void error
     
     return new Response(JSON.stringify({ 
       success: false,

@@ -74,6 +74,7 @@ export async function POST(request: NextRequest) {
       message: '邀请码验证成功'
     })
   } catch (error) {
+    void error
     return NextResponse.json(
       { error: '验证邀请码失败' },
       { status: 500 }

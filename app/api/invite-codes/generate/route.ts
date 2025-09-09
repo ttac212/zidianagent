@@ -96,6 +96,7 @@ export async function POST(request: NextRequest) {
     }, { status: 201 })
     
   } catch (error) {
+    void error
     return NextResponse.json(
       { error: '生成邀请码失败' },
       { status: 500 }
