@@ -189,8 +189,6 @@ export default async function middleware(req: NextRequest) {
       
     } catch (error) {
       // JWT解密失败，清除无效的session cookie
-      console.debug('JWT verification failed:', error)
-      
       // 创建重定向响应并清除相关cookies
       const response = redirectToLogin(req)
       

@@ -176,21 +176,12 @@ export function createSafeContextMessage(editorExcerpt: string): { role: string;
   const filterResult = filterEditorExcerpt(editorExcerpt)
   
   if (!filterResult.isValid) {
-    console.warn('[Content Filter] Rejected editor excerpt:', {
-      dangerLevel: filterResult.dangerLevel,
-      warnings: filterResult.warnings
-    })
     return null
   }
 
   // 记录可疑内容
   if (filterResult.dangerLevel !== 'safe') {
-    console.warn('[Content Filter] Suspicious content filtered:', {
-      dangerLevel: filterResult.dangerLevel,
-      warnings: filterResult.warnings,
-      metadata: filterResult.metadata
-    })
-  }
+    }
 
   return {
     role: "system",

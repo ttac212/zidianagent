@@ -82,13 +82,11 @@ class APIMonitor {
   private checkAlerts(stat: APIStats): void {
     // 慢请求告警
     if (stat.duration > this.slowRequestThreshold) {
-      console.warn(`Slow request detected: ${stat.endpoint} took ${stat.duration}ms`)
-    }
+      }
     
     // 错误告警
     if (!stat.success) {
-      console.error(`API error: ${stat.endpoint} - ${stat.error || `HTTP ${stat.status}`}`)
-    }
+      }
     
     // 检查错误率
     const recentStats = this.getRecentStats(100) // 最近100个请求
@@ -97,7 +95,7 @@ class APIMonitor {
       const errorRate = errorCount / recentStats.length
       
       if (errorRate > this.errorThreshold) {
-        console.warn(`High error rate detected: ${(errorRate * 100).toFixed(2)}% (${errorCount}/${recentStats.length})`)
+        .toFixed(2)}% (${errorCount}/${recentStats.length})`)
       }
     }
   }
@@ -249,8 +247,7 @@ if (process.env.NODE_ENV === 'development') {
   setInterval(() => {
     const report = apiMonitor.getPerformanceReport()
     if (report) {
-      console.debug('API Performance Report:\n', report)
-    }
+      }
   }, 60000)
 }
 

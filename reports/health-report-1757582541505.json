@@ -1,0 +1,200 @@
+{
+  "timestamp": "2025-09-11T09:22:17.442Z",
+  "checks": {
+    "security": {
+      "passed": false,
+      "issues": [
+        {
+          "severity": "high",
+          "message": "可能的敏感信息泄露: scripts\\db\\backup-database.js",
+          "fix": "将敏感信息移至环境变量"
+        }
+      ],
+      "score": 80
+    },
+    "codeQuality": {
+      "passed": false,
+      "issues": [
+        {
+          "severity": "medium",
+          "message": "发现 46 个待处理标记(TODO/FIXME/HACK)",
+          "fix": "定期清理技术债务"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: app\\documents\\page.tsx (665行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: app\\inspiration\\page.tsx (606行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: app\\merchants\\[id]\\page.tsx (604行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: app\\settings\\enhanced-page.tsx (599行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: app\\settings\\page.tsx (572行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: components\\ui\\sidebar.tsx (727行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: hooks\\use-chat-actions-fixed.ts (506行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: lib\\import\\local-folder-importer.ts (533行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: scripts\\auto-backup-scheduler.js (626行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: scripts\\db\\restore-database.js (608行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: scripts\\test\\comprehensive-reliability-test.js (650行)",
+          "fix": "考虑拆分为更小的模块"
+        }
+      ],
+      "score": 0
+    },
+    "performance": {
+      "passed": false,
+      "issues": [
+        {
+          "severity": "medium",
+          "message": "构建产物过大: 444.21MB",
+          "fix": "优化打包策略，实施代码分割"
+        },
+        {
+          "severity": "low",
+          "message": "发现 1 个未优化的大图片",
+          "fix": "使用图片压缩工具或Next.js Image组件"
+        }
+      ],
+      "score": 70
+    },
+    "dependencies": {
+      "passed": true,
+      "issues": [],
+      "score": 100
+    },
+    "testing": {
+      "passed": false,
+      "issues": [
+        {
+          "severity": "high",
+          "message": "测试覆盖率低: 11.3%的文件有测试",
+          "fix": "增加单元测试和集成测试"
+        }
+      ],
+      "score": 11.29032258064516
+    }
+  },
+  "score": 52,
+  "issues": [
+    {
+      "severity": "high",
+      "message": "可能的敏感信息泄露: scripts\\db\\backup-database.js",
+      "fix": "将敏感信息移至环境变量"
+    },
+    {
+      "severity": "medium",
+      "message": "发现 46 个待处理标记(TODO/FIXME/HACK)",
+      "fix": "定期清理技术债务"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: app\\documents\\page.tsx (665行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: app\\inspiration\\page.tsx (606行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: app\\merchants\\[id]\\page.tsx (604行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: app\\settings\\enhanced-page.tsx (599行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: app\\settings\\page.tsx (572行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: components\\ui\\sidebar.tsx (727行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: hooks\\use-chat-actions-fixed.ts (506行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: lib\\import\\local-folder-importer.ts (533行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: scripts\\auto-backup-scheduler.js (626行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: scripts\\db\\restore-database.js (608行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: scripts\\test\\comprehensive-reliability-test.js (650行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "medium",
+      "message": "构建产物过大: 444.21MB",
+      "fix": "优化打包策略，实施代码分割"
+    },
+    {
+      "severity": "low",
+      "message": "发现 1 个未优化的大图片",
+      "fix": "使用图片压缩工具或Next.js Image组件"
+    },
+    {
+      "severity": "high",
+      "message": "测试覆盖率低: 11.3%的文件有测试",
+      "fix": "增加单元测试和集成测试"
+    }
+  ],
+  "suggestions": [
+    "项目健康度较低，建议立即处理严重问题"
+  ]
+}

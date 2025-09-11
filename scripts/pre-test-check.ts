@@ -18,12 +18,11 @@ const colors = {
 }
 
 const log = {
-  success: (msg: string) => console.log(`${colors.green}${msg}${colors.reset}`),
-  error: (msg: string) => console.log(`${colors.red}${msg}${colors.reset}`),
-  warning: (msg: string) => console.log(`${colors.yellow}${msg}${colors.reset}`),
-  info: (msg: string) => console.log(`${colors.blue}${msg}${colors.reset}`),
-  section: (msg: string) => console.log(`\n${colors.cyan}=== ${msg} ===${colors.reset}`)
-}
+  success: (msg: string) => ,
+  error: (msg: string) => ,
+  warning: (msg: string) => ,
+  info: (msg: string) => ,
+  section: (msg: string) => }
 
 // 检查结果统计
 let totalChecks = 0
@@ -284,7 +283,7 @@ async function runAllChecks() {
   
   const passRate = totalChecks > 0 ? (passedChecks / totalChecks * 100).toFixed(1) : 0
   
-  console.log(`通过检查: ${passedChecks}/${totalChecks} (${passRate}%)`)
+  `)
   
   if (warnings > 0) {
     log.warning(`警告数量: ${warnings}`)

@@ -19,8 +19,7 @@ async function checkData() {
     })
 
     categories.forEach(category => {
-      console.log(`分类: ${category.name}, 商家数: ${category._count.merchants}`)
-    })
+      })
     // 检查商家数据
     const merchants = await prisma.merchant.findMany({
       include: {
@@ -33,8 +32,7 @@ async function checkData() {
     })
 
     merchants.forEach(merchant => {
-      console.log(`商家: ${merchant.name}, ID: ${merchant.id}`)
-    })
+      })
     // 检查内容数据
     const contents = await prisma.merchantContent.findMany({
       include: {
@@ -46,11 +44,9 @@ async function checkData() {
       take: 10
     })
 
-    console.log(`\n最新内容:`)
     contents.forEach((content, index) => {
-      console.log(`${index + 1}. ${content.title.substring(0, 50)}${content.title.length > 50 ? '...' : ''}`)
-      console.log(`   商家: ${content.merchant.name}\n`)
-    })
+      }${content.title.length > 50 ? '...' : ''}`)
+      })
 
     // 总内容数量
     const totalContents = await prisma.merchantContent.count()
@@ -66,17 +62,8 @@ async function checkData() {
       }
     })
 
-    console.log(`\n统计信息:`)
-    console.log(`总商家数: ${stats._count.id}`)
-    console.log(`总内容数: ${totalContents}`)
-    console.log(`总点赞数: ${stats._sum.totalDiggCount || 0}`)
-    console.log(`总评论数: ${stats._sum.totalCommentCount || 0}`)
-    console.log(`总收藏数: ${stats._sum.totalCollectCount || 0}`)
-    console.log(`总分享数: ${stats._sum.totalShareCount || 0}`)
-
-  } catch (error) {
-    console.error('检查数据时出错:', error)
-  } finally {
+    } catch (error) {
+    } finally {
     await prisma.$disconnect()
   }
 }

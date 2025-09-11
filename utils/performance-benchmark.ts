@@ -273,10 +273,8 @@ export async function runPerformanceTestSuite(): Promise<void> {
   // 对比分析
   try {
     const comparison = benchmark.compare('消息渲染-10条', '消息渲染-100条')
-    console.log('性能对比:', comparison)
-  } catch (error) {
-    console.error('性能对比分析失败:', error)
-  }
+    } catch (error) {
+    }
 }
 
 // 导出单例实例

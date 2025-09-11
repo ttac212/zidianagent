@@ -183,8 +183,6 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error: any) {
-    console.error('MCP Test API Error:', error)
-    
     return new Response(JSON.stringify({ 
       success: false,
       error: error?.message || "MCP测试失败",

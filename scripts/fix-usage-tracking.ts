@@ -45,8 +45,7 @@ async function fixUsageTracking() {
     for (const msg of messagesWithoutTokens) {
       const contentLength = msg.content?.length || 0
       const estimatedTokens = Math.ceil(contentLength / 4) // 粗略估算
-      console.log(`  消息ID: ${msg.id}, 估算tokens: ${estimatedTokens}, 模型: ${msg.modelId}`)
-    }
+      }
     
     // 3. 检查用户使用量是否匹配
     const users = await prisma.user.findMany({
@@ -76,19 +75,13 @@ async function fixUsageTracking() {
       const diff = Math.abs(actual - recorded)
       
       if (diff > 100) {
-        console.log(`${colors.red}用户 ${user.email}: 使用量不匹配，差异 ${diff} tokens${colors.reset}`)
-        console.log(`  记录的使用量: ${recorded}`)
-        console.log(`  实际使用量: ${actual}`)
-      } else {
-        console.log(`${colors.green}用户 ${user.email}: 使用量匹配 (${actual} tokens)${colors.reset}`)
+        } else {
+        ${colors.reset}`)
       }
     }
     
     // 4. 生成修复建议
-    console.log(`${colors.cyan}修复建议:${colors.reset}`)
-    console.log('1. 在聊天API route.ts中的saveAssistantMessage()需要await')
-    console.log('2. 确保SSE流中正确捕获usage信息')
-    console.log('3. 验证数据库约束配置正确')
+    需要await')
     } catch (error) {
     } finally {
     await prisma.$disconnect()

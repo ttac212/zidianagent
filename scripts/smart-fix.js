@@ -3,8 +3,6 @@
 const fs = require('fs');
 const path = require('path');
 
-console.log('🔧 智能修复被损坏的文件...\n');
-
 // 已知被损坏的文件和修复模式
 const filesToFix = [
   {
@@ -57,7 +55,6 @@ function fixFile(fileInfo) {
   const fullPath = path.join(process.cwd(), fileInfo.file);
   
   if (!fs.existsSync(fullPath)) {
-    console.log(`⚠️ 文件不存在: ${fileInfo.file}`);
     return false;
   }
   
@@ -106,23 +103,18 @@ function fixFile(fileInfo) {
       
       // 写入修复后的内容
       fs.writeFileSync(fullPath, content);
-      console.log(`✅ 修复 ${fileInfo.file}: ${fixCount} 处`);
       totalFixed++;
       return true;
     } else {
-      console.log(`ℹ️ ${fileInfo.file} 无需修复`);
       return false;
     }
   } catch (error) {
-    console.error(`❌ 修复失败 ${fileInfo.file}: ${error.message}`);
     totalFailed++;
     return false;
   }
 }
 
 // 执行修复
-console.log('开始智能修复...\n');
-
 filesToFix.forEach(fileInfo => {
   fixFile(fileInfo);
 });
@@ -147,13 +139,5 @@ additionalFiles.forEach(file => {
   });
 });
 
-console.log('\n' + '='.repeat(50));
-console.log('📊 修复报告');
-console.log('='.repeat(50));
-console.log(`✅ 成功修复: ${totalFixed} 个文件`);
-console.log(`❌ 失败: ${totalFailed} 个文件`);
-
-console.log('\n下一步：');
-console.log('1. 运行 pnpm tsc --noEmit 检查是否还有错误');
-console.log('2. 运行 pnpm dev 测试应用');
-console.log('3. 如有问题，从 .damaged 文件恢复');
+);
+);

@@ -6,14 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 
-console.log('===========================================');
-console.log('        健康检查API诊断工具 v1.0          ');
-console.log('===========================================\n');
-
 // 1. 检查环境变量配置
-console.log('📋 步骤1: 检查环境变量配置');
-console.log('-------------------------------------------');
-
 const envFiles = ['.env', '.env.local'];
 const envConfigs = {};
 
@@ -23,32 +16,26 @@ envFiles.forEach(file => {
     const content = fs.readFileSync(filePath, 'utf8');
     const lines = content.split('\n');
     
-    console.log(`\n✅ 找到文件: ${file}`);
-    
     lines.forEach(line => {
       if (line.includes('NEXT_PUBLIC_CONNECTION_MONITORING')) {
         const [key, value] = line.split('=');
         if (value) {
           envConfigs[file] = value.trim();
-          console.log(`   CONNECTION_MONITORING = ${value.trim()}`);
+          }`);
         }
       }
       if (line.includes('NEXTAUTH_URL') || line.includes('NEXTAUTH_SECRET')) {
         const [key, value] = line.split('=');
         if (key && value) {
-          console.log(`   ${key.trim()} = ${value ? '已配置' : '未配置'}`);
+          } = ${value ? '已配置' : '未配置'}`);
         }
       }
     });
   } else {
-    console.log(`❌ 文件不存在: ${file}`);
-  }
+    }
 });
 
 // 2. 分析503错误的可能原因
-console.log('\n\n📊 步骤2: 503错误原因分析');
-console.log('-------------------------------------------');
-
 const reasons = [];
 
 // 检查环境变量不一致
@@ -74,9 +61,6 @@ Object.entries(envConfigs).forEach(([file, value]) => {
 });
 
 // 3. 内存使用检查
-console.log('\n📊 步骤3: 运行时资源检查');
-console.log('-------------------------------------------');
-
 const memoryUsage = process.memoryUsage();
 const memoryInMB = {
   rss: Math.round(memoryUsage.rss / 1024 / 1024),
@@ -84,12 +68,6 @@ const memoryInMB = {
   heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024),
   external: Math.round(memoryUsage.external / 1024 / 1024)
 };
-
-console.log(`内存使用情况:`);
-console.log(`   RSS: ${memoryInMB.rss} MB`);
-console.log(`   堆总量: ${memoryInMB.heapTotal} MB`);
-console.log(`   堆使用: ${memoryInMB.heapUsed} MB`);
-console.log(`   外部: ${memoryInMB.external} MB`);
 
 if (memoryInMB.heapUsed > 2048) {
   reasons.push({
@@ -101,9 +79,6 @@ if (memoryInMB.heapUsed > 2048) {
 }
 
 // 4. 实际测试健康检查逻辑
-console.log('\n🔍 步骤4: 模拟健康检查逻辑');
-console.log('-------------------------------------------');
-
 // 模拟健康检查
 function simulateHealthCheck() {
   const checks = [];
@@ -153,9 +128,8 @@ function simulateHealthCheck() {
     });
   }
 
-  console.log('\n检查结果:');
-  checks.forEach(check => console.log(`   ${check}`));
-  console.log(`\n最终状态: ${healthy ? '✅ 健康' : '❌ 不健康 (会返回503)'}`);
+  checks.forEach(check => );
+  '}`);
 
   return healthy;
 }
@@ -167,44 +141,23 @@ require('dotenv').config({ path: '.env.local', override: true });
 const isHealthy = simulateHealthCheck();
 
 // 5. 诊断结果汇总
-console.log('\n\n🔬 诊断结果汇总');
-console.log('===========================================');
-
 if (reasons.length === 0 && isHealthy) {
-  console.log('✅ 未发现明显问题');
-  console.log('\n可能的原因:');
-  console.log('1. 环境变量在运行时被动态修改');
-  console.log('2. 并发请求导致的竞态条件');
-  console.log('3. Next.js热重载导致的临时状态不一致');
-} else {
-  console.log(`发现 ${reasons.length} 个潜在问题:\n`);
-  
+  } else {
   const criticalIssues = reasons.filter(r => r.severity === 'CRITICAL');
   const highIssues = reasons.filter(r => r.severity === 'HIGH');
   
   if (criticalIssues.length > 0) {
-    console.log('🔴 严重问题:');
     criticalIssues.forEach((issue, i) => {
-      console.log(`\n${i + 1}. ${issue.issue}`);
-      console.log(`   详情: ${issue.detail}`);
-      console.log(`   影响: ${issue.impact}`);
-    });
+      });
   }
   
   if (highIssues.length > 0) {
-    console.log('\n🟡 高优先级问题:');
     highIssues.forEach((issue, i) => {
-      console.log(`\n${i + 1}. ${issue.issue}`);
-      console.log(`   详情: ${issue.detail}`);
-      console.log(`   影响: ${issue.impact}`);
-    });
+      });
   }
 }
 
 // 6. 修复建议
-console.log('\n\n💡 修复建议');
-console.log('===========================================');
-
 const suggestions = [
   '1. 确保所有环境变量文件中 NEXT_PUBLIC_CONNECTION_MONITORING=enabled',
   '2. 确保 NEXTAUTH_URL 和 NEXTAUTH_SECRET 已正确配置',
@@ -216,16 +169,6 @@ const suggestions = [
   '5. 考虑实现健康检查结果缓存，避免频繁检查'
 ];
 
-suggestions.forEach(suggestion => console.log(suggestion));
+suggestions.forEach(suggestion => );
 
 // 7. 快速修复脚本
-console.log('\n\n🔧 快速修复命令');
-console.log('===========================================');
-console.log('# 修复环境变量配置:');
-console.log('echo "NEXT_PUBLIC_CONNECTION_MONITORING=enabled" >> .env.local');
-console.log('\n# 重启开发服务器:');
-console.log('pnpm dev');
-console.log('\n# 验证修复:');
-console.log('curl http://localhost:3007/api/health');
-
-console.log('\n\n✨ 诊断完成！');

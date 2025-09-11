@@ -371,9 +371,9 @@ function generateReport() {
   }
   
   // 显示报告
-  );
+  console.log('===========================================');
   log(`   项目健康度报告 - ${new Date().toLocaleDateString()}`, 'bold');
-  );
+  console.log('===========================================')
   
   // 显示总分
   const scoreColor = healthReport.score >= 80 ? 'green' : healthReport.score >= 60 ? 'yellow' : 'red';
@@ -430,7 +430,7 @@ function generateReport() {
   fs.writeFileSync(reportPath, JSON.stringify(healthReport, null, 2));
   log(`\n报告已保存至: ${reportPath}`, 'green');
   
-  );
+  console.log('===========================================');
   
   // 返回退出码
   return healthReport.score >= 60 ? 0 : 1;

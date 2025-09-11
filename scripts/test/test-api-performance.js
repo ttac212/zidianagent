@@ -4,10 +4,6 @@
  */
 
 async function testAPIPerformance() {
-  console.log('===========================================')
-  console.log('         API性能测试 v1.0                ')
-  console.log('===========================================\n')
-
   const baseUrl = 'http://localhost:3007'
   const endpoints = [
     {
@@ -46,9 +42,6 @@ async function testAPIPerformance() {
   const results = []
 
   for (const endpoint of endpoints) {
-    console.log(`📊 测试: ${endpoint.name}`)
-    console.log('-------------------------------------------')
-    
     const testResults = []
     const iterations = 5
 
@@ -75,10 +68,7 @@ async function testAPIPerformance() {
           time: responseTime
         })
 
-        console.log(`  测试${i}: ${response.status} - ${responseTime}ms`)
-
-      } catch (error) {
-        console.log(`  测试${i}: 错误 - ${error.message}`)
+        } catch (error) {
         testResults.push({
           iteration: i,
           status: 0,
@@ -115,18 +105,10 @@ async function testAPIPerformance() {
 
     results.push(result)
 
-    console.log(`\n  📈 统计:`)
-    console.log(`  平均响应: ${result.avgTime}ms`)
-    console.log(`  最快/最慢: ${minTime}ms / ${maxTime}ms`)
-    console.log(`  成功率: ${result.successRate}`)
-    console.log(`  ${result.passed ? '✅ 通过' : '❌ 未通过'} (期望 <${endpoint.expectedTime}ms)\n`)
+    \n`)
   }
 
   // 总结报告
-  console.log('===========================================')
-  console.log('              测试报告                    ')
-  console.log('===========================================\n')
-
   console.table(results.map(r => ({
     'API端点': r.endpoint,
     '平均响应(ms)': r.avgTime,
@@ -139,35 +121,32 @@ async function testAPIPerformance() {
   const totalCount = results.length
   const passRate = (passedCount / totalCount * 100).toFixed(1)
 
-  console.log(`\n总体通过率: ${passRate}% (${passedCount}/${totalCount})`)
+  `)
 
   // 性能评级
   const avgResponseTime = results.reduce((sum, r) => sum + r.avgTime, 0) / results.length
   
-  console.log(`\n性能评级:`)
   if (avgResponseTime < 50) {
-    console.log('⭐⭐⭐⭐⭐ 极佳 (<50ms)')
+    ')
   } else if (avgResponseTime < 100) {
-    console.log('⭐⭐⭐⭐ 优秀 (<100ms)')
+    ')
   } else if (avgResponseTime < 200) {
-    console.log('⭐⭐⭐ 良好 (<200ms)')
+    ')
   } else if (avgResponseTime < 500) {
-    console.log('⭐⭐ 一般 (<500ms)')
+    ')
   } else {
-    console.log('⭐ 需要优化 (>500ms)')
+    ')
   }
 
   // 优化建议
   const slowAPIs = results.filter(r => !r.passed)
   if (slowAPIs.length > 0) {
-    console.log('\n⚠️ 需要优化的API:')
     slowAPIs.forEach(api => {
-      console.log(`  - ${api.endpoint}: ${api.avgTime}ms (期望 <${api.expectedTime}ms)`)
+      `)
     })
   }
 
-  console.log('\n✨ 测试完成！')
-}
+  }
 
 // 运行测试
 testAPIPerformance().catch(console.error)

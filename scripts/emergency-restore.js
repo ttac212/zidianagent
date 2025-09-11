@@ -3,8 +3,6 @@
 const fs = require('fs');
 const path = require('path');
 
-console.log('🚨 紧急恢复受损文件...\n');
-
 // 需要恢复的关键文件（基于TypeScript错误）
 const filesToRestore = [
   'app/api/chat/route.ts',
@@ -22,8 +20,6 @@ let restoredCount = 0;
 let failedCount = 0;
 
 // 查找所有.backup文件并恢复
-console.log('🔍 查找所有备份文件...\n');
-
 function findBackupFiles(dir) {
   const files = [];
   const items = fs.readdirSync(dir, { withFileTypes: true });
@@ -43,29 +39,23 @@ function findBackupFiles(dir) {
 const backupFiles = findBackupFiles(process.cwd());
 
 if (backupFiles.length > 0) {
-  console.log(`找到 ${backupFiles.length} 个备份文件\n`);
-  
   backupFiles.forEach(backupPath => {
     const originalPath = backupPath.replace('.backup', '');
     
     try {
       const backupContent = fs.readFileSync(backupPath, 'utf8');
       fs.writeFileSync(originalPath, backupContent);
-      console.log(`✅ 恢复: ${path.relative(process.cwd(), originalPath)}`);
+      , originalPath)}`);
       restoredCount++;
       
       // 删除备份文件
       fs.unlinkSync(backupPath);
     } catch (error) {
-      console.error(`❌ 恢复失败: ${path.relative(process.cwd(), originalPath)}`);
-      console.error(`   错误: ${error.message}`);
+      , originalPath)}`);
       failedCount++;
     }
   });
 } else {
-  console.log('⚠️ 没有找到.backup文件\n');
-  console.log('尝试手动修复关键文件...\n');
-  
   // 手动修复最关键的语法错误
   filesToRestore.forEach(file => {
     const fullPath = path.join(process.cwd(), file);
@@ -97,33 +87,17 @@ if (backupFiles.length > 0) {
         
         if (modified) {
           fs.writeFileSync(fullPath, content);
-          console.log(`🔧 手动修复: ${file}`);
           restoredCount++;
         }
       } catch (error) {
-        console.error(`❌ 无法修复: ${file}`);
         failedCount++;
       }
     }
   });
 }
 
-console.log('\n' + '='.repeat(50));
-console.log('📊 恢复报告');
-console.log('='.repeat(50));
-console.log(`✅ 成功恢复/修复: ${restoredCount} 个文件`);
-console.log(`❌ 失败: ${failedCount} 个文件`);
-
+);
+);
 if (restoredCount > 0) {
-  console.log('\n✅ 紧急恢复完成！');
-  console.log('\n建议下一步：');
-  console.log('1. 重启开发服务器: pnpm dev');
-  console.log('2. 运行类型检查: pnpm tsc --noEmit');
-  console.log('3. 测试核心功能是否正常');
-} else {
-  console.log('\n⚠️ 无法自动恢复文件');
-  console.log('\n建议：');
-  console.log('1. 从版本控制恢复（如果有）');
-  console.log('2. 手动修复语法错误');
-  console.log('3. 从最近的备份恢复整个项目');
-}
+  } else {
+  }

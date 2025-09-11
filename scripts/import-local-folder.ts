@@ -66,32 +66,28 @@ async function main() {
       
       preview.importPlan.forEach((plan, index) => {
         if (plan.categoryName) {
-          console.log(`  分类: ${plan.categoryName}, 文件数: 1`)
-        }
-        console.log(`  文件: ${plan.file.fileName}`)
-      })
+          }
+        })
       
     } else {
       // 正式导入模式
       const result = await importer.importAll()
       
-      console.log(`\n导入完成! 成功: ${result.successCount}/${result.totalFiles} (${result.successCount > 0 ? (result.successCount / result.totalFiles * 100).toFixed(1) : 0}%)`)
+      .toFixed(1) : 0}%)`)
       
       if (result.categoryMapping.size > 0) {
-        console.log(`\n创建的分类:`)
         for (const [folder, categoryId] of result.categoryMapping) {
           const category = await prisma.documentCategory.findUnique({
             where: { id: categoryId }
           })
-          console.log(`  ${folder} -> ${category?.name || 'Unknown'}`)
-        }
+          }
       }
       
       // 显示错误详情
       if (result.errorCount > 0) {
         result.results.forEach((fileResult, index) => {
           if (!fileResult.success && fileResult.errors.length > 0) {
-            console.log(`  文件 ${index + 1}: ${fileResult.errors.join(', ')}`)
+            }`)
           }
         })
       }
@@ -100,12 +96,9 @@ async function main() {
   } catch (error) {
     if (error instanceof Error) {
       if (error.message.includes('ENOENT')) {
-        console.error(`文件夹不存在: ${CONFIG.SOURCE_FOLDER}`)
-      } else if (error.message.includes('permission')) {
-        console.error(`权限不足，无法访问文件夹: ${CONFIG.SOURCE_FOLDER}`)
-      } else {
-        console.error(`导入失败:`, error.message)
-      }
+        } else if (error.message.includes('permission')) {
+        } else {
+        }
     }
   } finally {
     await prisma.$disconnect()

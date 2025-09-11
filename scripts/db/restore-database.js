@@ -71,13 +71,6 @@ class DatabaseRestore {
    */
   async execute() {
     try {
-      console.log(`🔄 开始数据库恢复`)
-      console.log(`📁 备份文件: ${this.backupFile}`)
-      console.log(`🎯 恢复目标: ${this.options.target}`)
-      console.log(`📋 恢复策略: ${this.options.strategy}`)
-      console.log(`🔍 验证数据: ${this.options.verify}`)
-      console.log(`🧪 模拟运行: ${this.options.dryRun}`)
-      
       // 1. 验证备份文件
       await this.validateBackupFile()
       
@@ -94,8 +87,7 @@ class DatabaseRestore {
       if (!this.options.dryRun) {
         await this.performRestore(restoreFile)
       } else {
-        console.log(`🧪 模拟运行完成，实际恢复已跳过`)
-      }
+        }
       
       // 6. 验证恢复结果
       if (this.options.verify && !this.options.dryRun) {
@@ -115,23 +107,17 @@ class DatabaseRestore {
         dryRun: this.options.dryRun
       }
       
-      console.log(`✅ 数据库恢复完成!`)
-      console.log(`📊 恢复报告:`, JSON.stringify(report, null, 2))
+      )
       
       return report
       
     } catch (error) {
-      console.error(`❌ 数据库恢复失败:`, error.message)
-      
       // 如果恢复失败，尝试回滚
       if (this.currentBackupFile && !this.options.dryRun) {
         try {
-          console.log(`🔄 尝试回滚到原始状态...`)
           await this.rollbackRestore()
-          console.log(`✅ 已回滚到恢复前状态`)
-        } catch (rollbackError) {
-          console.error(`❌ 回滚失败:`, rollbackError.message)
-        }
+          } catch (rollbackError) {
+          }
       }
       
       throw error
@@ -159,7 +145,7 @@ class DatabaseRestore {
         throw new Error(`不支持的备份文件格式: ${ext}`)
       }
       
-      console.log(`✅ 备份文件验证通过 - 大小: ${this.formatFileSize(stats.size)}`)
+      }`)
       
       // 对于压缩文件，检查是否可以解压
       if (ext === '.gz') {
@@ -189,7 +175,7 @@ class DatabaseRestore {
           decompressedSize += chunk.length
         })
         .on('end', () => {
-          console.log(`✅ 压缩文件测试通过 - 解压后大小: ${this.formatFileSize(decompressedSize)}`)
+          }`)
           resolve()
         })
         .on('error', (error) => {
@@ -204,8 +190,7 @@ class DatabaseRestore {
   async ensureTempDirectory() {
     if (!fs.existsSync(RESTORE_CONFIG.tempDir)) {
       fs.mkdirSync(RESTORE_CONFIG.tempDir, { recursive: true })
-      console.log(`📁 创建临时目录: ${RESTORE_CONFIG.tempDir}`)
-    }
+      }
   }
 
   /**
@@ -217,7 +202,6 @@ class DatabaseRestore {
       : RESTORE_CONFIG.sqliteDbPath
       
     if (!fs.existsSync(targetDbPath)) {
-      console.log(`ℹ️  目标数据库不存在，跳过当前备份`)
       return null
     }
     
@@ -230,7 +214,6 @@ class DatabaseRestore {
     
     this.currentBackupFile = currentBackupPath
     
-    console.log(`💾 当前数据库已备份到: ${backupFileName}`)
     return currentBackupPath
   }
 
@@ -266,7 +249,6 @@ class DatabaseRestore {
         .pipe(gunzip)
         .pipe(writeStream)
         .on('finish', () => {
-          console.log(`🗜️  文件解压完成: ${originalName}`)
           resolve(decompressedPath)
         })
         .on('error', (error) => {
@@ -302,7 +284,6 @@ class DatabaseRestore {
         case 'replace':
           // 直接替换数据库文件
           fs.copyFileSync(restoreFile, targetDbPath)
-          console.log(`🔄 数据库文件已替换`)
           break
           
         case 'merge':
@@ -342,8 +323,6 @@ class DatabaseRestore {
             const sourceConversations = await sourcePrisma.conversation.findMany()
             const sourceMerchants = await sourcePrisma.merchant.findMany()
             
-            console.log(\`准备合并: \${sourceUsers.length}个用户, \${sourceConversations.length}个对话, \${sourceMerchants.length}个商家\`)
-            
             // 使用upsert合并用户数据
             for (const user of sourceUsers) {
               await targetPrisma.user.upsert({
@@ -361,8 +340,7 @@ class DatabaseRestore {
                 create: conv
               }).catch(err => {
                 // 如果外键约束失败，跳过这条记录
-                console.warn(\`跳过对话 \${conv.id}: \${err.message}\`)
-              })
+                })
             }
             
             // 合并商家数据 (按UID)
@@ -372,14 +350,10 @@ class DatabaseRestore {
                 update: merchant,
                 create: merchant
               }).catch(err => {
-                console.warn(\`跳过商家 \${merchant.uid}: \${err.message}\`)
-              })
+                })
             }
             
-            console.log('数据库合并完成')
-            
-          } catch (error) {
-            console.error('数据库合并失败:', error)
+            } catch (error) {
             process.exit(1)
           } finally {
             await sourcePrisma.$disconnect()
@@ -393,16 +367,15 @@ class DatabaseRestore {
       const child = spawn('node', ['-e', mergeScript])
       
       child.stdout.on('data', (data) => {
-        console.log(data.toString().trim())
+        .trim())
       })
       
       child.stderr.on('data', (data) => {
-        console.error(data.toString().trim())
+        .trim())
       })
       
       child.on('close', (code) => {
         if (code === 0) {
-          console.log(`🔄 数据库合并完成`)
           resolve()
         } else {
           reject(new Error(`数据库合并失败，退出码: ${code}`))
@@ -435,8 +408,6 @@ class DatabaseRestore {
               stdio: 'pipe' 
             })
             
-            console.log('空数据库结构已创建')
-            
             // 读取并执行SQL文件
             const sqlContent = fs.readFileSync('${sqlFile}', 'utf8')
             
@@ -444,10 +415,7 @@ class DatabaseRestore {
             // 简化处理：如果是schema文件，已经通过prisma处理了
             // 如果是数据文件，需要通过sqlite3命令行工具导入
             
-            console.log('SQL恢复完成')
-            
-          } catch (error) {
-            console.error('SQL恢复失败:', error)
+            } catch (error) {
             process.exit(1)
           }
         }
@@ -458,12 +426,11 @@ class DatabaseRestore {
       const child = spawn('node', ['-e', restoreScript])
       
       child.stdout.on('data', (data) => {
-        console.log(data.toString().trim())
+        .trim())
       })
       
       child.on('close', (code) => {
         if (code === 0) {
-          console.log(`📋 SQL文件恢复完成`)
           resolve()
         } else {
           reject(new Error(`SQL文件恢复失败，退出码: ${code}`))
@@ -497,24 +464,15 @@ class DatabaseRestore {
             const conversationCount = await prisma.conversation.count()
             const merchantCount = await prisma.merchant.count()
             
-            console.log(\`验证结果:\`)
-            console.log(\`- 用户数: \${userCount}\`)
-            console.log(\`- 对话数: \${conversationCount}\`)
-            console.log(\`- 商家数: \${merchantCount}\`)
-            
             // 验证关联关系
             const userWithConversations = await prisma.user.findFirst({
               include: { conversations: true }
             })
             
             if (userWithConversations) {
-              console.log(\`- 关联关系正常: 用户 \${userWithConversations.email} 有 \${userWithConversations.conversations.length} 个对话\`)
-            }
+              }
             
-            console.log('数据验证通过')
-            
-          } catch (error) {
-            console.error('数据验证失败:', error)
+            } catch (error) {
             process.exit(1)
           } finally {
             await prisma.$disconnect()
@@ -527,12 +485,11 @@ class DatabaseRestore {
       const child = spawn('node', ['-e', verifyScript])
       
       child.stdout.on('data', (data) => {
-        console.log(data.toString().trim())
+        .trim())
       })
       
       child.on('close', (code) => {
         if (code === 0) {
-          console.log(`✅ 恢复数据验证通过`)
           resolve()
         } else {
           reject(new Error(`数据验证失败，退出码: ${code}`))
@@ -554,8 +511,7 @@ class DatabaseRestore {
       : RESTORE_CONFIG.sqliteDbPath
     
     fs.copyFileSync(this.currentBackupFile, targetDbPath)
-    console.log(`🔄 已回滚到原始数据库状态`)
-  }
+    }
 
   /**
    * 清理临时文件
@@ -570,12 +526,10 @@ class DatabaseRestore {
           fs.unlinkSync(filePath)
         }
         
-        console.log(`🧹 临时文件清理完成`)
-      }
+        }
       
     } catch (error) {
-      console.warn(`⚠️  清理临时文件时出现警告: ${error.message}`)
-    }
+      }
   }
 
   /**
@@ -608,18 +562,7 @@ async function main() {
 
     // 显示帮助信息
     if (options.help || !options.backup) {
-      console.log(`
-智点AI平台 - 数据库恢复工具
-
-使用方法:
-  node scripts/restore-database.js --backup=备份文件路径 [选项]
-
-必需参数:
-  --backup=文件路径         要恢复的备份文件路径
-
-选项:
-  --target=db|test         恢复目标 (默认: db)
-    db      - 恢复到主数据库
+      db      - 恢复到主数据库
     test    - 恢复到测试数据库
   
   --strategy=replace|merge 恢复策略 (默认: replace)
@@ -650,11 +593,9 @@ async function main() {
     const restore = new DatabaseRestore(options)
     const result = await restore.execute()
     
-    console.log(`\n🎉 恢复任务完成!`)
     process.exit(0)
     
   } catch (error) {
-    console.error(`\n💥 恢复任务失败:`, error.message)
     process.exit(1)
   }
 }

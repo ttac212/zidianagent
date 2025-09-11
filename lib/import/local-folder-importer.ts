@@ -134,8 +134,6 @@ export class LocalFolderImporter {
     const filesByFolder = this.groupFilesByFolder(scanResult.supportedFiles)
     
     for (const [folderPath, files] of filesByFolder) {
-      console.log(`正在处理文件夹: ${folderPath}, 文件数: ${files.length}`)
-      
       const categoryId = batchResult.categoryMapping.get(folderPath) || this.config.categoryId
 
       for (const file of files) {

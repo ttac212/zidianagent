@@ -251,8 +251,7 @@ export function useChatEffects({
       focusInput()
 
       // 可以在这里添加错误上报逻辑
-      console.error('Chat error:', state.error)
-    }
+      }
   }, [state.error, focusInput])
 
   /**
@@ -270,8 +269,7 @@ export function useChatEffects({
 
         // 如果渲染时间过长，可以考虑优化
         if (renderTime > 100) {
-          console.warn(`Message rendering took ${renderTime}ms, consider optimization`)
-        }
+          }
       })
     }
   }, [state.messages])

@@ -117,7 +117,7 @@ class AutoBackupScheduler {
    * 启动自动备份调度器
    */
   start() {
-    console.log(`🚀 启动自动备份调度器 - ${new Date().toISOString()}`)
+    .toISOString()}`)
     
     // 注册所有备份任务
     this.registerBackupJobs()
@@ -133,8 +133,7 @@ class AutoBackupScheduler {
     // 注册进程退出处理
     this.registerExitHandlers()
     
-    console.log(`✅ 自动备份调度器已启动`)
-  }
+    }
 
   /**
    * 注册所有备份任务
@@ -144,7 +143,6 @@ class AutoBackupScheduler {
     
     Object.entries(schedules).forEach(([name, schedule]) => {
       if (!schedule.enabled) {
-        console.log(`⏸️  跳过已禁用的备份任务: ${name}`)
         return
       }
       
@@ -159,13 +157,8 @@ class AutoBackupScheduler {
         this.jobs.set(name, job)
         job.start()
         
-        console.log(`📅 已注册备份任务: ${name} - ${schedule.description}`)
-        console.log(`   计划: ${schedule.cron}`)
-        console.log(`   类型: ${schedule.type}, 压缩: ${schedule.compress}, 保留: ${schedule.keepDays}天`)
-        
-      } catch (error) {
-        console.error(`❌ 注册备份任务失败 [${name}]:`, error.message)
-      }
+        } catch (error) {
+        }
     })
   }
 
@@ -176,7 +169,7 @@ class AutoBackupScheduler {
     const startTime = Date.now()
     
     try {
-      console.log(`\n🔄 开始执行备份任务: ${jobName} - ${new Date().toISOString()}`)
+      .toISOString()}`)
       
       // 创建备份实例
       const backup = new DatabaseBackup({
@@ -205,7 +198,7 @@ class AutoBackupScheduler {
         await this.uploadToCloud(result.backupFile)
       }
       
-      console.log(`✅ 备份任务完成: ${jobName} - 耗时: ${Date.now() - startTime}ms`)
+      - startTime}ms`)
       
     } catch (error) {
       // 更新统计信息
@@ -218,8 +211,6 @@ class AutoBackupScheduler {
       if (this.config.notifications.enabled) {
         await this.sendNotification('error', jobName, { error: error.message })
       }
-      
-      console.error(`❌ 备份任务失败: ${jobName} - ${error.message}`)
       
       // 检查是否需要告警
       this.checkAlertThreshold()
@@ -278,8 +269,7 @@ class AutoBackupScheduler {
       this.performHealthCheck()
     }, this.config.monitoring.healthCheckInterval)
     
-    console.log(`💓 健康监控已启动 - 检查间隔: ${this.config.monitoring.healthCheckInterval / 1000}秒`)
-  }
+    }
 
   /**
    * 执行健康检查
@@ -320,7 +310,7 @@ class AutoBackupScheduler {
     
     // 记录健康状态
     if (issues.length > 0) {
-      console.warn(`⚠️  备份系统健康告警: ${issues.join(', ')}`)
+      }`)
       
       if (this.config.notifications.enabled) {
         this.sendHealthAlert(healthMetrics, issues)
@@ -328,8 +318,7 @@ class AutoBackupScheduler {
     } else {
       // 每小时输出一次健康状态
       if (Math.floor(now / (1000 * 60 * 60)) !== Math.floor((now - this.config.monitoring.healthCheckInterval) / (1000 * 60 * 60))) {
-        console.log(`💚 备份系统健康状态良好 - 成功率: ${healthMetrics.successRate}%, 运行时间: ${healthMetrics.runningTime}小时`)
-      }
+        }
     }
   }
 
@@ -338,8 +327,6 @@ class AutoBackupScheduler {
    */
   checkAlertThreshold() {
     if (this.stats.consecutiveFailures >= this.config.monitoring.alertThreshold) {
-      console.error(`🚨 备份告警: 连续失败 ${this.stats.consecutiveFailures} 次，已达到告警阈值`)
-      
       if (this.config.notifications.enabled) {
         this.sendCriticalAlert()
       }
@@ -375,8 +362,7 @@ class AutoBackupScheduler {
       }
       
     } catch (error) {
-      console.error(`通知发送失败:`, error.message)
-    }
+      }
   }
 
   /**
@@ -395,8 +381,7 @@ class AutoBackupScheduler {
       throw new Error(`Webhook响应错误: ${response.status}`)
     }
     
-    console.log(`📫 Webhook通知已发送: ${notification.type}`)
-  }
+    }
 
   /**
    * 发送健康告警
@@ -438,8 +423,6 @@ class AutoBackupScheduler {
    */
   async uploadToCloud(backupFile) {
     try {
-      console.log(`☁️  开始上传备份到云存储: ${backupFile}`)
-      
       // 根据配置的云存储提供商执行上传
       switch (this.config.cloudStorage.provider) {
         case 'aws':
@@ -455,10 +438,7 @@ class AutoBackupScheduler {
           throw new Error(`不支持的云存储提供商: ${this.config.cloudStorage.provider}`)
       }
       
-      console.log(`✅ 云存储上传成功`)
-      
-    } catch (error) {
-      console.error(`❌ 云存储上传失败:`, error.message)
+      } catch (error) {
       throw error
     }
   }
@@ -488,28 +468,17 @@ class AutoBackupScheduler {
     }
     
     await s3.upload(uploadParams).promise()
-    console.log(`S3上传完成: s3://${this.config.cloudStorage.config.bucket}/${s3Key}`)
-  }
+    }
 
   /**
    * 显示调度状态
    */
   displayScheduleStatus() {
-    console.log(`\n📋 备份调度状态:`)
-    console.log(`   总任务数: ${this.jobs.size}`)
-    
     this.jobs.forEach((job, name) => {
       const schedule = this.config.schedules[name]
-      console.log(`   ✓ ${name}: ${schedule.description}`)
-    })
+      })
     
-    console.log(`\n📊 历史统计:`)
-    console.log(`   总备份次数: ${this.stats.totalBackups}`)
-    console.log(`   成功次数: ${this.stats.successfulBackups}`)
-    console.log(`   失败次数: ${this.stats.failedBackups}`)
-    console.log(`   连续失败: ${this.stats.consecutiveFailures}`)
-    console.log(`   最后备份: ${this.stats.lastBackupTime || '从未成功'}`)
-    console.log(`   运行时间: ${((Date.now() - this.stats.startTime) / (1000 * 60 * 60)).toFixed(1)} 小时`)
+    - this.stats.startTime) / (1000 * 60 * 60)).toFixed(1)} 小时`)
   }
 
   /**
@@ -529,12 +498,10 @@ class AutoBackupScheduler {
           lastBackupTime: savedStats.lastBackupTime ? new Date(savedStats.lastBackupTime) : null
         }
         
-        console.log(`📈 已加载历史统计信息`)
-      }
+        }
       
     } catch (error) {
-      console.warn(`⚠️  加载历史统计失败，使用默认值:`, error.message)
-    }
+      }
   }
 
   /**
@@ -551,27 +518,22 @@ class AutoBackupScheduler {
       fs.writeFileSync(statsFile, JSON.stringify(this.stats, null, 2))
       
     } catch (error) {
-      console.warn(`⚠️  保存统计信息失败:`, error.message)
-    }
+      }
   }
 
   /**
    * 停止调度器
    */
   stop() {
-    console.log(`🛑 正在停止自动备份调度器...`)
-    
     // 停止所有cron任务
     this.jobs.forEach((job, name) => {
       job.stop()
-      console.log(`   已停止任务: ${name}`)
-    })
+      })
     
     // 保存最终统计信息
     this.saveStats()
     
-    console.log(`✅ 自动备份调度器已停止`)
-  }
+    }
 
   /**
    * 注册进程退出处理
@@ -579,7 +541,6 @@ class AutoBackupScheduler {
   registerExitHandlers() {
     // 优雅退出处理
     const gracefulShutdown = (signal) => {
-      console.log(`\n接收到 ${signal} 信号，开始优雅关闭...`)
       this.stop()
       process.exit(0)
     }
@@ -589,13 +550,11 @@ class AutoBackupScheduler {
     
     // 未捕获异常处理
     process.on('uncaughtException', (error) => {
-      console.error('未捕获异常:', error)
       this.saveStats()
       process.exit(1)
     })
     
     process.on('unhandledRejection', (reason, promise) => {
-      console.error('未处理的Promise拒绝:', reason)
       this.saveStats()
     })
   }
@@ -615,16 +574,7 @@ async function main() {
     })
 
     if (options.help) {
-      console.log(`
-智点AI平台 - 自动化备份调度器
-
-使用方法:
-  node scripts/auto-backup-scheduler.js [选项]
-
-选项:
-  --config=文件路径    自定义配置文件
-  --test              测试模式(立即执行一次备份)
-  --status            显示调度器状态
+      --status            显示调度器状态
   --help              显示帮助信息
 
 环境变量:
@@ -646,8 +596,6 @@ async function main() {
 
     // 测试模式
     if (options.test) {
-      console.log(`🧪 测试模式: 执行一次完整备份`)
-      
       const backup = new DatabaseBackup({
         type: 'full',
         compress: true,
@@ -655,7 +603,6 @@ async function main() {
       })
       
       const result = await backup.execute()
-      console.log(`✅ 测试备份完成:`, result)
       return
     }
 
@@ -664,10 +611,9 @@ async function main() {
     scheduler.start()
     
     // 保持进程运行
-    console.log(`🏃 调度器运行中... (按 Ctrl+C 停止)`)
+    `)
     
   } catch (error) {
-    console.error(`💥 调度器启动失败:`, error.message)
     process.exit(1)
   }
 }

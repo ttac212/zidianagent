@@ -154,56 +154,52 @@ async function diagnoseUsageStatsEnhanced(opts: CliOptions) {
 
     // 文本输出
     if (!opts.json) {
-      console.log(cfmt(`\n=== 使用量统计诊断（最近 ${opts.days} 天）===`, 'cyan', useColor))
-      console.log(`UsageStats: total=${totalRecords}, _total=${totalOnlyRecords}, null=${nullModelRecords}, per-model=${modelSpecificRecords}`)
-      console.log(`Messages (since ${since.toISOString().slice(0,10)}): withTokens=${messagesWithTokens}, withoutTokens=${messagesWithoutTokens}`)
+      )
+      .slice(0,10)}): withTokens=${messagesWithTokens}, withoutTokens=${messagesWithoutTokens}`)
 
       if (recentRecords.length) {
-        console.log(cfmt(`\n最近 UsageStats 记录（${recentRecords.length}）:`, 'blue', useColor))
+        )
         for (const r of recentRecords) {
-          console.log(`  用户: ${r.user?.email || r.userId}, 模型: ${r.modelId}, 日期: ${r.date.toISOString().slice(0,10)}, tokens: ${r.totalTokens}, calls: ${r.apiCalls}`)
+          .slice(0,10)}, tokens: ${r.totalTokens}, calls: ${r.apiCalls}`)
         }
       }
       if (recentAIMessages.length) {
-        console.log(cfmt(`\n最近 AI 消息（${recentAIMessages.length}）:`, 'blue', useColor))
+        )
         for (const m of recentAIMessages) {
-          console.log(`  对话: ${m.conversation?.title || ''}, 模型: ${m.modelId}, tokens: ${m.totalTokens}, 时间: ${m.createdAt.toISOString()}`)
+          }`)
         }
       }
 
-      console.log(cfmt(`\n用户用量概览（${users.length}）:`, 'blue', useColor))
+      )
       for (const u of result.users) {
-        console.log(`  用户: ${u.email}, 本月: ${u.month}/${u.limit}${u.pct!=null?` (${u.pct}%)`:''}`)
+        `:''}`)
       }
 
       if (inconsistencies.length) {
         exitCode = 2
-        console.log(cfmt(`\n发现 ${inconsistencies.length} 个 _total 与各模型统计不一致项：`, 'yellow', useColor))
+        )
         const sample = inconsistencies.slice(0, Math.min(10, inconsistencies.length))
         for (const it of sample) {
-          console.log(`  ${it.key}: tokens diff=${it.tokenDiff} (${(it.tokenRel*100).toFixed(1)}%), calls diff=${it.callsDiff} (${(it.callsRel*100).toFixed(1)}%)`)
+          .toFixed(1)}%), calls diff=${it.callsDiff} (${(it.callsRel*100).toFixed(1)}%)`)
         }
       } else {
-        console.log(cfmt(`\n未发现 _total 与各模型统计不一致项`, 'green', useColor))
+        )
       }
 
       // 结论与建议
-      console.log(cfmt(`\n建议:`, 'cyan', useColor))
-      console.log(`- 确认聊天 API 统计写入流程（预记录/完成记录）是否存在失败路径未回补`)
-      console.log(`- 检查日期归零（UTC 0 点）与 _total/模型项写入时机是否一致`)
-      console.log(`- 如为生产环境，建议引入幂等 requestId 与定时对账作业`)
-    }
+      )
+      }
   } catch (error) {
     exitCode = 3
     if (!opts.json) {
-      console.error(cfmt('诊断使用量统计时出错:', 'red', true), error)
+      , error)
     } else {
       result.error = (error as Error)?.message || String(error)
     }
   } finally {
     try { await prisma.$disconnect() } catch {}
     if (opts.json) {
-      console.log(JSON.stringify(result, null, 2))
+      )
     }
     process.exitCode = exitCode
   }
@@ -212,7 +208,6 @@ async function diagnoseUsageStatsEnhanced(opts: CliOptions) {
 if (require.main === module) {
   const opts = parseArgs(process.argv)
   diagnoseUsageStatsEnhanced(opts).catch(err => {
-    console.error('Fatal:', err)
     process.exitCode = 3
   })
 }

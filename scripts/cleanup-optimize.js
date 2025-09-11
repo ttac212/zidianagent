@@ -26,8 +26,7 @@ const colors = {
 };
 
 function log(message, color = 'reset') {
-  console.log(`${colors[color]}${message}${colors.reset}`);
-}
+  }
 
 // 待删除的文件列表
 const filesToDelete = [

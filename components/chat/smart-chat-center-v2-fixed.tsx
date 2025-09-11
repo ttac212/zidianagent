@@ -223,11 +223,7 @@ export const SmartChatCenterV2Fixed = React.memo<SmartChatCenterProps>(({
   }, [])
 
   // 调试日志：检查组件渲染状态
-  console.debug('SmartChatCenterV2Fixed render', {
-    conversationId: conversation?.id,
-    stateMessagesLength: state.messages.length,
-    isLoading: state.isLoading,
-    timestamp: new Date().toISOString()
+  .toISOString()
   })
 
   // 即使没有对话也显示聊天界面，确保输入框始终可用

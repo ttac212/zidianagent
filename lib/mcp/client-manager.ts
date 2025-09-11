@@ -115,8 +115,7 @@ export class MCPClientManager {
       clientWrapper.connectedAt = new Date()
 
       if (this.config.enableLogging) {
-        console.log(`[MCP] 成功连接到服务器: ${serverConfig.name}`)
-        console.log(`[MCP] 可用工具数量: ${Object.keys(tools).length}`)
+        .length}`)
       }
 
       return clientWrapper
@@ -126,8 +125,7 @@ export class MCPClientManager {
       clientWrapper.lastError = error.message
 
       if (this.config.enableLogging) {
-        console.error(`[MCP] 连接服务器失败: ${serverConfig.name}`, error.message)
-      }
+        }
 
       throw error
     }
@@ -156,7 +154,6 @@ export class MCPClientManager {
       
       return tools
     } catch (error) {
-      console.warn('[MCP] 获取工具列表失败:', error)
       return {}
     }
   }
@@ -207,8 +204,7 @@ export class MCPClientManager {
           return result
         } catch (error: any) {
           if (this.config.enableLogging) {
-            console.error(`[MCP] 工具调用失败: ${toolName}`, error.message)
-          }
+            }
           throw error
         }
       }
@@ -229,11 +225,9 @@ export class MCPClientManager {
     try {
       await clientWrapper.client.close()
       if (this.config.enableLogging) {
-        console.log(`[MCP] 已关闭服务器连接: ${clientWrapper.name}`)
-      }
+        }
     } catch (error: any) {
-      console.error(`[MCP] 关闭连接失败: ${clientWrapper.name}`, error.message)
-    } finally {
+      } finally {
       this.clients.delete(serverId)
     }
   }
@@ -324,8 +318,7 @@ export class MCPClientManager {
       try {
         await this.healthCheck()
       } catch (error) {
-        console.error('[MCP] 健康检查失败:', error)
-      }
+        }
     }, this.config.healthCheckInterval)
   }
 

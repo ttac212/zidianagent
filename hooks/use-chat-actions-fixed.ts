@@ -57,8 +57,7 @@ export function useChatActionsFixed({
     
     // 一致性检查
     if (modelFromHook && modelFromState && modelFromHook !== modelFromState) {
-      console.warn('Model inconsistency detected:', { modelFromHook, modelFromState })
-    }
+      }
     
     return actualModel
   }, [getCurrentModel, state.settings.modelId])
@@ -222,8 +221,6 @@ export function useChatActionsFixed({
               }
             } catch (e) {
               parseErrorCount++
-              console.debug('Failed to parse SSE line:', e, 'Line:', line)
-              
               // 如果解析错误过多，通知用户
               if (parseErrorCount >= maxParseErrors) {
                 dispatch({

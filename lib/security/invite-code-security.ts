@@ -225,8 +225,7 @@ export async function logVerificationAttempt(
   userAgent?: string
 ) {
   // 在生产环境中，应该记录到数据库或日志系统
-  console.log('Invite code verification attempt:', {
-    timestamp: new Date().toISOString(),
+  .toISOString(),
     ipHash,
     codePrefix: code.substring(0, 4) + '***', // 不记录完整邀请码
     success,

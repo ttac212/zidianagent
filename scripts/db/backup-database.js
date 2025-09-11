@@ -64,8 +64,6 @@ class DatabaseBackup {
    */
   async execute() {
     try {
-      console.log(`🚀 开始数据库备份 - 类型: ${this.options.type}, 格式: ${this.options.format}`)
-      
       // 创建备份目录
       await this.ensureBackupDirectory()
       
@@ -81,14 +79,11 @@ class DatabaseBackup {
       // 生成备份报告
       const report = await this.generateBackupReport(backupFile)
       
-      console.log(`✅ 数据库备份完成!`)
-      console.log(`📁 备份文件: ${backupFile}`)
-      console.log(`📊 备份报告: ${JSON.stringify(report, null, 2)}`)
+      }`)
       
       return { success: true, backupFile, report }
       
     } catch (error) {
-      console.error(`❌ 数据库备份失败:`, error.message)
       throw error
     }
   }
@@ -99,8 +94,7 @@ class DatabaseBackup {
   async ensureBackupDirectory() {
     if (!fs.existsSync(this.backupDir)) {
       fs.mkdirSync(this.backupDir, { recursive: true })
-      console.log(`📁 创建备份目录: ${this.backupDir}`)
-    }
+      }
   }
 
   /**
@@ -135,7 +129,6 @@ class DatabaseBackup {
         const schemaBackupFile = path.join(this.backupDir, `schema_${this.timestamp}.prisma`)
         fs.copyFileSync(BACKUP_CONFIG.schemaPath, schemaBackupFile)
         
-        console.log(`📋 已备份数据库文件和Schema`)
         break
         
       case 'schema':
@@ -148,7 +141,7 @@ class DatabaseBackup {
         // 仅备份数据 (SQLite较复杂,使用完整备份)
         backupFile = path.join(this.backupDir, `${backupFileName}_dataonly.db`)
         fs.copyFileSync(BACKUP_CONFIG.sqliteDbPath, backupFile)
-        console.log(`📊 已备份数据 (SQLite完整文件)`)
+        `)
         break
         
       default:
@@ -202,12 +195,9 @@ class DatabaseBackup {
     }
 
     try {
-      console.log(`🔄 执行PostgreSQL备份命令...`)
       const output = execSync(pgDumpCmd, { encoding: 'utf8', maxBuffer: 50 * 1024 * 1024 })
       fs.writeFileSync(backupFile, output)
-      console.log(`💾 PostgreSQL备份完成`)
-      
-    } catch (error) {
+      } catch (error) {
       throw new Error(`PostgreSQL备份失败: ${error.message}`)
     }
 
@@ -249,10 +239,7 @@ class DatabaseBackup {
             })
             
             fs.writeFileSync('${outputFile}', schemaSQL)
-            console.log('Schema exported successfully')
-            
-          } catch (error) {
-            console.error('Schema export failed:', error)
+            } catch (error) {
             process.exit(1)
           } finally {
             await prisma.$disconnect()
@@ -264,7 +251,6 @@ class DatabaseBackup {
 
       child.on('close', (code) => {
         if (code === 0) {
-          console.log(`📋 数据库结构已导出到: ${outputFile}`)
           resolve()
         } else {
           reject(new Error(`Schema导出失败，退出码: ${code}`))
@@ -287,7 +273,7 @@ class DatabaseBackup {
         .pipe(gzip)
         .pipe(writeStream)
         .on('finish', () => {
-          console.log(`🗜️  文件已压缩: ${path.basename(compressedPath)}`)
+          }`)
           resolve(compressedPath)
         })
         .on('error', reject)
@@ -305,7 +291,7 @@ class DatabaseBackup {
         throw new Error('备份文件为空')
       }
       
-      console.log(`✅ 备份文件验证通过 - 大小: ${this.formatFileSize(stats.size)}`)
+      }`)
       
       // 对于SQLite文件，可以尝试打开验证
       if (backupFile.endsWith('.db') && !backupFile.endsWith('.gz')) {
@@ -337,10 +323,7 @@ class DatabaseBackup {
           try {
             // 尝试查询用户表验证
             const userCount = await prisma.user.count()
-            console.log(\`验证成功 - 用户数: \${userCount}\`)
-            
-          } catch (error) {
-            console.error('备份文件验证失败:', error.message)
+            } catch (error) {
             process.exit(1)
           } finally {
             await prisma.$disconnect()
@@ -352,7 +335,6 @@ class DatabaseBackup {
 
       child.on('close', (code) => {
         if (code === 0) {
-          console.log(`✅ SQLite备份文件完整性验证通过`)
           resolve()
         } else {
           reject(new Error(`SQLite备份验证失败`))
@@ -399,17 +381,15 @@ class DatabaseBackup {
           
           fs.rmdirSync(dirPath)
           cleanedCount++
-          console.log(`🗑️  已删除过期备份目录: ${dir}`)
-        }
+          }
       }
 
       if (cleanedCount > 0) {
-        console.log(`🧹 清理完成 - 删除 ${cleanedCount} 个过期备份目录，释放空间 ${this.formatFileSize(cleanedSize)}`)
+        }`)
       }
 
     } catch (error) {
-      console.warn(`⚠️  清理过期备份时出现警告: ${error.message}`)
-    }
+      }
   }
 
   /**
@@ -467,15 +447,7 @@ async function main() {
 
     // 显示帮助信息
     if (options.help) {
-      console.log(`
-智点AI平台 - 数据库备份工具
-
-使用方法:
-  node scripts/backup-database.js [选项]
-
-选项:
-  --type=full|schema|data    备份类型 (默认: full)
-    full    - 完整备份(数据+结构)
+      full    - 完整备份(数据+结构)
     schema  - 仅备份数据库结构
     data    - 仅备份数据
   
@@ -497,11 +469,9 @@ async function main() {
     const backup = new DatabaseBackup(options)
     const result = await backup.execute()
     
-    console.log(`\n🎉 备份任务完成!`)
     process.exit(0)
     
   } catch (error) {
-    console.error(`\n💥 备份任务失败:`, error.message)
     process.exit(1)
   }
 }

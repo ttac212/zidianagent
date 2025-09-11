@@ -322,8 +322,7 @@ export function useCreateConversationMutation() {
       )
     },
     onError: (error: Error) => {
-      console.error('创建对话失败:', error.message)
-    }
+      }
   })
 }
 
@@ -346,8 +345,7 @@ export function useDeleteConversationMutation() {
       queryClient.removeQueries({ queryKey: conversationKeys.detail(deletedId) })
     },
     onError: (error: Error) => {
-      console.error('删除对话失败:', error.message)
-    }
+      }
   })
 }
 
@@ -376,8 +374,7 @@ export function useUpdateConversationMutation() {
       )
     },
     onError: (error: Error) => {
-      console.error('更新对话失败:', error.message)
-    }
+      }
   })
 }
 

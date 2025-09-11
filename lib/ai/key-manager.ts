@@ -152,8 +152,7 @@ export function validateModelKeyConfig(modelId: string): {
 export const KeyDebugTools = {
   showAllKeys: () => {
     KEY_CONFIGS.forEach(config => {
-      console.log(`${config.provider}: ${config.key ? '已配置' : '未配置'}`)
-    })
+      })
   },
 
   testKeySelection: (modelId: string) => {

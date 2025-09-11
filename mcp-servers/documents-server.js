@@ -83,8 +83,7 @@ server.addTool({
             updatedAt: doc.updatedAt
           })
         } catch (e) {
-          console.error(`读取文档失败: ${file}`, e.message)
-        }
+          }
       }
     }
     
@@ -192,8 +191,7 @@ server.addTool({
             })
           }
         } catch (e) {
-          console.error(`搜索文档失败: ${file}`, e.message)
-        }
+          }
       }
     }
     
@@ -404,8 +402,7 @@ server.addTool({
             updatedAt: doc.updatedAt
           })
         } catch (e) {
-          console.error(`处理文档统计失败: ${file}`, e.message)
-        }
+          }
       }
     }
     
@@ -453,32 +450,24 @@ async function main() {
     // 创建stdio传输
     const transport = new StdioServerTransport()
     
-    console.error('[Documents MCP Server] 启动中...')
-    console.error(`[Documents MCP Server] 文档存储路径: ${DOCS_STORAGE_PATH}`)
-    
     // 连接并运行服务器
     await server.connect(transport)
     
-    console.error('[Documents MCP Server] 服务器已启动，等待连接...')
-  } catch (error) {
-    console.error('[Documents MCP Server] 启动失败:', error)
+    } catch (error) {
     process.exit(1)
   }
 }
 
 // 处理优雅退出
 process.on('SIGINT', async () => {
-  console.error('[Documents MCP Server] 收到退出信号，正在关闭...')
   process.exit(0)
 })
 
 process.on('SIGTERM', async () => {
-  console.error('[Documents MCP Server] 收到终止信号，正在关闭...')
   process.exit(0)
 })
 
 // 启动服务器
 main().catch((error) => {
-  console.error('[Documents MCP Server] 启动异常:', error)
   process.exit(1)
 })

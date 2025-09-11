@@ -31,8 +31,7 @@ export function recordUsageAsync(
     } catch (error) {
       // 生产环境只记录错误，不抛出
       if (process.env.NODE_ENV === 'development') {
-        console.warn('Usage stats recording failed:', error)
-      }
+        }
     }
   })
 }

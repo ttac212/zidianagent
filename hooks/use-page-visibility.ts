@@ -83,7 +83,7 @@ export function usePageVisibility(
 
         // 可选：记录页面重新可见的调试信息
         if (opts.debug) {
-          console.log(`页面变为可见，隐藏了 ${(hiddenDuration / 1000).toFixed(1)}秒`, {
+          .toFixed(1)}秒`, {
             hiddenDuration,
             isLongAbsence
           })

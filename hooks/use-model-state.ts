@@ -181,11 +181,7 @@ export function useModelConsistencyCheck(componentName: string) {
     const isConsistent = uiModel === stateModel && stateModel === requestModel
     
     if (!isConsistent) {
-      console.warn(`Model inconsistency detected in ${componentName}:`, {
-        uiModel,
-        stateModel,
-        requestModel,
-        timestamp: new Date().toISOString()
+      .toISOString()
       })
     }
     

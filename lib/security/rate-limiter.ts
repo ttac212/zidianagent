@@ -205,8 +205,7 @@ export function withRateLimit<T extends any[], R>(
         userId = await getUserId(request)
       } catch (error) {
         // 忽略获取用户ID的错误，继续使用IP限制
-        console.warn('[Rate Limiter] Failed to get user ID:', error)
-      }
+        }
     }
     
     // 检查速率限制

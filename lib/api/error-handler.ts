@@ -113,15 +113,7 @@ export function createErrorResponse(
 
   // 记录错误日志（仅服务器错误）
   if (apiError.statusCode >= 500) {
-    console.error('[API Error]', {
-      code: apiError.code,
-      message: apiError.message,
-      details: apiError.details,
-      stack: apiError.stack,
-      requestId,
-      timestamp: response.error.timestamp
-    })
-  }
+    }
 
   return NextResponse.json(response, { status: apiError.statusCode })
 }

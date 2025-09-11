@@ -213,10 +213,7 @@ export function useConnectionMonitor(options: UseConnectionMonitorOptions = {}) 
         
         // 详细错误日志（仅开发环境）
         if (process.env.NODE_ENV === 'development') {
-          console.warn('Health check error:', {
-            message: errorMessage,
-            endpoint: healthEndpoint,
-            timestamp: new Date().toISOString(),
+          .toISOString(),
             consecutiveFailures: newFailures,
             originalError: error
           });
@@ -402,8 +399,7 @@ export function useConnectionMonitor(options: UseConnectionMonitorOptions = {}) 
         try {
           cleanup();
         } catch (error) {
-          console.debug('Cleanup error:', error)
-        }
+          }
       });
       cleanupRef.current = [];
     };

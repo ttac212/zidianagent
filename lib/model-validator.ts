@@ -173,11 +173,9 @@ export class ModelConsistencyChecker {
 
         // 如果发现不一致，发出警告
         if (!validation.isValid) {
-          console.warn('模型状态不一致:', validation.errors)
-        }
+          }
       } catch (error) {
-        console.error('模型一致性检查失败:', error)
-      }
+        }
     }, this.intervalMs)
   }
 
@@ -233,10 +231,8 @@ export const ModelDebugTools = {
     try {
       localStorage.removeItem('lastSelectedModelId')
       // 建议刷新页面
-      console.log('模型状态已重置，建议刷新页面')
-    } catch (error) {
-      console.error('重置模型状态失败:', error)
-    }
+      } catch (error) {
+      }
   },
 
   // 强制设置模型
