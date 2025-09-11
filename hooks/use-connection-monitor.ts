@@ -158,9 +158,14 @@ export function useConnectionMonitor(options: UseConnectionMonitorOptions = {}) 
       // 解析响应
       let responseData;
       try {
-        responseData = await response.json();
+        const responseText = await response.text();
+        if (!responseText.trim()) {
+          throw new Error('Empty response body');
+        }
+        responseData = JSON.parse(responseText);
       } catch (parseError) {
-        throw new Error(`Invalid JSON response: ${parseError}`);
+        const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parse error';
+        throw new Error(`JSON parse failed - ${errorMessage}. Status: ${response.status}, Headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()))}`);
       }
 
       const isHealthy = response.ok && 
@@ -205,6 +210,17 @@ export function useConnectionMonitor(options: UseConnectionMonitorOptions = {}) 
         const newInterval = getAdaptiveInterval(newFailures);
         
         const errorMessage = error instanceof Error ? error.message : 'Network error';
+        
+        // 详细错误日志（仅开发环境）
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('Health check error:', {
+            message: errorMessage,
+            endpoint: healthEndpoint,
+            timestamp: new Date().toISOString(),
+            consecutiveFailures: newFailures,
+            originalError: error
+          });
+        }
         
         // 触发错误回调
         if (onError) {

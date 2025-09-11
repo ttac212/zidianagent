@@ -118,6 +118,12 @@ pnpm restore:db                    # 还原数据库
 pnpm restore:help                  # 查看还原帮助
 ```
 
+### 健康检查API诊断（新增）
+```bash
+node scripts/diagnose-health-api.js   # 诊断503错误原因
+node scripts/test-health-api.js       # 测试健康检查API
+```
+
 ## 核心架构
 
 ### 聊天系统架构
@@ -153,6 +159,7 @@ pnpm restore:help                  # 查看还原帮助
    - 轻量级服务器状态检测
    - 性能监控和响应时间追踪
    - 功能开关支持 (disabled/enabled/debug)
+   - 请求统计和成功率计算（增强版）
 
 2. **自适应连接监控** (`hooks/use-connection-monitor.ts`):
    - 智能间隔调整: 30s正常 → 10s恢复 → 5s紧急
@@ -185,7 +192,7 @@ app/api/
 ├── users/             # 用户管理 (profile, usage, settings)
 ├── documents/         # 文档管理 (upload, parse, delete)
 ├── feedback/          # 用户反馈系统
-├── health/            # 健康检查和监控
+├── health/            # 健康检查和监控（增强版带诊断）
 └── keyword-data/      # 关键字数据分析
 ```
 
@@ -236,6 +243,7 @@ app/api/
 NEXTAUTH_URL=http://localhost:3007
 NEXTAUTH_SECRET=<强随机字符串>
 DATABASE_URL=file:./prisma/dev.db
+NEXT_PUBLIC_CONNECTION_MONITORING=enabled  # 重要：必须配置
 ```
 
 ### AI服务配置（多KEY架构）
@@ -251,11 +259,6 @@ LLM_API_KEY=<通用回退Key>
 ```env
 DEV_LOGIN_CODE=<临时登录码>
 NEXT_PUBLIC_DEV_LOGIN_CODE=<同上>
-```
-
-### 可靠性监控配置
-```env
-NEXT_PUBLIC_CONNECTION_MONITORING=enabled  # 连接监控功能开关 (enabled/disabled/debug)
 ```
 
 ## 重要文件位置
@@ -280,12 +283,14 @@ NEXT_PUBLIC_CONNECTION_MONITORING=enabled  # 连接监控功能开关 (enabled/d
 - `app/workspace/page.tsx`: 工作区主页，包含对话管理功能
 
 ### 可靠性监控系统
-- `app/api/health/route.ts`: 健康检查API端点
+- `app/api/health/route.ts`: 健康检查API端点（增强版）
 - `hooks/use-connection-monitor.ts`: 自适应连接监控Hook
 - `components/ui/connection-status.tsx`: 连接状态指示器组件（z-[45]层级，tooltip z-[60]）
 - `scripts/comprehensive-reliability-test.js`: 综合可靠性测试脚本
 - `scripts/test-server-restart-scenario.js`: 服务器重启场景测试
 - `scripts/test-connection-monitoring-integration.js`: 连接监控集成测试
+- `scripts/diagnose-health-api.js`: 健康检查API诊断工具
+- `scripts/test-health-api.js`: 健康检查API测试工具
 
 ### AI配置
 - `lib/ai/models.ts`: 模型配置和白名单
@@ -430,6 +435,11 @@ npx tsx scripts/diagnose-usage-stats.ts  # 诊断使用量统计
 - **Tooltip被遮挡**: 检查z-index层级，tooltip应为 `z-[60]`
 - **多个状态指示器冲突**: 将冲突的组件移至不同位置（如left-4）
 
+### 健康检查API 503错误
+- **环境变量缺失**: 确保`.env`和`.env.local`都包含`NEXT_PUBLIC_CONNECTION_MONITORING=enabled`
+- **诊断工具**: 运行 `node scripts/diagnose-health-api.js` 定位问题
+- **测试验证**: 运行 `node scripts/test-health-api.js` 验证修复
+
 ### 部署注意
 - PostgreSQL推荐用于生产环境
 - 生产环境使用环境变量管理敏感信息
@@ -473,6 +483,11 @@ npx prisma generate                     # 重新生成客户端
 - 所有动画和交互已进行响应式优化
 
 # 最新修复记录
+- ✅ **健康检查API 503错误修复** (2025-09-09)：
+  - 统一环境变量配置，确保`NEXT_PUBLIC_CONNECTION_MONITORING=enabled`
+  - 增强API添加请求追踪、统计和诊断信息
+  - 100%测试通过率，31个请求全部成功
+  - 新增诊断和测试工具支持问题快速定位
 - ✅ **长对话显示性能优化** (2025-09-04)：
   - 虚拟滚动阈值从50条提升到100条，减少不必要的性能开销
   - 优化消息项高度估算算法，提高滚动精度
@@ -496,17 +511,6 @@ npx prisma generate                     # 重新生成客户端
   - 健康检查API平均响应时间142ms，远优于500ms目标
   - 综合测试100%通过：45/45请求成功，服务器重启10秒内检测恢复
   - 性能优化：内存增长仅1.6MB，CPU增长0.7%，远低于目标阈值
-- ✅ NextAuth JSON解析错误已修复（关闭debug模式，添加错误页面配置）
-- ✅ 用户菜单加载状态优化（避免在loading期间渲染）
-- ✅ 按钮微交互和聊天输入体验已全面优化
-- ✅ AI思考状态可视化已实现多阶段动画系统
-- ✅ UsageStats约束错误已修复（modelId从null改为"_total"标识总量统计）
-- ✅ API稳定性大幅提升（2024-08-30）：
-  - 实现自动重试机制，网络故障自动恢复
-  - 添加请求超时控制，防止无限等待
-  - 集成API性能监控，实时追踪错误率
-  - 优化错误提示，用户体验更友好
-  - 修复数据库modelId不一致问题
 
 # 快速调试命令
 ```bash
@@ -514,4 +518,6 @@ node scripts/test-models.js                # 测试模型可用性
 node scripts/test-multi-key.js            # 测试多KEY配置
 node scripts/db-check.js                  # 检查数据库连接
 node debug-recent-usage.js                # 调试使用量统计
+node scripts/diagnose-health-api.js       # 诊断健康检查API
+node scripts/test-health-api.js           # 测试健康检查API
 ```

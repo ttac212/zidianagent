@@ -8,6 +8,7 @@ import { getModelProvider, getTodayDate } from "@/lib/ai/model-stats-helper"
 import { createSafeContextMessage, validateMessageContent } from "@/lib/security/content-filter"
 import { checkMultipleRateLimits } from "@/lib/security/rate-limiter"
 import { createErrorResponse } from "@/lib/api/error-handler"
+import { recordUsageAsync } from "@/lib/utils/usage-stats-helper"
 
 // 支持 GET 方法用于健康检查
 export async function GET() {
@@ -224,39 +225,8 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // 提前记录一次 API 调用（当用户已认证且上游可用时）
-    try {
-      const today = getTodayDate()
-      const modelProvider = getModelProvider(useModel)
-      
-      // 预记录总量统计
-      await prisma.usageStats.upsert({
-        where: { userId_date_modelId: { userId: userId!, date: today, modelId: "_total" } },
-        update: { apiCalls: { increment: 1 }, updatedAt: new Date() },
-        create: { userId: userId!, date: today, modelId: "_total", apiCalls: 1 },
-      })
-      
-      // 预记录按模型统计
-      await prisma.usageStats.upsert({
-        where: { 
-          userId_date_modelId: { 
-            userId: userId!, 
-            date: today, 
-            modelId: useModel 
-          } 
-        },
-        update: { apiCalls: { increment: 1 }, updatedAt: new Date() },
-        create: { 
-          userId: userId!, 
-          date: today, 
-          modelId: useModel,
-          modelProvider: modelProvider,
-          apiCalls: 1 
-        },
-      })
-    } catch (preErr) {
-      void preErr
-      }
+    // 移除预记录，改为请求完成后统一记录
+    // 这样可以减少50%的数据库写入操作
 
     const headers = new Headers()
     headers.set("Content-Type", upstream.headers.get("Content-Type") || "text/event-stream")
@@ -361,73 +331,17 @@ export async function POST(request: NextRequest) {
           })
         }
 
-        // 更新当日用量统计（不依赖 conversationId）
-        const today = getTodayDate() // 使用统一的日期函数
-
-        // 1. 更新总量统计（使用modelId = null）
-        await prisma.usageStats.upsert({
-          where: {
-            userId_date_modelId: {
-              userId: userId,
-              date: today,
-              modelId: "_total"
-            }
-          },
-          update: {
-            apiCalls: { increment: 1 },
-            successfulCalls: { increment: 1 },
-            totalTokens: { increment: tokenUsage.total_tokens || 0 },
-            promptTokens: { increment: tokenUsage.prompt_tokens || 0 },
-            completionTokens: { increment: tokenUsage.completion_tokens || 0 },
-            messagesCreated: { increment: conversationId ? 2 : 0 },
-            updatedAt: new Date(),
-          },
-          create: {
-            userId: userId,
-            date: today,
-            modelId: "_total",
-            modelProvider: null,
-            apiCalls: 1,
-            successfulCalls: 1,
-            totalTokens: tokenUsage.total_tokens || 0,
-            promptTokens: tokenUsage.prompt_tokens || 0,
-            completionTokens: tokenUsage.completion_tokens || 0,
-            messagesCreated: conversationId ? 2 : 0,
-          }
-        })
-
-        // 2. 新增按模型分组统计
+        // 异步记录使用量统计（简单优雅）
         const modelProvider = getModelProvider(useModel)
-        
-        await prisma.usageStats.upsert({
-          where: {
-            userId_date_modelId: {
-              userId: userId,
-              date: today,
-              modelId: useModel
-            }
-          },
-          update: {
-            apiCalls: { increment: 1 },
-            successfulCalls: { increment: 1 },
-            totalTokens: { increment: tokenUsage.total_tokens || 0 },
-            promptTokens: { increment: tokenUsage.prompt_tokens || 0 },
-            completionTokens: { increment: tokenUsage.completion_tokens || 0 },
-            messagesCreated: { increment: conversationId ? 2 : 0 },
-            updatedAt: new Date(),
-          },
-          create: {
-            userId: userId,
-            date: today,
-            modelId: useModel,
-            modelProvider: modelProvider,
-            apiCalls: 1,
-            successfulCalls: 1,
-            totalTokens: tokenUsage.total_tokens || 0,
-            promptTokens: tokenUsage.prompt_tokens || 0,
-            completionTokens: tokenUsage.completion_tokens || 0,
-            messagesCreated: conversationId ? 2 : 0,
-          }
+        recordUsageAsync(prisma, {
+          userId: userId,
+          modelId: useModel,
+          modelProvider: modelProvider,
+          promptTokens: tokenUsage.prompt_tokens || 0,
+          completionTokens: tokenUsage.completion_tokens || 0,
+          totalTokens: tokenUsage.total_tokens || 0,
+          messagesCreated: conversationId ? 2 : 0,
+          success: true
         })
 
       } catch (error) {
@@ -443,37 +357,15 @@ export async function POST(request: NextRequest) {
     
     
   } catch (error: any) {
-    // 无论是否有对话ID，只要识别到用户，就记录失败统计
-    if (userId) {
-      try {
-        const today = new Date()
-        today.setUTCHours(0, 0, 0, 0)
-
-        await prisma.usageStats.upsert({
-          where: {
-            userId_date_modelId: {
-              userId: userId,
-              date: today,
-              modelId: "_total"
-            }
-          },
-          update: {
-            apiCalls: { increment: 1 },
-            failedCalls: { increment: 1 },
-            updatedAt: new Date(),
-          },
-          create: {
-            userId: userId,
-            date: today,
-            modelId: "_total",
-            apiCalls: 1,
-            failedCalls: 1,
-          }
-        })
-      } catch (dbError) {
-        void dbError
-        // Failed to record failed call stats - error logged internally
-      }
+    // 记录失败统计（简单异步）
+    if (userId && model !== 'unknown') {
+      const modelProvider = getModelProvider(model)
+      recordUsageAsync(prisma, {
+        userId: userId,
+        modelId: model,
+        modelProvider: modelProvider,
+        success: false
+      })
     }
     
     const payload = { error: error?.message || "请求处理失败" }
