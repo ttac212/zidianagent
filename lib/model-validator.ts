@@ -173,9 +173,15 @@ export class ModelConsistencyChecker {
 
         // 如果发现不一致，发出警告
         if (!validation.isValid) {
-          }
-      } catch (error) {
+          console.warn('[ModelValidator] Validation failed:', {
+            errors: validation.errors,
+            warnings: validation.warnings,
+            timestamp: new Date().toISOString()
+          })
         }
+      } catch (error) {
+        console.error('[ModelValidator] Check failed:', error)
+      }
     }, this.intervalMs)
   }
 

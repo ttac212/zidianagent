@@ -8,8 +8,8 @@ import type {
   ToastProps,
 } from "@/components/ui/toast"
 
-const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+const TOAST_LIMIT = 3 // 允许同时显示3个toast，避免重要通知被覆盖
+const TOAST_REMOVE_DELAY = 5000 // 5秒后自动消失（shadcn默认值）
 
 type ToasterToast = ToastProps & {
   id: string

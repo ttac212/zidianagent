@@ -156,12 +156,12 @@ export function useCreateConversationMutation() {
         newConversation
       )
 
-      toast.success('�¶Ի��Ѵ���')
+      toast.success('新对话已创建')
     },
 
     onError: (err) => {
-      toast.error('�����Ի�ʧ��', {
-        description: err instanceof Error ? err.message : 'δ֪����'
+      toast.error('创建对话失败', {
+        description: err instanceof Error ? err.message : '未知错误'
       })
     }
   })

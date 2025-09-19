@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Save, FileText, Clock, User, Hash } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { toast as unifiedToast } from '@/lib/toast/unified-toast'
+import { FeedbackButton, InlineFeedback } from '@/components/ui/inline-feedback'
 
 interface Document {
   id?: string
@@ -32,6 +34,7 @@ interface DocumentEditorProps {
 }
 
 export function DocumentEditor({ document, onSave, onCancel }: DocumentEditorProps) {
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
   const [formData, setFormData] = useState<Document>({
     title: "",
     content: "",
@@ -81,15 +84,15 @@ export function DocumentEditor({ document, onSave, onCancel }: DocumentEditorPro
 
   const handleSave = async () => {
     if (!formData.title.trim() || !formData.content.trim()) {
-      toast({
-        title: "保存失败",
-        description: "标题和内容不能为空",
-        variant: "destructive",
-      })
+      // 验证错误始终显示
+      unifiedToast.error("保存失败", { description: "标题和内容不能为空" })
+      setSaveStatus('error')
+      setTimeout(() => setSaveStatus('idle'), 2000)
       return
     }
 
     setSaving(true)
+    setSaveStatus('saving')
     try {
       const method = document?.id ? "PUT" : "POST"
       const url = document?.id ? `/api/documents/${document.id}` : "/api/documents"
@@ -108,20 +111,21 @@ export function DocumentEditor({ document, onSave, onCancel }: DocumentEditorPro
       const result = await response.json()
 
       if (result.success) {
-        toast({
-          title: "保存成功",
-          description: result.message || "文档已保存",
-        })
+        setSaveStatus('success')
+        // 只在首次创建时显示toast
+        if (!document?.id) {
+          unifiedToast.success("文档创建成功")
+        }
+        setTimeout(() => setSaveStatus('idle'), 2000)
         onSave?.(result.data)
       } else {
         throw new Error(result.error)
       }
     } catch (error) {
-      toast({
-        title: "保存失败",
-        description: "请稍后重试",
-        variant: "destructive",
-      })
+      setSaveStatus('error')
+      // 错误使用toast确保可见
+      unifiedToast.error("保存失败", { description: "请稍后重试" })
+      setTimeout(() => setSaveStatus('idle'), 3000)
     } finally {
       setSaving(false)
     }
@@ -241,7 +245,14 @@ export function DocumentEditor({ document, onSave, onCancel }: DocumentEditorPro
             取消
           </Button>
         )}
-        <Button onClick={handleSave} disabled={saving}>
+        <FeedbackButton
+          onClick={handleSave}
+          disabled={saving}
+          feedbackType={saveStatus === 'saving' ? 'loading' : saveStatus === 'success' ? 'success' : saveStatus === 'error' ? 'error' : 'idle'}
+          feedbackMessage={saveStatus === 'success' ? '已保存' : saveStatus === 'error' ? '保存失败' : undefined}
+          feedbackPosition="left"
+          feedbackDuration={2000}
+        >
           {saving ? (
             <>
               <Clock className="h-4 w-4 mr-2 animate-spin" />
@@ -253,7 +264,7 @@ export function DocumentEditor({ document, onSave, onCancel }: DocumentEditorPro
               保存文档
             </>
           )}
-        </Button>
+        </FeedbackButton>
       </div>
     </div>
   )

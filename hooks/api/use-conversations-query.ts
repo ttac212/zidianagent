@@ -27,6 +27,7 @@ interface ApiMessage {
   content: string
   createdAt: string
   totalTokens?: number
+  modelId?: string
   metadata?: Record<string, unknown>
 }
 
@@ -102,7 +103,11 @@ function transformApiMessage(msg: ApiMessage): ChatMessage {
     content: msg.content,
     timestamp: new Date(msg.createdAt).getTime(),
     tokens: msg.totalTokens || 0,
-    metadata: msg.metadata as any
+    metadata: {
+      ...(msg.metadata as any),
+      // 将数据库的modelId字段映射到metadata.model，供前端显示组件使用
+      ...(msg.modelId && { model: msg.modelId })
+    }
   }
 }
 

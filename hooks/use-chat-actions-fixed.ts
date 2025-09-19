@@ -63,7 +63,13 @@ export function useChatActionsFixed({
     
     // 一致性检查
     if (modelFromHook && modelFromState && modelFromHook !== modelFromState) {
-      }
+      console.warn('[use-chat-actions] Model mismatch detected:', {
+        fromHook: modelFromHook,
+        fromState: modelFromState,
+        using: actualModel,
+        timestamp: new Date().toISOString()
+      })
+    }
     
     return actualModel
   }, [getCurrentModel])
@@ -74,6 +80,9 @@ export function useChatActionsFixed({
   const sendMessage = useCallback(async (content: string) => {
     const currentState = stateRef.current
     if (!content.trim() || currentState.isLoading) return
+
+    // 在最外层定义requestStartTime，确保所有代码块都可以访问
+    const requestStartTime = Date.now()
 
     // 检查是否有对话，没有则创建新对话
     let currentConversation: Conversation | undefined = conversation
@@ -124,13 +133,11 @@ export function useChatActionsFixed({
       const requestBody = {
         messages: currentMessages.map(m => ({ role: m.role, content: m.content })),
         model: modelForThisSend,
-        temperature: state.settings.temperature,
+        temperature: currentState.settings.temperature, // 使用最新的temperature值
         conversationId: currentConversation?.id, // 使用当前对话的ID（可能是新创建的）
       }
-
-      // 开始监控API请求
-      const requestStartTime = Date.now()
       
+      // 使用之前已定义的requestStartTime
       const response = await fetchWithRetry(
         '/api/chat',
         {
@@ -154,18 +161,30 @@ export function useChatActionsFixed({
 
       // 记录API响应
       const requestDuration = Date.now() - requestStartTime
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        const errorMessage = errorData.error || errorData.message || `HTTP error! status: ${response.status}`
+        
+        // 记录失败请求
+        apiMonitor.logRequest(
+          '/api/chat',
+          'POST',
+          response.status,
+          requestDuration,
+          errorMessage
+        )
+        
+        throw new Error(errorMessage)
+      }
+      
+      // 记录成功请求
       apiMonitor.logRequest(
         '/api/chat',
         'POST',
         response.status,
-        requestDuration,
-        response.ok ? undefined : `HTTP ${response.status}`
+        requestDuration
       )
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
-      }
 
       const reader = response.body?.getReader()
       if (!reader) {
@@ -317,11 +336,23 @@ export function useChatActionsFixed({
 
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        // 用户取消请求，不显示错误
+        // 用户取消请求，记录但不显示错误
+        const requestDuration = Date.now() - requestStartTime
+        apiMonitor.logRequest(
+          '/api/chat',
+          'POST',
+          0,  // 用0表示取消
+          requestDuration,
+          'User cancelled request'
+        )
       } else {
         // 提供友好的错误信息
         let userMessage = '发送消息失败'
+        let errorDetail = 'Unknown error'
+        
         if (error instanceof Error) {
+          errorDetail = error.message
+          
           if (error.message.includes('超时')) {
             userMessage = '响应超时，请检查网络连接后重试'
           } else if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
@@ -336,6 +367,16 @@ export function useChatActionsFixed({
             userMessage = error.message
           }
         }
+        
+        // 记录错误到API监控
+        const requestDuration = Date.now() - requestStartTime
+        apiMonitor.logRequest(
+          '/api/chat',
+          'POST',
+          0,  // 0表示请求失败
+          requestDuration,
+          errorDetail
+        )
         
         dispatch({
           type: 'SET_ERROR',

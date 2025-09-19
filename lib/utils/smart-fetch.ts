@@ -5,6 +5,24 @@
 
 import { retryWithBackoff, type RetryOptions } from './retry'
 
+/**
+ * 检测是否在浏览器环境中
+ */
+function isBrowser(): boolean {
+  return typeof window !== 'undefined' && 
+         typeof navigator !== 'undefined' &&
+         typeof document !== 'undefined'
+}
+
+/**
+ * 检测是否在Node.js环境中
+ */
+function isNode(): boolean {
+  return typeof process !== 'undefined' &&
+         process.versions != null &&
+         process.versions.node != null
+}
+
 export interface SmartFetchOptions extends RequestInit {
   /** 重试选项 */
   retry?: RetryOptions
@@ -24,13 +42,18 @@ export interface SmartFetchOptions extends RequestInit {
  * 网络恢复检查函数
  */
 async function waitForNetworkRecovery(timeout = 30000): Promise<boolean> {
+  // 在服务端环境中直接返回true（假设网络正常）
+  if (!isBrowser()) {
+    return true
+  }
+  
   const startTime = Date.now()
   const healthCheckUrl = '/api/health'
   
   while (Date.now() - startTime < timeout) {
     try {
       // 检查浏览器网络状态
-      if (!navigator.onLine) {
+      if ('navigator' in window && !navigator.onLine) {
         await new Promise(resolve => setTimeout(resolve, 1000))
         continue
       }
@@ -59,12 +82,21 @@ async function waitForNetworkRecovery(timeout = 30000): Promise<boolean> {
  * 检查网络状态
  */
 async function checkNetworkStatus(): Promise<boolean> {
-  if (!navigator.onLine) {
+  // 在服务端环境中直接返回true
+  if (!isBrowser()) {
+    return true
+  }
+  
+  // 检查navigator.onLine状态
+  if ('navigator' in window && !navigator.onLine) {
     return false
   }
 
   try {
-    const response = await fetch('/api/health', {
+    // 在服务端环境中，这个请求可能需要完整URL
+    const healthCheckUrl = isBrowser() ? '/api/health' : `${process.env.NEXTAUTH_URL || 'http://localhost:3007'}/api/health`
+    
+    const response = await fetch(healthCheckUrl, {
       method: 'HEAD',
       cache: 'no-cache',
       signal: AbortSignal.timeout(5000)
@@ -256,3 +288,41 @@ export const networkAwareFetch = createNetworkAwareFetch({
   checkNetworkBeforeRetry: true,
   timeout: 30000
 })
+
+/**
+ * 安全的fetch包装器 - 自动处理环境差异
+ */
+export async function safeFetch(
+  url: string,
+  options?: RequestInit
+): Promise<Response> {
+  // 在服务端环境中，可能需要完整URL
+  const fullUrl = !isBrowser() && !url.startsWith('http') 
+    ? `${process.env.NEXTAUTH_URL || 'http://localhost:3007'}${url}`
+    : url
+  
+  // 在服务端环境中，不使用智能重试功能
+  if (!isBrowser()) {
+    return fetch(fullUrl, options)
+  }
+  
+  // 在浏览器环境中，使用智能Fetch
+  return smartFetch(url, options as SmartFetchOptions)
+}
+
+/**
+ * 检测当前环境的网络能力
+ */
+export function getNetworkCapabilities() {
+  return {
+    isBrowser: isBrowser(),
+    isNode: isNode(),
+    hasNavigator: typeof navigator !== 'undefined',
+    hasOnlineAPI: isBrowser() && 'onLine' in navigator,
+    hasConnectionAPI: isBrowser() && 'connection' in navigator,
+    hasServiceWorker: isBrowser() && 'serviceWorker' in navigator,
+    hasFetch: typeof fetch !== 'undefined',
+    hasAbortController: typeof AbortController !== 'undefined',
+    hasTimeout: typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal
+  }
+}

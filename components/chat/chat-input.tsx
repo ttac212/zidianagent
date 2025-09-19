@@ -10,6 +10,7 @@ import { Send, Loader2, Square, Lightbulb, AlertTriangle } from 'lucide-react'
 import type { ChatInputProps } from '@/types/chat'
 import { useAutoResizeTextarea } from '@/hooks/use-auto-resize-textarea'
 import { ModelSelectorAnimated } from './model-selector-animated'
+import { MESSAGE_LIMITS, getCharLimitStatus } from '@/lib/constants/message-limits'
 
 // 推荐问题列表
 const SUGGESTED_QUESTIONS = [
@@ -46,12 +47,6 @@ const PLACEHOLDER_TEXTS = {
   ]
 }
 
-// 字符限制配置
-const CHAR_LIMITS = {
-  MAX: 20000,
-  SHOW_COUNTER: 15000,
-  WARNING: 18000
-} as const
 
 // 获取模型名称（简化：直接显示ID；如需名称，请在上层通过 props 注入或统一在头部展示模型名称）
 function getModelName(id: string) {
@@ -77,10 +72,12 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
   
   // 字符计数相关状态
   const charCount = useMemo(() => input.length, [input])
-  const shouldShowCounter = charCount >= CHAR_LIMITS.SHOW_COUNTER
-  const isOverWarningThreshold = charCount >= CHAR_LIMITS.WARNING
-  const isOverLimit = charCount > CHAR_LIMITS.MAX
-  const remainingChars = CHAR_LIMITS.MAX - charCount
+  const limitStatus = useMemo(() => getCharLimitStatus(charCount), [charCount])
+  const shouldShowCounter = limitStatus.showCounter
+  const isOverWarningThreshold = limitStatus.isWarning
+  const isOverLimit = !limitStatus.isValid
+  const isDangerZone = limitStatus.isDanger
+  const remainingChars = limitStatus.remaining
   
   // 智能占位符选择逻辑
   const getSmartPlaceholder = useMemo(() => {
@@ -133,9 +130,15 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
   
   // 处理输入变化，包含字符限制验证
   const handleInputChange = (value: string) => {
-    // 如果超过最大限制，截断输入
-    const truncatedValue = value.length > CHAR_LIMITS.MAX ? value.slice(0, CHAR_LIMITS.MAX) : value
-    onInputChange(truncatedValue)
+    // 如果超过最大限制，阻止输入并显示警告
+    if (value.length > MESSAGE_LIMITS.MAX_LENGTH) {
+      // 振动效果提示用户（仅在支持的设备上）
+      if (typeof window !== 'undefined' && 'navigator' in window && navigator.vibrate) {
+        navigator.vibrate(100)
+      }
+      return // 阻止超出限制的输入
+    }
+    onInputChange(value)
     adjustHeight()
   }
   
@@ -249,6 +252,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                 } ${
                   // 字符限制相关的边框颜色
                   isOverLimit ? 'border-red-400' : 
+                  isDangerZone ? 'border-orange-400' :
                   isOverWarningThreshold ? 'border-amber-400' : 
                   isFocused ? 'border-primary shadow-sm' :
                   'border-border hover:border-border/80'
@@ -286,15 +290,23 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                     {/* 字符计数器 */}
                     {shouldShowCounter && (
                       <div className={`flex items-center gap-1 text-xs transition-colors duration-200 ${
-                        isOverLimit ? 'text-red-500' : 
+                        isOverLimit ? 'text-red-500 font-semibold animate-pulse' : 
+                        isDangerZone ? 'text-orange-500 font-medium' :
                         isOverWarningThreshold ? 'text-amber-500' : 
                         'text-muted-foreground'
                       }`}>
-                        {isOverWarningThreshold && (
-                          <AlertTriangle className="w-3 h-3" />
+                        {(isOverWarningThreshold || isDangerZone || isOverLimit) && (
+                          <AlertTriangle className={`w-3 h-3 ${
+                            isOverLimit ? 'animate-bounce' : ''
+                          }`} />
                         )}
                         <span>
-                          {isOverLimit ? `超出 ${Math.abs(remainingChars)}` : remainingChars}
+                          {isOverLimit 
+                            ? `已达上限 (${MESSAGE_LIMITS.MAX_LENGTH.toLocaleString()} 字符)`
+                            : isDangerZone 
+                            ? `剩余 ${remainingChars} 字符`
+                            : `${charCount.toLocaleString()} / ${MESSAGE_LIMITS.MAX_LENGTH.toLocaleString()}`
+                          }
                         </span>
                       </div>
                     )}

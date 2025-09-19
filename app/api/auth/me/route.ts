@@ -9,7 +9,7 @@ import { createErrorResponse } from '@/lib/api/error-handler'
  */
 export async function GET(request: NextRequest) {
   // 速率限制检查 - 认证API使用严格限制
-  const rateLimitCheck = checkRateLimit(request, 'AUTH')
+  const rateLimitCheck = await checkRateLimit(request, 'AUTH')
   if (!rateLimitCheck.allowed && rateLimitCheck.error) {
     return createErrorResponse(rateLimitCheck.error)
   }

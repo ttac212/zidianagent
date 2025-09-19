@@ -82,11 +82,34 @@ class APIMonitor {
   private checkAlerts(stat: APIStats): void {
     // 慢请求告警
     if (stat.duration > this.slowRequestThreshold) {
-      }
+      console.warn('[APIMonitor] Slow request detected:', {
+        endpoint: stat.endpoint,
+        duration: `${stat.duration}ms`,
+        threshold: `${this.slowRequestThreshold}ms`,
+        timestamp: stat.timestamp.toISOString()
+      })
+    }
     
-    // 错误告警
+    // 错误告警（排除用户取消）
     if (!stat.success) {
+      // 跳过用户取消的请求
+      if (stat.status === 0 && stat.error?.toLowerCase().includes('cancel')) {
+        console.debug('[APIMonitor] Request cancelled by user:', stat.endpoint)
+        return
       }
+      
+      // 确保错误信息正确显示
+      const errorInfo = {
+        endpoint: stat.endpoint,
+        status: stat.status,
+        error: stat.error || 'Unknown error',
+        duration: `${stat.duration}ms`,
+        timestamp: stat.timestamp.toISOString()
+      }
+      
+      // 使用对象格式日志，更清晰且易于调试
+      console.error('[APIMonitor] Request failed:', errorInfo)
+    }
     
     // 检查错误率
     const recentStats = this.getRecentStats(100) // 最近100个请求
@@ -126,13 +149,15 @@ class APIMonitor {
       } else {
         errorCount++
         
-        // 记录错误信息
-        recentErrors.push({
-          endpoint: stat.endpoint,
-          error: stat.error || `HTTP ${stat.status}`,
-          timestamp: stat.timestamp,
-          status: stat.status
-        })
+        // 记录错误信息（排除用户取消）
+        if (!(stat.status === 0 && stat.error?.toLowerCase().includes('cancel'))) {
+          recentErrors.push({
+            endpoint: stat.endpoint,
+            error: stat.error || `HTTP ${stat.status}`,
+            timestamp: stat.timestamp,
+            status: stat.status
+          })
+        }
       }
       
       // 更新端点统计

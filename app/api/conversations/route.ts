@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getToken } from 'next-auth/jwt'
+import { ALLOWED_MODEL_IDS, DEFAULT_MODEL, isAllowed } from '@/lib/ai/models'
 
 // 获取对话列表（受保护）
 export async function GET(request: NextRequest) {
@@ -91,11 +92,18 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const {
       title = '新对话',
-      modelId = 'gpt-3.5-turbo',
+      modelId,
       temperature = 0.7,
       maxTokens = 2000,
       contextAware = true
     } = body
+    
+    // 验证并设置模型ID
+    let validatedModelId = modelId
+    if (!validatedModelId || !isAllowed(validatedModelId)) {
+      // 如果没有提供模型或模型不在允许列表中，使用默认模型
+      validatedModelId = DEFAULT_MODEL
+    }
 
     const userId = String(token.sub)
 
@@ -116,7 +124,7 @@ export async function POST(request: NextRequest) {
       data: {
         title,
         userId,
-        modelId,
+        modelId: validatedModelId,
         temperature,
         maxTokens,
         contextAware,

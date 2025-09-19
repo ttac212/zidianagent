@@ -6,32 +6,33 @@
 import { NextRequest } from 'next/server'
 import { createHash } from 'crypto'
 import { ApiError, API_ERROR_CODES } from '@/lib/api/error-handler'
+import { getRateLimiter, RATE_LIMIT_PRESETS } from './distributed-rate-limiter'
 
 // 速率限制配置
 export const RATE_LIMIT_CONFIG = {
   // 通用API限制 (requests per minute)
-  GENERAL: { requests: 60, window: 60 * 1000 },
+  GENERAL: { requests: 60, window: 60 * 1000, blockDuration: 60 * 1000 },
   
   // 聊天API限制 (更严格)
-  CHAT: { requests: 30, window: 60 * 1000 },
+  CHAT: { requests: 30, window: 60 * 1000, blockDuration: 5 * 60 * 1000 },
   
   // 认证相关API限制 (非常严格)
-  AUTH: { requests: 10, window: 60 * 1000 },
+  AUTH: { requests: 10, window: 60 * 1000, blockDuration: 15 * 60 * 1000 },
   
   // 管理员API限制
-  ADMIN: { requests: 100, window: 60 * 1000 },
+  ADMIN: { requests: 100, window: 60 * 1000, blockDuration: 60 * 1000 },
   
   // 文件上传限制
-  UPLOAD: { requests: 20, window: 60 * 1000 },
+  UPLOAD: { requests: 20, window: 60 * 1000, blockDuration: 10 * 60 * 1000 },
   
   // 搜索API限制
-  SEARCH: { requests: 50, window: 60 * 1000 },
+  SEARCH: { requests: 50, window: 60 * 1000, blockDuration: 2 * 60 * 1000 },
   
   // IP级别的全局限制
-  GLOBAL_IP: { requests: 200, window: 60 * 1000 },
+  GLOBAL_IP: { requests: 200, window: 60 * 1000, blockDuration: 10 * 60 * 1000 },
   
   // 用户级别的限制
-  USER: { requests: 300, window: 60 * 1000 }
+  USER: { requests: 300, window: 60 * 1000, blockDuration: 5 * 60 * 1000 }
 }
 
 // 限制类型
@@ -46,19 +47,10 @@ interface RequestRecord {
   blockedUntil?: number
 }
 
-// 内存存储（生产环境建议使用Redis）
-const requestCounts = new Map<string, RequestRecord>()
+// 使用分布式速率限制器替代内存存储
+const rateLimiter = getRateLimiter()
 
-// 清理过期记录的定时任务
-setInterval(() => {
-  const now = Date.now()
-  for (const [key, record] of requestCounts.entries()) {
-    // 清理超过5分钟的记录
-    if (now - record.lastRequest > 5 * 60 * 1000) {
-      requestCounts.delete(key)
-    }
-  }
-}, 2 * 60 * 1000) // 每2分钟清理一次
+// 注意：在Serverless环境中不使用定时器
 
 /**
  * 生成限制键
@@ -84,108 +76,49 @@ function getClientIdentifier(request: NextRequest, userId?: string): string {
 }
 
 /**
- * 检查速率限制
+ * 检查速率限制（使用分布式存储）
  */
-export function checkRateLimit(
+export async function checkRateLimit(
   request: NextRequest, 
   type: RateLimitType,
   userId?: string
-): { allowed: boolean; remaining: number; resetTime: number; error?: ApiError } {
+): Promise<{ allowed: boolean; remaining: number; resetTime: number; error?: ApiError }> {
   const config = RATE_LIMIT_CONFIG[type]
-  const identifier = getClientIdentifier(request, userId)
-  const key = generateLimitKey(identifier, type)
-  const now = Date.now()
   
-  // 获取或创建请求记录
-  let record = requestCounts.get(key)
+  // 使用分布式速率限制器
+  const result = await rateLimiter.check(
+    request,
+    type,
+    {
+      maxRequests: config.requests,
+      window: config.window,
+      blockDuration: config.blockDuration || config.window // 使用blockDuration或window作为阻止时长
+    },
+    userId
+  )
   
-  if (!record) {
-    // 首次请求
-    record = {
-      count: 1,
-      firstRequest: now,
-      lastRequest: now,
-      blocked: false
-    }
-    requestCounts.set(key, record)
-    return { 
-      allowed: true, 
-      remaining: config.requests - 1,
-      resetTime: now + config.window
-    }
-  }
-  
-  // 检查是否在阻止期间
-  if (record.blocked && record.blockedUntil && now < record.blockedUntil) {
+  if (!result.allowed) {
     return {
       allowed: false,
-      remaining: 0,
-      resetTime: record.blockedUntil,
+      remaining: result.remaining,
+      resetTime: result.resetTime,
       error: new ApiError(
         API_ERROR_CODES.RATE_LIMITED,
-        `API调用过于频繁，请在${Math.ceil((record.blockedUntil - now) / 1000)}秒后重试`,
+        result.reason || 'API调用过于频繁',
         429,
         { 
           type, 
-          resetTime: record.blockedUntil,
-          identifier: identifier.startsWith('user:') ? 'user' : 'ip'
+          resetTime: result.resetTime,
+          identifier: userId ? 'user' : 'ip'
         }
       )
     }
   }
   
-  // 检查时间窗口
-  if (now - record.firstRequest > config.window) {
-    // 重置窗口
-    record = {
-      count: 1,
-      firstRequest: now,
-      lastRequest: now,
-      blocked: false
-    }
-    requestCounts.set(key, record)
-    return { 
-      allowed: true, 
-      remaining: config.requests - 1,
-      resetTime: now + config.window
-    }
-  }
-  
-  // 检查是否超过限制
-  if (record.count >= config.requests) {
-    // 超过限制，阻止请求
-    record.blocked = true
-    record.blockedUntil = now + config.window
-    record.lastRequest = now
-    requestCounts.set(key, record)
-    
-    return {
-      allowed: false,
-      remaining: 0,
-      resetTime: record.blockedUntil,
-      error: new ApiError(
-        API_ERROR_CODES.RATE_LIMITED,
-        `API调用频率超限，请在${Math.ceil(config.window / 1000)}秒后重试`,
-        429,
-        { 
-          type, 
-          limit: config.requests,
-          window: config.window,
-          identifier: identifier.startsWith('user:') ? 'user' : 'ip'
-        }
-      )
-    }
-  }
-  
-  // 更新记录
-  record.count++
-  record.lastRequest = now
-  requestCounts.set(key, record)
-  
-  return { 
-    allowed: true, 
-    remaining: config.requests - record.count,
-    resetTime: record.firstRequest + config.window
+  return {
+    allowed: true,
+    remaining: result.remaining,
+    resetTime: result.resetTime
   }
 }
 
@@ -209,7 +142,7 @@ export function withRateLimit<T extends any[], R>(
     }
     
     // 检查速率限制
-    const limitCheck = checkRateLimit(request, type, userId)
+    const limitCheck = await checkRateLimit(request, type, userId)
     
     if (!limitCheck.allowed && limitCheck.error) {
       throw limitCheck.error
@@ -225,16 +158,18 @@ export function withRateLimit<T extends any[], R>(
 /**
  * 多重限制检查 (同时检查多个限制类型)
  */
-export function checkMultipleRateLimits(
+export async function checkMultipleRateLimits(
   request: NextRequest,
   types: RateLimitType[],
   userId?: string
-): { allowed: boolean; remaining: number; resetTime: number; error?: ApiError; failedType?: RateLimitType } {
-  // 缓存第一次检查的结果，避免双重计数
-  const results = types.map(type => ({
-    type,
-    result: checkRateLimit(request, type, userId)
-  }))
+): Promise<{ allowed: boolean; remaining: number; resetTime: number; error?: ApiError; failedType?: RateLimitType }> {
+  // 并行检查所有限制类型
+  const results = await Promise.all(
+    types.map(async type => ({
+      type,
+      result: await checkRateLimit(request, type, userId)
+    }))
+  )
   
   // 检查是否有被拒绝的请求
   for (const { type, result } of results) {
@@ -257,33 +192,36 @@ export function checkMultipleRateLimits(
 /**
  * 获取限制状态（用于监控）
  */
-export function getRateLimitStats(): {
+export async function getRateLimitStats(): Promise<{
   totalKeys: number
   activeBlocks: number
   memoryUsage: number
-} {
-  const now = Date.now()
-  let activeBlocks = 0
-  
-  for (const record of requestCounts.values()) {
-    if (record.blocked && record.blockedUntil && now < record.blockedUntil) {
-      activeBlocks++
-    }
-  }
-  
+}> {
+  // 在分布式架构中，统计信息需要从存储后端获取
+  // 目前返回默认值，实际应用应该使用监控服务
   return {
-    totalKeys: requestCounts.size,
-    activeBlocks,
-    memoryUsage: JSON.stringify([...requestCounts.entries()]).length
+    totalKeys: 0,  // 需要从分布式存储获取
+    activeBlocks: 0,  // 需要从分布式存储获取
+    memoryUsage: 0  // 在分布式架构中不适用
   }
 }
 
 /**
  * 手动清除特定键的限制（管理员功能）
  */
-export function clearRateLimit(identifier: string, type: RateLimitType): boolean {
-  const key = generateLimitKey(identifier, type)
-  return requestCounts.delete(key)
+export async function clearRateLimit(identifier: string, type: RateLimitType): Promise<boolean> {
+  // 创建一个临时请求对象来生成键
+  const dummyRequest = new Request('http://localhost', {
+    headers: new Headers()
+  })
+  
+  try {
+    await rateLimiter.reset(dummyRequest as any, type, identifier.startsWith('user:') ? identifier.replace('user:', '') : undefined)
+    return true
+  } catch (error) {
+    console.error('[RateLimiter] Failed to clear rate limit:', error)
+    return false
+  }
 }
 
 /**

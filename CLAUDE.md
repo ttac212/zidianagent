@@ -76,6 +76,7 @@ pnpm health:quick          # 快速健康检查
 pnpm debt:track            # 技术债务追踪
 node scripts/diagnose-health-api.js  # 诊断健康API问题
 node scripts/diagnose-usage-stats.ts # 检查使用量统计问题
+node scripts/check-encoding-issues.js # 检查文件编码问题
 pnpm monitor               # 性能监控
 
 # 环境配置
@@ -104,7 +105,7 @@ pnpm test:features         # 测试商家功能
 ## 核心架构
 
 ### 认证与安全
-- **NextAuth**: 基于JWT的认证系统
+- **NextAuth**: 基于JWT的认证系统，配置在`app/api/auth/[...nextauth]/route.ts`
 - **邀请码系统**: 支持使用限制、有效期、权限配置
 - **速率限制**: 多层级限制（用户/IP/API端点）
 - **内容过滤**: 消息内容安全验证
@@ -150,7 +151,7 @@ app/api/
 ### 必需环境变量
 ```env
 NEXTAUTH_URL=http://localhost:3007
-NEXTAUTH_SECRET=<强随机字符串，至少32字符>
+NEXTAUTH_SECRET=<强随机字符串，至少32字符，使用 openssl rand -hex 32 生成>
 DATABASE_URL=file:./prisma/dev.db
 NEXT_PUBLIC_CONNECTION_MONITORING=enabled
 ```
@@ -168,6 +169,8 @@ LLM_CLAUDE_API_KEY=<Claude专用Key>
 LLM_GEMINI_API_KEY=<Gemini专用Key>
 LLM_OPENAI_API_KEY=<OpenAI专用Key>
 ```
+
+详细配置参见 `.env.example` 文件
 
 ## 开发注意事项
 
@@ -197,40 +200,6 @@ z-[15]:  移动端遮罩层 + 时间轴圆点悬停
 z-10:    基础交互元素
 ```
 
-### 项目结构
-```
-app/
-├── api/              # API路由（Next.js App Router）
-│   ├── auth/         # NextAuth认证
-│   ├── chat/         # 聊天核心功能
-│   ├── conversations/# 对话管理
-│   └── merchants/    # 商家数据分析
-components/
-├── chat/             # 聊天组件
-├── ui/               # 通用UI组件（Radix UI）
-└── workspace/        # 工作区组件
-e2e/                  # Playwright端到端测试
-├── global-setup.ts   # 测试全局设置
-└── *.spec.ts         # 测试规范文件
-hooks/
-├── use-chat-*.ts     # 聊天相关hooks
-├── use-model-*.ts    # 模型状态管理
-└── use-connection-*.ts # 连接监控
-lib/
-├── ai/               # AI服务集成
-├── mcp/              # Model Context Protocol
-├── monitoring/       # 性能监控
-└── security/         # 安全相关
-prisma/
-├── schema.prisma     # 数据库模式
-└── dev.db           # SQLite开发数据库
-scripts/
-├── test/            # 测试脚本
-├── deploy/          # 部署脚本
-└── diagnose-*.js    # 诊断工具
-tests/               # Vitest单元测试
-```
-
 ### 数据库开发流程
 1. 修改 `prisma/schema.prisma`
 2. 运行 `pnpm db:generate` 生成客户端（必须）
@@ -251,14 +220,7 @@ tests/               # Vitest单元测试
 - **使用量记录**: Message → User → UsageStats双重更新
 - **模型选择**: `hooks/use-model-state.ts` - 支持动态切换
 - **状态管理**: `stores/conversation-store.ts` - Zustand统一管理
-
-### 测试策略
-- **单元测试**: `tests/` 目录，使用Vitest
-- **端到端测试**: `e2e/` 目录，使用Playwright，支持300并发极限压力测试
-- **API测试**: `scripts/test/verify-all-apis.js`
-- **性能测试**: `scripts/test/test-api-performance.js`
-- **健康检查**: `scripts/test/test-health-api.js`
-- **分阶段测试**: `pnpm test:phase0-3` 自动化测试流水线
+- **字符限制**: `lib/constants/message-limits.ts` - 20000字符上限
 
 ### 关键技术栈
 - **前端**: Next.js 15 + React 19 + TypeScript
@@ -292,17 +254,17 @@ pnpm backup:db                        # 备份当前数据
 pnpm restore:db                       # 恢复数据库
 ```
 
+### 编码问题
+```bash
+node scripts/check-encoding-issues.js # 检查文件编码问题
+# 常见问题：混合换行符（LF和CRLF）、乱码字符
+```
+
 ### 调试技巧
 ```bash
 pnpm dev:debug                        # 启用Node.js调试（端口9229）
 # Chrome DevTools: chrome://inspect
 ```
-
-## 脚本目录结构
-- **测试脚本**: `scripts/test/` - 各类测试脚本
-- **数据库脚本**: `scripts/db/` - 备份恢复工具
-- **部署脚本**: `scripts/deploy/` - 部署前检查
-- **诊断工具**: `scripts/diagnose-*.js` - 问题诊断
 
 ## 安全注意事项
 
@@ -329,6 +291,7 @@ node scripts/check-invite-codes.js           # 检查邀请码状态
 - `v20250911-optimization`: 优化前版本
 - `v20250911-optimized`: 优化后版本
 - `feature/2025-09-09`: 当前开发分支
+- `20250917`: 当前工作分支
 
 回滚命令：
 ```bash
@@ -352,19 +315,6 @@ pnpm test:run             # 运行所有测试
 pnpm security:check        # 安全检查（生产前必须）
 ```
 
-### 环境变量最小配置（开发）
-```env
-NEXTAUTH_URL=http://localhost:3007
-NEXTAUTH_SECRET=<32字符以上随机字符串，使用 openssl rand -hex 32 生成>
-DATABASE_URL=file:./prisma/dev.db
-LLM_API_BASE=https://api.302.ai/v1
-LLM_API_KEY=<你的302.AI API Key>
-NEXT_PUBLIC_CONNECTION_MONITORING=enabled
-NEXT_PUBLIC_APP_NAME=支点有星辰
-```
-
-详细配置参见 `.env.example` 文件
-
 ## 重要提示
 
 ### API路由编译问题
@@ -378,3 +328,7 @@ NEXT_PUBLIC_APP_NAME=支点有星辰
 ### 状态管理
 - 优先使用Zustand store (`stores/conversation-store.ts`)
 - 避免在多个地方管理相同状态
+
+### 编码问题
+- 项目中存在混合换行符（LF和CRLF），但不影响运行
+- 如发现乱码，运行 `node scripts/check-encoding-issues.js` 检查

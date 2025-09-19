@@ -3,6 +3,8 @@
  * 防止注入攻击和恶意内容
  */
 
+import { MESSAGE_LIMITS, truncateMessage } from '@/lib/constants/message-limits'
+
 // 内容过滤配置
 export const CONTENT_FILTER_CONFIG = {
   // 编辑器上下文限制
@@ -181,7 +183,12 @@ export function createSafeContextMessage(editorExcerpt: string): { role: string;
 
   // 记录可疑内容
   if (filterResult.dangerLevel !== 'safe') {
-    }
+    console.warn('[ContentFilter] Suspicious content detected:', {
+      dangerLevel: filterResult.dangerLevel,
+      reasons: filterResult.reason,
+      timestamp: new Date().toISOString()
+    })
+  }
 
   return {
     role: "system",
@@ -193,8 +200,6 @@ export function createSafeContextMessage(editorExcerpt: string): { role: string;
  * 验证消息内容
  */
 export function validateMessageContent(content: string): ContentFilterResult {
-  // 对用户消息进行基本验证
-  const maxMessageLength = 10000 // 单条消息最大长度
   const warnings: string[] = []
   let dangerLevel: 'safe' | 'suspicious' | 'dangerous' = 'safe'
   
@@ -216,12 +221,14 @@ export function validateMessageContent(content: string): ContentFilterResult {
   let filteredContent = content.trim()
   const originalLength = filteredContent.length
 
-  // 长度检查
+  // 使用统一的长度检查和截断逻辑
+  const truncateResult = truncateMessage(filteredContent)
   let truncated = false
-  if (filteredContent.length > maxMessageLength) {
-    filteredContent = filteredContent.substring(0, maxMessageLength)
+  if (truncateResult.truncated) {
+    filteredContent = truncateResult.content
     truncated = true
-    warnings.push('消息过长已截断')
+    warnings.push(`消息过长，已从 ${originalLength.toLocaleString()} 字符截断至 ${MESSAGE_LIMITS.MAX_LENGTH.toLocaleString()} 字符`)
+    dangerLevel = 'suspicious' // 截断是一个可疑的操作
   }
 
   // 基本清理

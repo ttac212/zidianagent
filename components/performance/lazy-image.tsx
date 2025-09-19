@@ -54,6 +54,7 @@ export function LazyImage({ src, alt, width, height, className = "", placeholder
       {!isLoaded && !hasError && <Skeleton className="absolute inset-0 w-full h-full" style={{ width, height }} />}
 
       {isInView && !hasError && (
+        // eslint-disable-next-line @next/next/no-img-element
         <img
           ref={imgRef}
           src={src || "/placeholder.svg"}

@@ -5,7 +5,8 @@ import { selectApiKey } from "@/lib/ai/key-manager"
 import { prisma } from "@/lib/prisma"
 import { getToken } from "next-auth/jwt"
 import { getModelProvider, getTodayDate } from "@/lib/ai/model-stats-helper"
-import { createSafeContextMessage, validateMessageContent } from "@/lib/security/content-filter"
+import { createSafeContextMessage } from "@/lib/security/content-filter"
+import { validateChatMessages } from "@/lib/security/message-validator"
 import { checkMultipleRateLimits } from "@/lib/security/rate-limiter"
 import { createErrorResponse } from "@/lib/api/error-handler"
 import { recordUsageAsync } from "@/lib/utils/usage-stats-helper"
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
     userId = String(token.sub)
     
     // 速率限制检查 - 检查聊天和全局IP限制
-    const rateLimitCheck = checkMultipleRateLimits(request, ['CHAT', 'GLOBAL_IP'], userId)
+    const rateLimitCheck = await checkMultipleRateLimits(request, ['CHAT', 'GLOBAL_IP'], userId)
     if (!rateLimitCheck.allowed && rateLimitCheck.error) {
       return createErrorResponse(rateLimitCheck.error)
     }
@@ -67,7 +68,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const useModel: string = requestModel
+    // 使用经过验证的模型ID，而非原始请求的模型
+    const useModel: string = model // 使用validateModelId验证后的模型
 
     // 若未提供 conversationId，自动为当前用户创建对话（容错，保证后续持久化）
     if (userId && !conversationId) {
@@ -83,7 +85,7 @@ export async function POST(request: NextRequest) {
         })
         conversationId = created.id
       } catch (e) {
-        void e
+        console.error('[chat] Auto-create conversation failed:', e)
         // 自动创建失败不应阻断后续用量统计
       }
     }
@@ -118,21 +120,37 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 验证和处理用户消息
-    let validatedMessages = messages
-    if (messages.length > 0) {
-      validatedMessages = messages.map((msg: any) => {
-        if (msg.role === 'user') {
-          const validation = validateMessageContent(msg.content)
-          if (!validation.isValid) {
-            // Invalid user message filtered - validation warnings logged internally
-            return { ...msg, content: '消息内容不符合安全规范，已被过滤' }
-          }
-          return { ...msg, content: validation.filteredContent }
-        }
-        return msg
+    // 使用专门的聊天消息验证器
+    // 自动区分新对话和已有对话的验证策略
+    const hasExistingConversation =
+      !!conversationId ||
+      (Array.isArray(messages) && messages.some((msg: any) => msg?.role && msg.role !== 'user'))
+
+    // 当出现历史 assistant/system 消息时也视作已有对话，避免误判安全威胁
+    const messageValidation = validateChatMessages(messages, hasExistingConversation)
+    
+    // 如果有安全问题，记录并拒绝请求
+    if (messageValidation.stats.roleViolations > 0) {
+      console.error('[Security] Role injection attempt detected:', {
+        userId,
+        conversationId,
+        violations: messageValidation.stats,
+        timestamp: new Date().toISOString()
       })
+      
+      // 可以考虑记录到数据库或发送警报
+      // await logSecurityIncident({ type: 'ROLE_INJECTION', userId, ... })
+      
+      return new Response(
+        JSON.stringify({ 
+          error: '检测到安全威胁，请求已被拒绝', 
+          code: 'SECURITY_VIOLATION' 
+        }),
+        { status: 403, headers: { "Content-Type": "application/json" } }
+      )
     }
+    
+    const validatedMessages = messageValidation.messages
 
     // 如果提供了对话信息，保存用户消息到数据库
     if (userId && conversationId && validatedMessages.length > 0) {
@@ -434,3 +452,4 @@ export async function POST(request: NextRequest) {
     // Request completed - timing logged internally
   }
 }
+

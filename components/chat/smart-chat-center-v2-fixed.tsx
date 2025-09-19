@@ -75,11 +75,12 @@ export const SmartChatCenterV2Fixed = React.memo<SmartChatCenterProps>(({
     messages: [], // 不从 conversation 初始化，避免循环
   })
 
-  // 包装onCreateConversation为Promise形式
+  // 直接使用onCreateConversation（已经是Promise形式）
   const createConversationWrapper = useCallback(async (model?: string): Promise<Conversation | null> => {
-    onCreateConversation()
-    return null // 因为原始函数返回void，我们返回null
-  }, [onCreateConversation])
+    // 传递模型参数并等待结果
+    const result = await onCreateConversation(model || currentModel)
+    return result
+  }, [onCreateConversation, currentModel])
 
   // 操作管理
   const {

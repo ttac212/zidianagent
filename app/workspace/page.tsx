@@ -25,6 +25,8 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog"
 import { toast } from "@/hooks/use-toast"
+import { toast as unifiedToast } from '@/lib/toast/unified-toast'
+import { useInlineFeedback } from '@/components/ui/inline-feedback'
 import { ChevronLeft, ChevronRight, MessageSquare, Plus, MoreHorizontal } from "lucide-react"
 import dynamic from "next/dynamic"
 import { ChatCenterSkeleton } from "@/components/skeletons/chat-center-skeleton"
@@ -33,7 +35,7 @@ const SmartChatCenterV2 = dynamic(
   { ssr: false, loading: () => <ChatCenterSkeleton /> }
 )
 import { Header } from "@/components/header"
-import { ALLOWED_MODELS, DEFAULT_MODEL } from "@/lib/ai/models"
+import { ALLOWED_MODELS, DEFAULT_MODEL, ALLOWED_MODEL_IDS, isAllowed } from "@/lib/ai/models"
 import { WorkspaceSkeleton } from "@/components/skeletons/workspace-skeleton"
 import { ConnectionStatus } from "@/components/ui/connection-status"
 
@@ -55,9 +57,22 @@ interface Conversation {
 }
 
 export default function WorkspacePage() {
-  // 使用安全的localStorage hook
+  // 使用安全的localStorage hook，并验证模型
   const defaultModelId = ALLOWED_MODELS.length > 0 ? ALLOWED_MODELS[0].id : DEFAULT_MODEL
-  const [selectedModel, setSelectedModel] = useSafeLocalStorage('lastSelectedModelId', defaultModelId)
+  const [storedModel, setStoredModel] = useSafeLocalStorage('lastSelectedModelId', defaultModelId)
+  
+  // 验证存储的模型是否有效
+  const [selectedModel, setSelectedModel] = useState(() => {
+    // 如果存储的模型在允许列表中，使用它；否则使用默认模型
+    return isAllowed(storedModel) ? storedModel : defaultModelId
+  })
+  
+  // 同步到localStorage（仅在有效时）
+  useEffect(() => {
+    if (isAllowed(selectedModel)) {
+      setStoredModel(selectedModel)
+    }
+  }, [selectedModel, setStoredModel])
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     // 移动端默认折叠侧边栏
     if (typeof window !== 'undefined') {
@@ -105,14 +120,18 @@ export default function WorkspacePage() {
   // 确保始终有可用对话（页面加载完成后，如果没有对话就创建一个）
   useEffect(() => {
     if (!loading && conversations.length === 0 && !currentConversationId) {
-      createConversation(selectedModel)
+      // 确保使用验证过的模型
+      const modelToUse = isAllowed(selectedModel) ? selectedModel : defaultModelId
+      createConversation(modelToUse)
     }
-  }, [loading, conversations.length, currentConversationId, createConversation, selectedModel])
+  }, [loading, conversations.length, currentConversationId, createConversation, selectedModel, defaultModelId])
 
   // 简化的对话管理函数
   const handleCreateConversation = async () => {
     try {
-      const newConversation = await createConversation(selectedModel)
+      // 确保使用验证过的模型
+      const modelToUse = isAllowed(selectedModel) ? selectedModel : defaultModelId
+      const newConversation = await createConversation(modelToUse)
       if (newConversation) {
         // 移动端创建对话后自动折叠侧边栏，专注聊天
         if (typeof window !== 'undefined' && window.innerWidth < 768) {
@@ -183,9 +202,10 @@ export default function WorkspacePage() {
       a.click()
       a.remove()
       URL.revokeObjectURL(url)
-      toast({ title: '导出成功', description: '对话已导出为 JSON 文件。' })
+      // 使用轻量级toast提示
+      unifiedToast.success('导出成功')
     } catch (e) {
-      toast({ title: '导出失败', description: '请稍后重试。' })
+      unifiedToast.error('导出失败', { description: '请稍后重试' })
     }
   }
 
@@ -194,9 +214,10 @@ export default function WorkspacePage() {
     try {
       const url = `${window.location.origin}${window.location.pathname}?conversation=${conversation.id}`
       await navigator.clipboard.writeText(url)
-      toast({ title: '已复制链接', description: '对话链接已复制到剪贴板。' })
+      // 不显示复制成功toast，只在失败时提示
+      // 浏览器已经有原生的复制反馈
     } catch (e) {
-      toast({ title: '复制失败', description: '无法复制到剪贴板。' })
+      unifiedToast.error('复制失败', { description: '无法复制到剪贴板' })
     }
   }
 
@@ -413,7 +434,7 @@ export default function WorkspacePage() {
                                       <AlertDialogHeader>
                                         <AlertDialogTitle>删除对话</AlertDialogTitle>
                                         <AlertDialogDescription>
-                                          将删除"{conv.title}"
+                                          将删除&ldquo;{conv.title}&rdquo;
                                           {conv.messages?.length ? `（${conv.messages.length} 条消息）` : ''}。
                                           此操作不可撤销。
                                         </AlertDialogDescription>

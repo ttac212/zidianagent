@@ -94,7 +94,7 @@ export interface SmartChatCenterProps {
   editorContextEnabled?: boolean
   editorContent?: string
   onUpdateConversation: (id: string, updates: Partial<Conversation>) => void
-  onCreateConversation: () => void
+  onCreateConversation: (model?: string) => Promise<Conversation | null>
   onDeleteConversation: (id: string) => void
   onSelectConversation: (id: string) => void
   onSelectedModelChange?: (modelId: string) => void
