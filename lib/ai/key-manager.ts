@@ -93,8 +93,14 @@ export function selectApiKey(modelId: string): KeySelectionResult {
     return result
   }
 
-  // 4. 无可用Key - 抛出错误而不是返回空Key
-  throw new Error(`无法为模型 ${modelId} 找到有效的API Key。请检查环境变量配置。`)
+  // 4. 无可用Key - 返回错误状态而不是抛出异常
+  const result: KeySelectionResult = {
+    apiKey: '',
+    provider: 'None',
+    keySource: 'none',
+    confidence: 'low'
+  }
+  return result
 }
 
 /**

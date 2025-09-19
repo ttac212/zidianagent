@@ -240,21 +240,21 @@ export default function WorkspacePage() {
     <div className="h-screen flex flex-col bg-background">
       <Header />
       
-      {/* 连接状态指示器 - 工作区专用 */}
+      {/* 连接状态指示器 - 工作区专用，调整位置避免与时间轴冲突 */}
       <ConnectionStatus
         position="fixed"
         size="sm"
-        className="top-20 right-4 z-[45]"
+        className="top-20 left-4 z-[45] md:left-auto md:right-4"
         animated={true}
         showDetails={false}
         autoHideWhenHealthy={false}
       />
 
       <div className="flex-1 flex overflow-hidden min-h-0 relative">
-        {/* 移动端遮罩层 */}
+        {/* 移动端遮罩层 - 调整层级避免干扰组件交互 */}
         {!sidebarCollapsed && (
           <div
-            className="fixed inset-0 bg-black/50 z-10 md:hidden"
+            className="fixed inset-0 bg-black/50 z-[15] md:hidden"
             onClick={() => setSidebarCollapsed(true)}
           />
         )}

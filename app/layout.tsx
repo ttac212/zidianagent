@@ -1,6 +1,7 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+// 暂时禁用Google Fonts，避免连接警告
+// import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { ErrorBoundary } from "@/components/ui/error-boundary"
@@ -10,12 +11,14 @@ import { SessionProvider } from "@/components/providers/session-provider"
 import { QueryProvider } from "@/lib/providers/query-provider"
 import { Toaster } from "@/components/ui/toaster"
 
-const inter = Inter({
-  subsets: ["latin"],
-  display: "swap",
+// 使用系统字体配置，避免Google Fonts连接问题
+const inter = {
+  className: "font-sans",
   variable: "--font-inter",
-  fallback: ["system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
-})
+  style: {
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif"
+  }
+}
 
 export const metadata: Metadata = {
   title: "支点有星辰 - AI创作平台",

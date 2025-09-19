@@ -240,7 +240,7 @@ async function importMerchantData(filePath: string) {
     const merchantName = firstRow['商家名称']
     
     if (!merchantUID || !merchantName) {
-      : ${filePath}`)
+      console.error(`缺少必要字段(商家UID或商家名称): ${filePath}`)
       return
     }
 
@@ -376,14 +376,14 @@ async function importMerchantData(filePath: string) {
         })
         contentCount++
       } catch (error) {
-        :`, error)
+        console.error(`创建商家内容失败:`, error)
       }
     }
 
     return { merchantName, contentCount }
     
   } catch (error) {
-    :`, error)
+    console.error(`处理文件时出错:`, error)
     return null
   }
 }
@@ -407,7 +407,7 @@ async function main() {
       }
     }
     
-    => sum + r.contentCount, 0)} 条内容`)
+    console.log(`导入完成！共处理 ${results.length} 个商家，${results.reduce((sum, r) => sum + r.contentCount, 0)} 条内容`)
     
     // 统计信息
     const categories = await prisma.merchantCategory.findMany({

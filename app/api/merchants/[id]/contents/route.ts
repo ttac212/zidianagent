@@ -5,10 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
 import type { ContentFilters, ContentListResponse } from '@/types/merchant'
-
-const prisma = new PrismaClient()
+import { createErrorResponse, generateRequestId } from '@/lib/api/error-handler'
 
 // GET /api/merchants/[id]/contents - 获取商家内容列表
 export async function GET(
@@ -60,12 +59,15 @@ export async function GET(
       merchantId: id
     }
     
+    // 收集所有OR条件
+    const orConditions: any[] = []
+    
     if (filters.search) {
-      where.OR = [
+      orConditions.push(
         { title: { contains: filters.search } },
         { content: { contains: filters.search } },
-        { transcript: { contains: filters.search } },
-      ]
+        { transcript: { contains: filters.search } }
+      )
     }
     
     if (filters.contentType) {
@@ -86,12 +88,27 @@ export async function GET(
       where.hasTranscript = filters.hasTranscript
     }
     
+    // 如果有最小互动量过滤，需要与搜索条件合并
     if (filters.minEngagement) {
-      where.OR = [
+      const engagementConditions = [
         { diggCount: { gte: filters.minEngagement } },
         { commentCount: { gte: filters.minEngagement } },
         { collectCount: { gte: filters.minEngagement } },
       ]
+      
+      if (orConditions.length > 0) {
+        // 如果有搜索条件，需要组合AND逻辑
+        where.AND = [
+          { OR: orConditions },
+          { OR: engagementConditions }
+        ]
+      } else {
+        // 只有互动量过滤
+        where.OR = engagementConditions
+      }
+    } else if (orConditions.length > 0) {
+      // 只有搜索条件
+      where.OR = orConditions
     }
 
     // 排序配置
@@ -144,10 +161,7 @@ export async function GET(
     return NextResponse.json(response)
     
   } catch (error) {
-    return NextResponse.json(
-      { error: '获取商家内容列表失败' },
-      { status: 500 }
-    )
+    return createErrorResponse(error as Error, generateRequestId())
   }
 }
 

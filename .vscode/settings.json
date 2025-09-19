@@ -1,0 +1,6 @@
+{
+    "chatgpt.apiBase": "https://jp.duckcoding.com/v1",
+"chatgpt.config": {
+  "preferred_auth_method": "sk-MgHo5stWi2kJJTdGTx8IghS587oqnmlbhVviA1tiKGzRVkpz"
+}
+}

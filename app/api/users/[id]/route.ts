@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getToken } from 'next-auth/jwt'
+import { createErrorResponse, generateRequestId, requireAuth } from '@/lib/api/error-handler'
 
-// 获取单个用户详情（受保护）
+// 获取单个用户详情（受保护 - 需要ADMIN权限）
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const token = await getToken({ req: request as any })
-    if (!token?.sub) return NextResponse.json({ error: '未认证' }, { status: 401 })
+    
+    // 使用统一认证检查，需要ADMIN权限
+    const authError = requireAuth(token, 'ADMIN')
+    if (authError) return createErrorResponse(authError)
 
     const { id } = await params
     
@@ -72,19 +76,22 @@ export async function GET(
       data: user
     })
   } catch (error) {
-    return NextResponse.json(
-      { error: '获取用户详情失败' },
-      { status: 500 }
-    )
+    return createErrorResponse(error as Error, generateRequestId())
   }
 }
 
-// 更新用户
+// 更新用户（需要ADMIN权限）
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const token = await getToken({ req: request as any })
+    
+    // 使用统一认证检查，需要ADMIN权限
+    const authError = requireAuth(token, 'ADMIN')
+    if (authError) return createErrorResponse(authError)
+    
     const { id } = await params
     const body = await request.json()
     const { 
@@ -166,12 +173,18 @@ export async function PATCH(
   }
 }
 
-// 删除用户
+// 删除用户（需要ADMIN权限）
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const token = await getToken({ req: request as any })
+    
+    // 使用统一认证检查，需要ADMIN权限
+    const authError = requireAuth(token, 'ADMIN')
+    if (authError) return createErrorResponse(authError)
+    
     const { id } = await params
     
     // 检查用户是否存在

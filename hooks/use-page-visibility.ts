@@ -51,7 +51,7 @@ export function usePageVisibility(
   const opts = { ...DEFAULT_OPTIONS, ...options }
   
   const [visibilityState, setVisibilityState] = useState<PageVisibilityState>({
-    isVisible: !document.hidden,
+    isVisible: typeof document !== 'undefined' ? !document.hidden : true,
     wasHidden: false,
     lastVisibleTime: Date.now(),
     lastHiddenTime: 0,
@@ -83,15 +83,16 @@ export function usePageVisibility(
 
         // 可选：记录页面重新可见的调试信息
         if (opts.debug) {
-          .toFixed(1)}秒`, {
-            hiddenDuration,
-            isLongAbsence
-          })
+          // 调试信息已禁用 - 可通过日志系统替代
+          // console.log(`页面重新可见，隐藏时长: ${(hiddenDuration / 1000).toFixed(1)}秒`, {
+          //   hiddenDuration,
+          //   isLongAbsence
+          // })
         }
       } else {
         // 页面变为隐藏
         hiddenStartTimeRef.current = now
-        }
+      }
 
       const newState: PageVisibilityState = {
         isVisible,
@@ -132,7 +133,7 @@ export function usePageVisibility(
   const resetVisibilityState = useCallback(() => {
     const now = Date.now()
     setVisibilityState({
-      isVisible: !document.hidden,
+      isVisible: typeof document !== 'undefined' ? !document.hidden : true,
       wasHidden: false,
       lastVisibleTime: now,
       lastHiddenTime: 0,

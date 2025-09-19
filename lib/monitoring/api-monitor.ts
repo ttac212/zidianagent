@@ -95,7 +95,7 @@ class APIMonitor {
       const errorRate = errorCount / recentStats.length
       
       if (errorRate > this.errorThreshold) {
-        .toFixed(2)}% (${errorCount}/${recentStats.length})`)
+        console.warn(`High error rate detected: ${(errorRate * 100).toFixed(2)}% (${errorCount}/${recentStats.length})`)
       }
     }
   }

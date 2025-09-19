@@ -14,7 +14,12 @@ const nextConfig = {
   // 允许在开发环境从指定来源（如同一局域网的设备）访问开发服务器
   // 参考: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
   allowedDevOrigins: ["192.168.0.3"],
-  // 优化开发缓存配置
+  
+  // Turbopack 配置（当使用 --turbo 时生效）
+  // Turbopack 自动优化，无需额外配置
+  
+  // Webpack 配置（仅在不使用 --turbo 时生效）
+  // 注意：使用 Turbopack 时此配置会被忽略
   webpack: (config, { dev }) => {
     if (dev) {
       // 使用内存缓存而非完全禁用，提升开发体验

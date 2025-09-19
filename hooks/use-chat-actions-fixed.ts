@@ -44,13 +44,19 @@ export function useChatActionsFixed({
   // 中断控制器引用
   const abortControllerRef = useRef<AbortController | null>(null)
   
+  // Latest Ref Pattern: 缓存最新状态以减少依赖项
+  const stateRef = useRef(state)
+  useEffect(() => {
+    stateRef.current = state
+  }, [state])
+  
   // 模型一致性检查
   const { checkConsistency } = useModelConsistencyCheck('ChatActions')
   
   // 获取发送时的确切模型（优先使用getCurrentModel，fallback到state）
   const getSendingModel = useCallback((): string => {
     const modelFromHook = getCurrentModel ? getCurrentModel() : null
-    const modelFromState = state.settings.modelId
+    const modelFromState = stateRef.current.settings.modelId
     
     // 优先使用统一状态管理的模型
     const actualModel = modelFromHook || modelFromState
@@ -60,13 +66,14 @@ export function useChatActionsFixed({
       }
     
     return actualModel
-  }, [getCurrentModel, state.settings.modelId])
+  }, [getCurrentModel])
 
   /**
    * 发送消息 - 使用简单的 fetch API
    */
   const sendMessage = useCallback(async (content: string) => {
-    if (!content.trim() || state.isLoading) return
+    const currentState = stateRef.current
+    if (!content.trim() || currentState.isLoading) return
 
     // 检查是否有对话，没有则创建新对话
     let currentConversation: Conversation | undefined = conversation
@@ -99,7 +106,7 @@ export function useChatActionsFixed({
       dispatch({ type: 'ADD_MESSAGE', payload: userMessage })
 
       // 准备消息历史
-      const currentMessages = [...state.messages, userMessage]
+      const currentMessages = [...currentState.messages, userMessage]
 
       // 创建中断控制器
       abortControllerRef.current = new AbortController()
@@ -110,7 +117,7 @@ export function useChatActionsFixed({
       // 进行一致性验证
       checkConsistency(
         modelForThisSend, // UI选择的模型
-        state.settings.modelId, // 状态中的模型
+        currentState.settings.modelId, // 状态中的模型
         modelForThisSend // 请求中使用的模型
       )
       
@@ -142,7 +149,7 @@ export function useChatActionsFixed({
             })
           }
         },
-        30000 // 30秒超时
+        30000 // 30秒超时（比服务端的25秒稍长）
       )
 
       // 记录API响应
@@ -179,13 +186,28 @@ export function useChatActionsFixed({
       // 读取流式响应
       let parseErrorCount = 0
       const maxParseErrors = 5
+      let buffer = '' // 缓冲区，处理跨chunk的SSE帧
       
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
 
         const chunk = new TextDecoder().decode(value)
-        const lines = chunk.split('\n')
+        
+        // 将新数据添加到缓冲区
+        buffer += chunk
+        
+        // 按行分割，但保留最后的不完整行
+        const lines = buffer.split('\n')
+        
+        // 如果最后一个元素不是空字符串，说明可能是不完整的行
+        // 保留它在缓冲区中，等待下一个chunk
+        if (lines[lines.length - 1] !== '') {
+          buffer = lines.pop() || ''
+        } else {
+          buffer = ''
+          lines.pop() // 移除最后的空字符串
+        }
         
         for (const line of lines) {
           if (line.startsWith('data: ') && line !== 'data: [DONE]') {
@@ -236,6 +258,26 @@ export function useChatActionsFixed({
               }
             }
           }
+        }
+      }
+
+      // 处理缓冲区中剩余的数据
+      if (buffer.trim() && buffer.startsWith('data: ') && buffer !== 'data: [DONE]') {
+        try {
+          const data = JSON.parse(buffer.slice(6))
+          const content = data.choices?.[0]?.delta?.content
+          if (content) {
+            assistantContent += content
+            dispatch({
+              type: 'UPDATE_MESSAGE',
+              payload: {
+                id: assistantMessage.id,
+                updates: { content: assistantContent }
+              }
+            })
+          }
+        } catch (error) {
+          console.debug('SSE final parse error:', buffer, error)
         }
       }
 
@@ -312,7 +354,13 @@ export function useChatActionsFixed({
       dispatch({ type: 'SET_LOADING', payload: false })
       abortControllerRef.current = null
     }
-  }, [state.isLoading, state.messages, state.settings, dispatch, conversation, onUpdateConversation, onCreateConversation, onSelectConversation, getSendingModel])
+  }, [dispatch, conversation, onUpdateConversation, onCreateConversation, onSelectConversation, getSendingModel])
+
+  // 创建sendMessage的稳定引用，用于其他函数调用
+  const sendMessageRef = useRef(sendMessage)
+  useEffect(() => {
+    sendMessageRef.current = sendMessage
+  }, [sendMessage])
 
   /**
    * 停止生成
@@ -350,22 +398,23 @@ export function useChatActionsFixed({
    * 重试消息
    */
   const retryMessage = useCallback(async (messageId: string) => {
-    const messageIndex = state.messages.findIndex(msg => msg.id === messageId)
+    const currentState = stateRef.current
+    const messageIndex = currentState.messages.findIndex(msg => msg.id === messageId)
     if (messageIndex === -1) return
 
-    const message = state.messages[messageIndex]
+    const message = currentState.messages[messageIndex]
     if (message.role !== 'user') return
 
     // 移除该消息之后的所有消息
-    const messagesToKeep = state.messages.slice(0, messageIndex)
+    const messagesToKeep = currentState.messages.slice(0, messageIndex)
     dispatch({ type: 'CLEAR_MESSAGES' })
     messagesToKeep.forEach(msg => {
       dispatch({ type: 'ADD_MESSAGE', payload: msg })
     })
 
     // 重新发送消息
-    await sendMessage(message.content)
-  }, [state.messages, dispatch, sendMessage])
+    await sendMessageRef.current(message.content)
+  }, [dispatch])
 
   /**
    * 清空消息
@@ -421,15 +470,16 @@ export function useChatActionsFixed({
    * 处理错误重试
    */
   const handleErrorRetry = useCallback(async () => {
-    if (!state.error) return
+    const currentState = stateRef.current
+    if (!currentState.error) return
 
     dispatch({ type: 'SET_ERROR', payload: null })
 
     // 如果有输入内容，重新发送
-    if (state.input.trim()) {
-      await sendMessage(state.input)
+    if (currentState.input.trim()) {
+      await sendMessageRef.current(currentState.input)
     }
-  }, [state.error, state.input, dispatch, sendMessage])
+  }, [dispatch])
 
   /**
    * 批量操作

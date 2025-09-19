@@ -191,16 +191,44 @@ export async function POST(request: NextRequest) {
     
 
 
-    const upstream = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        // 接受 SSE
-        "Accept": "text/event-stream",
-      },
-      body: JSON.stringify(payload),
-    })
+    // 添加超时控制
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 25000) // 25秒超时
+
+    let upstream: Response
+    try {
+      upstream = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          // 接受 SSE
+          "Accept": "text/event-stream",
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId)
+      if (fetchError.name === 'AbortError') {
+        return new Response(JSON.stringify({ 
+          error: "AI服务响应超时，请稍后重试", 
+          retryable: true,
+          timeout: "25s"
+        }), {
+          status: 408,
+          headers: { "Content-Type": "application/json" },
+        })
+      }
+      return new Response(JSON.stringify({ 
+        error: "AI服务连接失败，请检查网络", 
+        retryable: true 
+      }), {
+        status: 502,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
 
     // 非 2xx：尝试解析错误并向前端统一返回
     if (!upstream.ok) {
@@ -236,11 +264,26 @@ export async function POST(request: NextRequest) {
     // 创建转换流来拦截并保存响应
     let assistantContent = ""
     let isComplete = false
+    let buffer = "" // 缓冲区，处理跨chunk的SSE帧
 
     const transformStream = new TransformStream({
       transform(chunk, controller) {
         const text = new TextDecoder().decode(chunk)
-        const lines = text.split('\n')
+        
+        // 将新数据添加到缓冲区
+        buffer += text
+        
+        // 按行分割，但保留最后的不完整行
+        const lines = buffer.split('\n')
+        
+        // 如果最后一个元素不是空字符串，说明可能是不完整的行
+        // 保留它在缓冲区中，等待下一个chunk
+        if (lines[lines.length - 1] !== '') {
+          buffer = lines.pop() || ''
+        } else {
+          buffer = ''
+          lines.pop() // 移除最后的空字符串
+        }
         
         for (const line of lines) {
           if (line.startsWith('data: ')) {
@@ -266,7 +309,8 @@ export async function POST(request: NextRequest) {
               }
             } catch (e) {
               void e
-              // 忽略解析错误
+              // 记录解析错误但继续处理
+              console.debug('SSE parse error:', line)
             }
           }
         }
@@ -274,6 +318,21 @@ export async function POST(request: NextRequest) {
         controller.enqueue(chunk)
       },
       flush() {
+        // 处理缓冲区中剩余的数据
+        if (buffer.trim() && buffer.startsWith('data: ')) {
+          try {
+            const data = buffer.slice(6).trim()
+            if (data !== '[DONE]') {
+              const parsed = JSON.parse(data)
+              if (parsed.choices?.[0]?.delta?.content) {
+                assistantContent += parsed.choices[0].delta.content
+              }
+            }
+          } catch (e) {
+            console.debug('SSE final parse error:', buffer, e)
+          }
+        }
+        
         // 流结束后保存 AI 响应到数据库
         if (userId && assistantContent && isComplete) {
           // 异步保存，不阻塞响应
@@ -283,7 +342,7 @@ export async function POST(request: NextRequest) {
     })
 
     // 异步保存助手消息的函数
-    async function saveAssistantMessage() {
+    const saveAssistantMessage = async () => {
       try {
         if (!userId) return
 

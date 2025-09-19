@@ -1,0 +1,53 @@
+// 修复 use-chat-actions-fixed.ts 的依赖循环问题
+// 
+// 问题：sendMessage 依赖 state.messages，导致频繁重新创建
+// 解决：使用 useRef 缓存状态，减少依赖项
+
+// 在 use-chat-actions-fixed.ts 中添加：
+
+// 1. 添加状态引用缓存
+const stateRef = useRef(state);
+useEffect(() => {
+  stateRef.current = state;
+}, [state]);
+
+// 2. 修复 sendMessage
+const sendMessage = useCallback(async (content: string) => {
+  const currentState = stateRef.current;
+  if (!content.trim() || currentState.isLoading) return;
+
+  // 使用当前状态而不是依赖项中的状态
+  const currentMessages = [...currentState.messages];
+  
+  // ... 其余逻辑保持不变
+  
+}, [dispatch, conversation, onUpdateConversation, onCreateConversation, onSelectConversation, getSendingModel])
+// 移除 state 相关依赖项
+
+// 3. 创建 sendMessage 的稳定引用
+const sendMessageRef = useRef(sendMessage);
+useEffect(() => {
+  sendMessageRef.current = sendMessage;
+}, [sendMessage]);
+
+// 4. 修复 retryMessage
+const retryMessage = useCallback(async (messageId: string) => {
+  const currentState = stateRef.current;
+  const messageIndex = currentState.messages.findIndex(msg => msg.id === messageId);
+  // ... 其余逻辑
+  
+  // 使用稳定引用
+  await sendMessageRef.current(message.content);
+}, [dispatch]); // 移除 sendMessage 依赖
+
+// 5. 修复 handleErrorRetry
+const handleErrorRetry = useCallback(async () => {
+  const currentState = stateRef.current;
+  if (!currentState.error) return;
+  
+  dispatch({ type: 'SET_ERROR', payload: null });
+  
+  if (currentState.input.trim()) {
+    await sendMessageRef.current(currentState.input);
+  }
+}, [dispatch]); // 移除所有 state 和 sendMessage 依赖

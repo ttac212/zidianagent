@@ -73,21 +73,25 @@ async function main() {
       // 正式导入模式
       const result = await importer.importAll()
       
-      .toFixed(1) : 0}%)`)
+      console.log(`导入完成! 成功: ${result.successCount}, 失败: ${result.errorCount}, 成功率: ${result.successCount > 0 ? ((result.successCount / (result.successCount + result.errorCount)) * 100).toFixed(1) : 0}%)`)
       
       if (result.categoryMapping.size > 0) {
         for (const [folder, categoryId] of result.categoryMapping) {
           const category = await prisma.documentCategory.findUnique({
             where: { id: categoryId }
           })
-          }
+          console.log(`  文件夹 "${folder}" 映射到分类: ${category?.name || '未知'} (${categoryId})`)
+        }
       }
       
       // 显示错误详情
       if (result.errorCount > 0) {
         result.results.forEach((fileResult, index) => {
           if (!fileResult.success && fileResult.errors.length > 0) {
-            }`)
+            console.log(`  文件 ${index + 1} 导入失败:`)
+            fileResult.errors.forEach(error => {
+              console.log(`    第${error.row}行: ${error.message}`)
+            })
           }
         })
       }
@@ -96,9 +100,12 @@ async function main() {
   } catch (error) {
     if (error instanceof Error) {
       if (error.message.includes('ENOENT')) {
-        } else if (error.message.includes('permission')) {
-        } else {
-        }
+        console.error('错误: 指定的文件夹不存在')
+      } else if (error.message.includes('permission')) {
+        console.error('错误: 权限不足，无法访问文件夹')
+      } else {
+        console.error('导入过程中出错:', error.message)
+      }
     }
   } finally {
     await prisma.$disconnect()

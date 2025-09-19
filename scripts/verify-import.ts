@@ -71,10 +71,11 @@ async function main() {
     })
     
     topMerchants.forEach((merchant, index) => {
-      `)
-      })
+      console.log(`  ${index + 1}. ${merchant.name} - ${merchant.totalContentCount} 条内容`)
+    })
     // 验证数据完整性
     } catch (error) {
+      console.error('验证导入时出错:', error)
     } finally {
     await prisma.$disconnect()
   }

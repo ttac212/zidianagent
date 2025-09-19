@@ -5,10 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
 import { parseAndCleanTags } from '@/lib/utils/tag-parser'
-
-const prisma = new PrismaClient()
+import { createErrorResponse, generateRequestId } from '@/lib/api/error-handler'
 
 // GET /api/merchants/[id]/analytics - 获取商家分析数据
 export async function GET(
@@ -165,10 +164,7 @@ export async function GET(
     return NextResponse.json(analytics)
     
   } catch (error) {
-    return NextResponse.json(
-      { error: '获取分析数据失败' },
-      { status: 500 }
-    )
+    return createErrorResponse(error as Error, generateRequestId())
   }
 }
 

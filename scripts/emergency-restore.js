@@ -45,13 +45,13 @@ if (backupFiles.length > 0) {
     try {
       const backupContent = fs.readFileSync(backupPath, 'utf8');
       fs.writeFileSync(originalPath, backupContent);
-      , originalPath)}`);
+      console.log(`已恢复文件: ${originalPath}`);
       restoredCount++;
       
       // 删除备份文件
       fs.unlinkSync(backupPath);
     } catch (error) {
-      , originalPath)}`);
+      console.error(`恢复文件失败: ${originalPath}`, error.message);
       failedCount++;
     }
   });
@@ -96,8 +96,10 @@ if (backupFiles.length > 0) {
   });
 }
 
-);
-);
+console.log(`\n恢复完成: 成功 ${restoredCount} 个，失败 ${failedCount} 个`);
+
 if (restoredCount > 0) {
-  } else {
-  }
+  console.log('紧急恢复操作已完成');
+} else {
+  console.log('没有文件需要恢复');
+}

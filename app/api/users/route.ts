@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getToken } from 'next-auth/jwt'
+import { createErrorResponse, generateRequestId, requireAuth } from '@/lib/api/error-handler'
 
-// 获取用户列表（受保护）
+// 获取用户列表（受保护 - 需要ADMIN权限）
 export async function GET(request: NextRequest) {
   try {
     const token = await getToken({ req: request as any })
-    if (!token?.sub) return NextResponse.json({ error: '未认证' }, { status: 401 })
+    
+    // 使用统一认证检查，需要ADMIN权限
+    const authError = requireAuth(token, 'ADMIN')
+    if (authError) return createErrorResponse(authError)
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '10')
@@ -68,16 +72,19 @@ export async function GET(request: NextRequest) {
       }
     })
   } catch (error) {
-    return NextResponse.json(
-      { error: '获取用户列表失败' },
-      { status: 500 }
-    )
+    return createErrorResponse(error as Error, generateRequestId())
   }
 }
 
-// 创建新用户
+// 创建新用户（需要ADMIN权限）
 export async function POST(request: NextRequest) {
   try {
+    const token = await getToken({ req: request as any })
+    
+    // 使用统一认证检查，需要ADMIN权限
+    const authError = requireAuth(token, 'ADMIN')
+    if (authError) return createErrorResponse(authError)
+    
     const body = await request.json()
     const { email, username, displayName, role = 'USER', monthlyTokenLimit = 100000 } = body
     
@@ -144,9 +151,6 @@ export async function POST(request: NextRequest) {
       message: '用户创建成功'
     }, { status: 201 })
   } catch (error) {
-    return NextResponse.json(
-      { error: '创建用户失败' },
-      { status: 500 }
-    )
+    return createErrorResponse(error as Error, generateRequestId())
   }
 }

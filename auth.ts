@@ -48,9 +48,65 @@ export const authOptions: NextAuthOptions = {
               return null
             }
           } else if (isProduction) {
-            // 生产环境应该使用正式的认证方式
-            // TODO: 实现正式的认证逻辑（OAuth、邮箱验证等）
-            return null
+            // 生产环境认证逻辑
+            if (!credentials?.email || !credentials?.code) {
+              return null
+            }
+            
+            // 验证邮箱格式
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+            if (!emailRegex.test(credentials.email)) {
+              return null
+            }
+            
+            // 查找用户
+            const user = await prisma.user.findUnique({ 
+              where: { email: credentials.email } 
+            })
+            
+            if (!user) {
+              // 生产环境不自动创建用户，需要通过邀请码注册
+              return null
+            }
+            
+            // 验证邮箱是否已验证
+            if (!user.emailVerified) {
+              throw new Error('EMAIL_NOT_VERIFIED')
+            }
+            
+            // 验证邀请码或临时验证码
+            // 这里可以实现：
+            // 1. 邀请码验证（已有 InviteCode 表）
+            // 2. 临时验证码（通过邮件发送）
+            // 3. OAuth 回调后的验证
+            
+            // 示例：验证邀请码
+            if (user.inviteCodeId) {
+              const inviteCode = await prisma.inviteCode.findUnique({
+                where: { id: user.inviteCodeId }
+              })
+              
+              if (!inviteCode || inviteCode.code !== credentials.code) {
+                return null
+              }
+              
+              // 检查邀请码是否过期或达到使用限制
+              if (inviteCode.expiresAt && inviteCode.expiresAt < new Date()) {
+                return null
+              }
+              
+              if (inviteCode.maxUses && inviteCode.usedCount >= inviteCode.maxUses) {
+                return null
+              }
+            }
+            
+            // 验证通过，返回用户信息
+            return {
+              id: user.id,
+              email: user.email,
+              name: user.name,
+              role: user.role
+            }
           } else {
             return null
           }

@@ -5,7 +5,7 @@
 
 import { NextRequest } from 'next/server'
 import { createHash } from 'crypto'
-import { ApiError, ApiErrorCode } from '@/lib/api/error-handler'
+import { ApiError, API_ERROR_CODES } from '@/lib/api/error-handler'
 
 // 速率限制配置
 export const RATE_LIMIT_CONFIG = {
@@ -122,7 +122,7 @@ export function checkRateLimit(
       remaining: 0,
       resetTime: record.blockedUntil,
       error: new ApiError(
-        ApiErrorCode.RATE_LIMITED,
+        API_ERROR_CODES.RATE_LIMITED,
         `API调用过于频繁，请在${Math.ceil((record.blockedUntil - now) / 1000)}秒后重试`,
         429,
         { 
@@ -164,7 +164,7 @@ export function checkRateLimit(
       remaining: 0,
       resetTime: record.blockedUntil,
       error: new ApiError(
-        ApiErrorCode.RATE_LIMITED,
+        API_ERROR_CODES.RATE_LIMITED,
         `API调用频率超限，请在${Math.ceil(config.window / 1000)}秒后重试`,
         429,
         { 
@@ -230,17 +230,22 @@ export function checkMultipleRateLimits(
   types: RateLimitType[],
   userId?: string
 ): { allowed: boolean; remaining: number; resetTime: number; error?: ApiError; failedType?: RateLimitType } {
-  for (const type of types) {
-    const result = checkRateLimit(request, type, userId)
+  // 缓存第一次检查的结果，避免双重计数
+  const results = types.map(type => ({
+    type,
+    result: checkRateLimit(request, type, userId)
+  }))
+  
+  // 检查是否有被拒绝的请求
+  for (const { type, result } of results) {
     if (!result.allowed) {
       return { ...result, failedType: type }
     }
   }
   
-  // 返回最严格的限制信息
-  const results = types.map(type => checkRateLimit(request, type, userId))
-  const minRemaining = Math.min(...results.map(r => r.remaining))
-  const maxResetTime = Math.max(...results.map(r => r.resetTime))
+  // 返回最严格的限制信息（使用缓存的结果）
+  const minRemaining = Math.min(...results.map(r => r.result.remaining))
+  const maxResetTime = Math.max(...results.map(r => r.result.resetTime))
   
   return {
     allowed: true,

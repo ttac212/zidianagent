@@ -1,0 +1,300 @@
+D:\zdqidongxiangmu\app\api\analytics\events\route.ts
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\app\api\analytics\metrics\route.ts
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\app\api\auth\verify-invite-code\route.ts
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\app\api\chat\route.ts
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\app\api\conversations\[id]\route.ts
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\app\api\conversations\route.ts
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\app\api\data\metrics\route.ts
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\app\api\debug\ai-test\route.ts
+   no-unused-vars 1
+   no-console 5
+
+D:\zdqidongxiangmu\app\api\debug\env\route.ts
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\app\api\feedback\[id]\route.ts
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\app\api\feedback\route.ts
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\app\api\import\external-resources\route.ts
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\app\api\invite-codes\generate\route.ts
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\app\api\invite-codes\register\route.ts
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\app\api\invite-codes\route.ts
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\app\api\invite-codes\verify\route.ts
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\app\api\keyword-data\route.ts
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\app\api\mcp-test\route.ts
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\app\api\merchants\[id]\export\route.ts
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\app\api\metrics\route.ts
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\app\api\users\[id]\model-stats\route.ts
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\app\api\users\[id]\route.ts
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\app\documents\page.tsx
+   no-unused-vars 9
+   react-hooks/exhaustive-deps 3
+
+D:\zdqidongxiangmu\app\help\page.tsx
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\app\inspiration\page.tsx
+   no-unused-vars 11
+
+D:\zdqidongxiangmu\app\merchants\[id]\analytics\page.tsx
+   no-unused-vars 5
+   react-hooks/exhaustive-deps 1
+
+D:\zdqidongxiangmu\app\merchants\[id]\page.tsx
+   no-unused-vars 12
+   react-hooks/exhaustive-deps 2
+
+D:\zdqidongxiangmu\app\merchants\page.tsx
+   no-unused-vars 9
+   react-hooks/exhaustive-deps 1
+
+D:\zdqidongxiangmu\app\page.tsx
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\app\settings\enhanced-page.tsx
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\app\settings\page.tsx
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\app\test-scrollbar\page.tsx
+   no-unused-vars 6
+
+D:\zdqidongxiangmu\app\workspace\page.tsx
+   no-unused-vars 7
+   react/no-unescaped-entities 2
+
+D:\zdqidongxiangmu\components\admin\admin-dashboard.tsx
+   no-unused-vars 1
+   react-hooks/exhaustive-deps 1
+
+D:\zdqidongxiangmu\components\admin\admin-overview.tsx
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\components\admin\key-management.tsx
+   no-unused-vars 2
+   react-hooks/exhaustive-deps 1
+
+D:\zdqidongxiangmu\components\admin\user-management.tsx
+   no-unused-vars 2
+   react-hooks/exhaustive-deps 1
+
+D:\zdqidongxiangmu\components\auth\invite-code-auth.tsx
+   no-unused-vars 4
+
+D:\zdqidongxiangmu\components\chat\chat-error-boundary.tsx
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\components\chat\chat-header.tsx
+   no-unused-vars 3
+
+D:\zdqidongxiangmu\components\chat\chat-input.tsx
+   no-unused-vars 3
+   react-hooks/exhaustive-deps 1
+
+D:\zdqidongxiangmu\components\chat\conversation-sidebar-v2.tsx
+   no-unused-vars 2
+   react-hooks/exhaustive-deps 1
+
+D:\zdqidongxiangmu\components\chat\message-item.tsx
+   no-unused-vars 5
+   no-console 1
+
+D:\zdqidongxiangmu\components\chat\model-selector-animated.tsx
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\components\chat\smart-chat-center-v2-fixed.tsx
+   no-unused-vars 11
+   react-hooks/exhaustive-deps 3
+
+D:\zdqidongxiangmu\components\chat\timeline-scrollbar.tsx
+   no-unused-vars 3
+
+D:\zdqidongxiangmu\components\documents\document-editor.tsx
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\components\documents\document-list.tsx
+   no-unused-vars 4
+   react-hooks/exhaustive-deps 1
+
+D:\zdqidongxiangmu\components\documents\markdown-editor.tsx
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\components\editor\milkdown-editor.tsx
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\components\feedback\feedback-form.tsx
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\components\feedback\feedback-list.tsx
+   no-unused-vars 4
+   react-hooks/exhaustive-deps 1
+
+D:\zdqidongxiangmu\components\help\help-tooltip.tsx
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\components\help\onboarding-tour.tsx
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\components\merchants\tag-analysis-modal.tsx
+   no-unused-vars 6
+   react-hooks/exhaustive-deps 1
+
+D:\zdqidongxiangmu\components\monitoring\system-monitor.tsx
+   no-unused-vars 1
+   react-hooks/exhaustive-deps 1
+
+D:\zdqidongxiangmu\components\performance\lazy-image.tsx
+   @next/next/no-img-element 1
+
+D:\zdqidongxiangmu\components\performance\preloader.tsx
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\components\performance\virtual-list.tsx
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\components\providers\storage-provider.tsx
+   no-unused-vars 3
+
+D:\zdqidongxiangmu\components\stats\model-usage-cards.tsx
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\components\templates\prompt-template-library.tsx
+   no-unused-vars 3
+
+D:\zdqidongxiangmu\components\ui\carousel.tsx
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\components\ui\chart.tsx
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\components\ui\connection-recovery.tsx
+   no-unused-vars 3
+
+D:\zdqidongxiangmu\components\ui\connection-status.tsx
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\components\ui\error-boundary.tsx
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\components\ui\keyboard-shortcuts.tsx
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\components\ui\retry-wrapper.tsx
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\components\ui\sidebar.tsx
+   no-unused-vars 4
+
+D:\zdqidongxiangmu\components\ui\use-toast.ts
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\components\workspace\conversation-search.tsx
+   no-unused-vars 5
+
+D:\zdqidongxiangmu\lib\ai\key-manager.ts
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\lib\analytics.ts
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\lib\api\error-handler.ts
+   no-unused-vars 17
+
+D:\zdqidongxiangmu\lib\error-handler.ts
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\lib\import\local-folder-importer.ts
+   no-unused-vars 3
+
+D:\zdqidongxiangmu\lib\mcp\client-manager.ts
+   no-unused-vars 5
+   no-console 1
+
+D:\zdqidongxiangmu\lib\metrics.ts
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\lib\model-validator.ts
+   no-console 1
+   no-unused-vars 6
+
+D:\zdqidongxiangmu\lib\monitoring\api-monitor.ts
+   no-console 1
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\lib\performance-utils.ts
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\lib\prisma.ts
+   no-console 5
+
+D:\zdqidongxiangmu\lib\security\content-filter.ts
+   no-unused-vars 1
+
+D:\zdqidongxiangmu\lib\security\invite-code-security.ts
+   no-unused-vars 1
+   no-console 1
+
+D:\zdqidongxiangmu\lib\security\rate-limiter.ts
+   no-unused-vars 7
+
+D:\zdqidongxiangmu\lib\storage.ts
+   no-unused-vars 4
+
+D:\zdqidongxiangmu\lib\title-utils.ts
+   no-unused-vars 4
+
+D:\zdqidongxiangmu\lib\utils\api-cache.ts
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\lib\utils\retry.ts
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\lib\utils\smart-fetch.ts
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\lib\utils\tag-parser.ts
+   no-unused-vars 2
+
+D:\zdqidongxiangmu\lib\utils\usage-stats-helper.ts
+   no-console 2
+

@@ -127,14 +127,14 @@ function transformApiConversation(conv: ApiConversation): Conversation {
 
 // ==================== API函数 ====================
 
-const conversationApi = {
+export const conversationApi = {
   // 获取对话列表
   fetchConversations: async (params: {
     page?: number
     limit?: number
     includeMessages?: boolean
   } = {}): Promise<Conversation[]> => {
-    const { page = 1, limit = 20, includeMessages = true } = params
+    const { page = 1, limit = 20, includeMessages = false } = params
 
     const searchParams = new URLSearchParams({
       page: page.toString(),
@@ -228,18 +228,26 @@ const conversationApi = {
 
   // 更新对话
   updateConversation: async (id: string, updates: Partial<Conversation>): Promise<Conversation> => {
+    const payload: Record<string, unknown> = {}
+    if (updates.title !== undefined) payload.title = updates.title
+    if (updates.model !== undefined) payload.modelId = updates.model
+
+    if (Object.keys(payload).length === 0) {
+      const latest = await conversationApi.fetchConversation(id)
+      if (!latest) {
+        throw new Error('未找到对话')
+      }
+      return latest
+    }
+
     const response = await fetch('/api/conversations/' + id, {
-      method: 'PUT',
+      method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        title: updates.title,
-        modelId: updates.model,
-        temperature: 0.7, // 可以从updates中获取
-      })
+      body: JSON.stringify(payload)
     })
-    
+
     if (!response.ok) {
       throw new Error('更新对话失败: ' + response.status + ' ' + response.statusText)
     }
@@ -250,7 +258,7 @@ const conversationApi = {
       throw new Error(result.message || '更新对话失败')
     }
 
-    // 返回更新后的对话，合并更新的消息
+    // 返回更新后的对话，并同步本地的未接收新消息
     const updatedConv = transformApiConversation(result.data)
     if (updates.messages) {
       updatedConv.messages = updates.messages

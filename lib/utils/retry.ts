@@ -75,6 +75,11 @@ function shouldRetry(error: any): boolean {
   const message = error?.message || ''
   const status = error?.status || error?.response?.status
 
+  // 特殊处理: AbortError 永远不应重试（用户主动中止）
+  if (error?.name === 'AbortError' || message.includes('AbortError')) {
+    return false
+  }
+
   // 不应该重试的错误类型
   const noRetryPatterns = [
     '401',           // 未授权
@@ -97,13 +102,19 @@ function shouldRetry(error: any): boolean {
     'ETIMEDOUT',        // 超时
     'ENOTFOUND',        // DNS解析失败
     'NetworkError',     // 网络错误
+    '408',              // 请求超时
     '500',              // 服务器内部错误
     '502',              // 网关错误
     '503',              // 服务不可用
     '504',              // 网关超时
     '429',              // 请求过多（限流）
-    'AbortError',       // 请求被中止
+    // 'AbortError' 已移除 - 用户主动中止不应重试
+    '请求超时',         // 中文超时消息
     '流处理失败',       // SSE流错误
+    'AI服务响应超时',   // AI服务超时
+    'AI服务连接失败',   // AI服务连接失败
+    'Database timeout', // 数据库超时
+    'timeout',          // 通用超时
   ]
 
   // 检查是否应该重试
@@ -137,7 +148,19 @@ export async function fetchWithTimeout(
   timeout = 30000
 ): Promise<Response> {
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), timeout)
+  let isTimeoutAbort = false
+  const timeoutId = setTimeout(() => {
+    isTimeoutAbort = true
+    controller.abort()
+  }, timeout)
+
+  // 如果外部提供了signal，需要合并处理
+  const originalSignal = options.signal as AbortSignal | undefined
+  if (originalSignal) {
+    originalSignal.addEventListener('abort', () => {
+      controller.abort()
+    })
+  }
 
   try {
     const response = await fetch(url, {
@@ -148,8 +171,15 @@ export async function fetchWithTimeout(
     return response
   } catch (error: any) {
     clearTimeout(timeoutId)
+    
+    // 区分超时中止和用户中止
     if (error.name === 'AbortError') {
-      throw new Error(`请求超时（${timeout}ms）`)
+      if (isTimeoutAbort) {
+        const timeoutError = new Error(`请求超时（${timeout}ms）`)
+        timeoutError.name = 'TimeoutError'
+        throw timeoutError
+      }
+      // 保留原始的 AbortError（用户主动中止）
     }
     throw error
   }

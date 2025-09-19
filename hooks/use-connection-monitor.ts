@@ -8,11 +8,11 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-// 自适应检查间隔策略
+// 自适应检查间隔策略 - 优化后的间隔
 const ADAPTIVE_INTERVALS = {
-  HEALTHY: 30000,      // 正常状态30秒
-  RECOVERING: 10000,   // 恢复中10秒  
-  CRITICAL: 5000,      // 严重异常5秒
+  HEALTHY: 60000,      // 正常状态60秒（减少服务器负载）
+  RECOVERING: 20000,   // 恢复中20秒  
+  CRITICAL: 10000,     // 严重异常10秒（避免过于频繁）
   MAX_FAILURES: 3      // 连续失败3次进入严重模式
 } as const;
 
@@ -82,6 +82,13 @@ export function useConnectionMonitor(options: UseConnectionMonitorOptions = {}) 
   const isUnmountedRef = useRef(false);
   const statsRef = useRef({ totalChecks: 0, successfulChecks: 0 });
   const hasInitialized = useRef(false);
+  // 添加状态引用，避免useCallback依赖项频繁变化
+  const stateRef = useRef(state);
+  
+  // 更新状态引用
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   // 资源清理函数管理
   const addCleanup = useCallback((cleanup: () => void) => {
@@ -121,7 +128,7 @@ export function useConnectionMonitor(options: UseConnectionMonitorOptions = {}) 
     });
   }, [onStatusChange]);
 
-  // 健康检查核心逻辑
+  // 健康检查核心逻辑 - 优化依赖项，避免无限循环
   const performHealthCheck = useCallback(async (): Promise<void> => {
     if (!enabled || isUnmountedRef.current) {
       return;
@@ -173,15 +180,18 @@ export function useConnectionMonitor(options: UseConnectionMonitorOptions = {}) 
                        responseData?.status === 'healthy';
 
       if (!isUnmountedRef.current) {
-        const newFailures = isHealthy ? 0 : state.consecutiveFailures + 1;
+        // 使用stateRef.current获取最新状态，避免依赖项问题
+        const currentState = stateRef.current;
+        const newFailures = isHealthy ? 0 : currentState.consecutiveFailures + 1;
         const newInterval = getAdaptiveInterval(newFailures);
 
         // 如果从失败状态恢复，触发恢复回调
-        if (state.consecutiveFailures > 0 && isHealthy && onRecover) {
+        if (currentState.consecutiveFailures > 0 && isHealthy && onRecover) {
           try {
             onRecover();
           } catch (error) {
-            }
+            // 静默处理回调错误
+          }
         }
 
         if (isHealthy) {
@@ -199,24 +209,27 @@ export function useConnectionMonitor(options: UseConnectionMonitorOptions = {}) 
         });
 
         // 自适应调整检查间隔
-        if (newInterval !== state.currentInterval) {
+        if (newInterval !== currentState.currentInterval) {
           rescheduleCheck(newInterval);
         }
       }
 
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError' && !isUnmountedRef.current) {
-        const newFailures = state.consecutiveFailures + 1;
+        const currentState = stateRef.current;
+        const newFailures = currentState.consecutiveFailures + 1;
         const newInterval = getAdaptiveInterval(newFailures);
         
         const errorMessage = error instanceof Error ? error.message : 'Network error';
         
         // 详细错误日志（仅开发环境）
         if (process.env.NODE_ENV === 'development') {
-          .toISOString(),
-            consecutiveFailures: newFailures,
-            originalError: error
-          });
+          // 错误日志已禁用 - 应使用专门的错误追踪服务
+          // console.error('Connection monitor error:', {
+          //   timestamp: new Date().toISOString(),
+          //   consecutiveFailures: newFailures,
+          //   originalError: error
+          // });
         }
         
         // 触发错误回调
@@ -224,7 +237,8 @@ export function useConnectionMonitor(options: UseConnectionMonitorOptions = {}) 
           try {
             onError(error instanceof Error ? error : new Error(errorMessage));
           } catch (callbackError) {
-            }
+            // 静默处理回调错误
+          }
         }
 
         updateState({
@@ -236,7 +250,7 @@ export function useConnectionMonitor(options: UseConnectionMonitorOptions = {}) 
         });
 
         // 自适应调整检查间隔
-        if (newInterval !== state.currentInterval) {
+        if (newInterval !== currentState.currentInterval) {
           rescheduleCheck(newInterval);
         }
       }
@@ -245,31 +259,33 @@ export function useConnectionMonitor(options: UseConnectionMonitorOptions = {}) 
     enabled, 
     healthEndpoint, 
     timeout, 
-    state.consecutiveFailures, 
-    state.currentInterval, 
     getAdaptiveInterval, 
     updateState, 
     onError, 
     onRecover
-  ]);
+  ]); // 移除state依赖项，避免无限循环
 
-  // 重新安排检查任务
+  // 重新安排检查任务 - 使用稳定引用
   const rescheduleCheck = useCallback((newInterval: number) => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
     }
     
     if (!isUnmountedRef.current && enabled) {
-      intervalRef.current = setInterval(performHealthCheck, newInterval);
+      intervalRef.current = setInterval(() => {
+        if (!isUnmountedRef.current && performHealthCheckRef.current) {
+          performHealthCheckRef.current();
+        }
+      }, newInterval);
     }
-  }, [enabled, performHealthCheck]);
+  }, [enabled]); // 移除performHealthCheck依赖
 
-  // 手动触发健康检查
+  // 手动触发健康检查 - 使用稳定引用
   const triggerHealthCheck = useCallback((): void => {
-    if (!isUnmountedRef.current && enabled) {
-      performHealthCheck();
+    if (!isUnmountedRef.current && enabled && performHealthCheckRef.current) {
+      performHealthCheckRef.current();
     }
-  }, [enabled, performHealthCheck]);
+  }, [enabled]); // 移除performHealthCheck依赖
 
   // 客户端挂载后初始化真实状态
   useEffect(() => {
@@ -284,7 +300,7 @@ export function useConnectionMonitor(options: UseConnectionMonitorOptions = {}) 
     }
   }, [state.isOnline, updateState]);
 
-  // 监听网络状态变化
+  // 监听网络状态变化 - 使用稳定引用
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -298,8 +314,8 @@ export function useConnectionMonitor(options: UseConnectionMonitorOptions = {}) 
         
         // 网络恢复时延迟1秒后检查，避免网络抖动
         setTimeout(() => {
-          if (!isUnmountedRef.current) {
-            performHealthCheck();
+          if (!isUnmountedRef.current && performHealthCheckRef.current) {
+            performHealthCheckRef.current();
           }
         }, 1000);
       }
@@ -327,20 +343,31 @@ export function useConnectionMonitor(options: UseConnectionMonitorOptions = {}) 
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [updateState, performHealthCheck, addCleanup]);
+  }, [updateState, addCleanup]); // 移除performHealthCheck依赖
 
-  // 监听页面可见性变化
+  // 监听页面可见性变化 - 使用稳定引用并优化检查策略
   useEffect(() => {
     if (typeof document === 'undefined') return;
 
     const handleVisibilityChange = () => {
-      if (!document.hidden && !isUnmountedRef.current) {
-        // 页面重新激活时延迟检查
-        setTimeout(() => {
-          if (!isUnmountedRef.current) {
-            performHealthCheck();
+      if (!isUnmountedRef.current) {
+        if (!document.hidden) {
+          // 页面重新激活时延迟检查，并重新启动定时器
+          setTimeout(() => {
+            if (!isUnmountedRef.current && performHealthCheckRef.current) {
+              performHealthCheckRef.current();
+              // 重新启动定时器
+              const currentInterval = stateRef.current.currentInterval || ADAPTIVE_INTERVALS.HEALTHY;
+              rescheduleCheck(currentInterval);
+            }
+          }, 500);
+        } else {
+          // 页面隐藏时暂停定时器，减少不必要的请求
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
           }
-        }, 500);
+        }
       }
     };
 
@@ -353,21 +380,28 @@ export function useConnectionMonitor(options: UseConnectionMonitorOptions = {}) 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [performHealthCheck, addCleanup]);
+  }, [addCleanup, rescheduleCheck]); // 添加rescheduleCheck依赖
 
-  // 主要的定期健康检查逻辑
+  // 稳定的健康检查引用
+  const performHealthCheckRef = useRef(performHealthCheck);
+  useEffect(() => {
+    performHealthCheckRef.current = performHealthCheck;
+  }, [performHealthCheck]);
+
+  // 主要的定期健康检查逻辑 - 优化依赖项
   useEffect(() => {
     if (!enabled) return;
 
-    // 初始检查（延迟1秒，让组件完全挂载）
+    // 初始检查（延迟2秒，让组件完全挂载）
     const initialCheckTimeout = setTimeout(() => {
       if (!isUnmountedRef.current) {
-        performHealthCheck();
+        performHealthCheckRef.current();
       }
-    }, 1000);
+    }, 2000);
 
-    // 设置定期检查
-    rescheduleCheck(state.currentInterval);
+    // 设置定期检查，使用默认间隔
+    const currentInterval = stateRef.current.currentInterval || ADAPTIVE_INTERVALS.HEALTHY;
+    rescheduleCheck(currentInterval);
 
     return () => {
       clearTimeout(initialCheckTimeout);
@@ -375,7 +409,7 @@ export function useConnectionMonitor(options: UseConnectionMonitorOptions = {}) 
         clearInterval(intervalRef.current);
       }
     };
-  }, [enabled, state.currentInterval, rescheduleCheck, performHealthCheck]);
+  }, [enabled, rescheduleCheck]); // 移除对performHealthCheck和state的依赖
 
   // 组件卸载时的资源清理
   useEffect(() => {

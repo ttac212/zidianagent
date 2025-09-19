@@ -29,15 +29,17 @@ export function recordUsageAsync(
     try {
       await recordUsageInternal(prisma, record)
     } catch (error) {
-      // 生产环境只记录错误，不抛出
+      // 记录但不抛出错误，避免影响主流程
       if (process.env.NODE_ENV === 'development') {
-        }
+        console.warn('使用量统计记录失败:', error)
+      }
+      // 生产环境静默处理，确保用户体验不受影响
     }
   })
 }
 
 /**
- * 内部记录函数
+ * 内部记录函数（增强版 - 解决外键约束问题）
  */
 async function recordUsageInternal(
   prisma: PrismaClient,
@@ -45,75 +47,97 @@ async function recordUsageInternal(
 ): Promise<void> {
   const today = getTodayUTC()
   
-  // 使用事务确保数据一致性
-  await prisma.$transaction([
-    // 1. 更新总量统计
-    prisma.usageStats.upsert({
-      where: {
-        userId_date_modelId: {
+  // 关键修复：先验证用户存在，避免外键约束违反
+  const userExists = await prisma.user.findUnique({
+    where: { id: record.userId },
+    select: { id: true }
+  })
+  
+  if (!userExists) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(`跳过不存在用户的统计记录: ${record.userId}`)
+    }
+    return // 静默跳过，不影响主流程
+  }
+
+  // 使用优化的事务配置和错误处理
+  await prisma.$transaction(
+    [
+      // 1. 更新总量统计
+      prisma.usageStats.upsert({
+        where: {
+          userId_date_modelId: {
+            userId: record.userId,
+            date: today,
+            modelId: "_total"
+          }
+        },
+        update: {
+          apiCalls: { increment: 1 },
+          successfulCalls: record.success ? { increment: 1 } : undefined,
+          failedCalls: !record.success ? { increment: 1 } : undefined,
+          promptTokens: record.promptTokens ? { increment: record.promptTokens } : undefined,
+          completionTokens: record.completionTokens ? { increment: record.completionTokens } : undefined,
+          totalTokens: record.totalTokens ? { increment: record.totalTokens } : undefined,
+          messagesCreated: record.messagesCreated ? { increment: record.messagesCreated } : undefined,
+          updatedAt: new Date(),
+        },
+        create: {
           userId: record.userId,
           date: today,
-          modelId: "_total"
+          modelId: "_total",
+          apiCalls: 1,
+          successfulCalls: record.success ? 1 : 0,
+          failedCalls: !record.success ? 1 : 0,
+          promptTokens: record.promptTokens || 0,
+          completionTokens: record.completionTokens || 0,
+          totalTokens: record.totalTokens || 0,
+          messagesCreated: record.messagesCreated || 0,
         }
-      },
-      update: {
-        apiCalls: { increment: 1 },
-        successfulCalls: record.success ? { increment: 1 } : undefined,
-        failedCalls: !record.success ? { increment: 1 } : undefined,
-        promptTokens: record.promptTokens ? { increment: record.promptTokens } : undefined,
-        completionTokens: record.completionTokens ? { increment: record.completionTokens } : undefined,
-        totalTokens: record.totalTokens ? { increment: record.totalTokens } : undefined,
-        messagesCreated: record.messagesCreated ? { increment: record.messagesCreated } : undefined,
-        updatedAt: new Date(),
-      },
-      create: {
-        userId: record.userId,
-        date: today,
-        modelId: "_total",
-        apiCalls: 1,
-        successfulCalls: record.success ? 1 : 0,
-        failedCalls: !record.success ? 1 : 0,
-        promptTokens: record.promptTokens || 0,
-        completionTokens: record.completionTokens || 0,
-        totalTokens: record.totalTokens || 0,
-        messagesCreated: record.messagesCreated || 0,
-      }
-    }),
-    
-    // 2. 更新按模型统计
-    prisma.usageStats.upsert({
-      where: {
-        userId_date_modelId: {
+      }),
+      
+      // 2. 更新按模型统计
+      prisma.usageStats.upsert({
+        where: {
+          userId_date_modelId: {
+            userId: record.userId,
+            date: today,
+            modelId: record.modelId
+          }
+        },
+        update: {
+          apiCalls: { increment: 1 },
+          successfulCalls: record.success ? { increment: 1 } : undefined,
+          failedCalls: !record.success ? { increment: 1 } : undefined,
+          promptTokens: record.promptTokens ? { increment: record.promptTokens } : undefined,
+          completionTokens: record.completionTokens ? { increment: record.completionTokens } : undefined,
+          totalTokens: record.totalTokens ? { increment: record.totalTokens } : undefined,
+          messagesCreated: record.messagesCreated ? { increment: record.messagesCreated } : undefined,
+          updatedAt: new Date(),
+        },
+        create: {
           userId: record.userId,
           date: today,
-          modelId: record.modelId
+          modelId: record.modelId,
+          modelProvider: record.modelProvider,
+          apiCalls: 1,
+          successfulCalls: record.success ? 1 : 0,
+          failedCalls: !record.success ? 1 : 0,
+          promptTokens: record.promptTokens || 0,
+          completionTokens: record.completionTokens || 0,
+          totalTokens: record.totalTokens || 0,
+          messagesCreated: record.messagesCreated || 0,
         }
-      },
-      update: {
-        apiCalls: { increment: 1 },
-        successfulCalls: record.success ? { increment: 1 } : undefined,
-        failedCalls: !record.success ? { increment: 1 } : undefined,
-        promptTokens: record.promptTokens ? { increment: record.promptTokens } : undefined,
-        completionTokens: record.completionTokens ? { increment: record.completionTokens } : undefined,
-        totalTokens: record.totalTokens ? { increment: record.totalTokens } : undefined,
-        messagesCreated: record.messagesCreated ? { increment: record.messagesCreated } : undefined,
-        updatedAt: new Date(),
-      },
-      create: {
-        userId: record.userId,
-        date: today,
-        modelId: record.modelId,
-        modelProvider: record.modelProvider,
-        apiCalls: 1,
-        successfulCalls: record.success ? 1 : 0,
-        failedCalls: !record.success ? 1 : 0,
-        promptTokens: record.promptTokens || 0,
-        completionTokens: record.completionTokens || 0,
-        totalTokens: record.totalTokens || 0,
-        messagesCreated: record.messagesCreated || 0,
-      }
-    })
-  ])
+      })
+    ],
+    {
+      // 使用更长的超时时间和重试机制
+      maxWait: 15000,  // 15秒等待
+      timeout: 45000,  // 45秒超时
+      // SQLite下使用序列化隔离级别确保一致性
+      isolationLevel: 'Serializable'
+    }
+  )
 }
 
 /**

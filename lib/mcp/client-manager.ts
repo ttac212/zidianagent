@@ -115,7 +115,7 @@ export class MCPClientManager {
       clientWrapper.connectedAt = new Date()
 
       if (this.config.enableLogging) {
-        .length}`)
+        console.log(`MCP client connected with ${tools.length} tools`)
       }
 
       return clientWrapper

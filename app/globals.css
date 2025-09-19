@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import "tw-animate-css";
 
 /* 字体回退方案 - 解决 Google Fonts 连接问题 */
 @font-face {

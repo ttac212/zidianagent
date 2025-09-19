@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { createErrorResponse, generateRequestId } from '@/lib/api/error-handler'
 
 // 创建测试邀请码 - 仅开发环境可用
 export async function POST() {
@@ -60,9 +61,6 @@ export async function POST() {
     })
 
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : '创建测试邀请码失败' },
-      { status: 500 }
-    )
+    return createErrorResponse(error as Error, generateRequestId())
   }
 }

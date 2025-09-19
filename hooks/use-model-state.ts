@@ -181,8 +181,7 @@ export function useModelConsistencyCheck(componentName: string) {
     const isConsistent = uiModel === stateModel && stateModel === requestModel
     
     if (!isConsistent) {
-      .toISOString()
-      })
+      // Model state inconsistency detected - should be logged to monitoring system
     }
     
     return isConsistent

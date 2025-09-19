@@ -5,8 +5,9 @@
 
 import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { User, Copy, ThumbsUp, ThumbsDown, RotateCcw } from 'lucide-react'
+import { User, Copy, Check, ThumbsUp, ThumbsDown, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import type { MessageItemProps } from '@/types/chat'
 import { getModelDisplayName, getModelProvider } from '@/lib/model-utils'
 
@@ -22,6 +23,9 @@ export const MessageItem = React.memo<MessageItemProps>(({
   // 微光闪烁状态 - 新回复时触发
   const [shouldGlow, setShouldGlow] = useState(false)
   const [isNewMessage, setIsNewMessage] = useState(false)
+  
+  // 复制状态
+  const [copied, setCopied] = useState(false)
   
   // 字数统计
   const wordCount = message.content.length
@@ -49,9 +53,39 @@ export const MessageItem = React.memo<MessageItemProps>(({
     }
   }, [message.content, isAssistant])
 
-  const handleCopy = () => {
-    onCopy(message.content)
-    // TODO: 可以在这里添加复制成功的视觉反馈
+  const handleCopy = async () => {
+    try {
+      // 调用父组件的复制函数
+      onCopy(message.content)
+      
+      // 尝试使用浏览器 API 复制
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(message.content)
+      }
+      
+      // 设置复制状态
+      setCopied(true)
+      
+      // 显示成功提示
+      toast.success('已复制到剪贴板', {
+        duration: 2000,
+        position: 'bottom-right',
+        icon: <Check className="w-4 h-4" />,
+        className: 'text-sm'
+      })
+      
+      // 2秒后重置复制状态
+      setTimeout(() => {
+        setCopied(false)
+      }, 2000)
+    } catch (err) {
+      // 复制失败提示
+      toast.error('复制失败，请手动选择文本', {
+        duration: 3000,
+        position: 'bottom-right'
+      })
+      console.error('复制失败:', err)
+    }
   }
 
   const handleRetry = () => {
@@ -61,12 +95,14 @@ export const MessageItem = React.memo<MessageItemProps>(({
   }
 
   return (
-    <div className={cn(
-      "flex gap-4 transition-all duration-300",
-      isUser ? "justify-end" : "justify-start",
-      isNewMessage && "animate-in slide-in-from-bottom-2 fade-in-0"
-    )}>
-
+    <div 
+      data-message-id={message.id}
+      className={cn(
+        "flex gap-4 transition-all duration-300",
+        isUser ? "justify-end" : "justify-start",
+        isNewMessage && "animate-in slide-in-from-bottom-2 fade-in-0"
+      )}
+    >
       {/* 消息内容 */}
       <div className={cn(
         "max-w-[90%] group",
@@ -167,15 +203,26 @@ export const MessageItem = React.memo<MessageItemProps>(({
               size="sm"
               className={cn(
                 "h-5 px-2 text-xs transition-all duration-200",
-                "opacity-70 hover:opacity-100",
-                "text-muted-foreground hover:text-primary",
-                "hover:bg-primary/10 rounded"
+                copied 
+                  ? "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/30"
+                  : "opacity-70 hover:opacity-100 text-muted-foreground hover:text-primary hover:bg-primary/10",
+                "rounded"
               )}
               onClick={handleCopy}
-              title="复制消息内容"
+              title={copied ? "已复制" : "复制消息内容"}
+              disabled={copied}
             >
-              <Copy className="h-3 w-3 mr-1" />
-              复制
+              {copied ? (
+                <>
+                  <Check className="h-3 w-3 mr-1 animate-in zoom-in-0 duration-200" />
+                  已复制
+                </>
+              ) : (
+                <>
+                  <Copy className="h-3 w-3 mr-1" />
+                  复制
+                </>
+              )}
             </Button>
           )}
         </div>

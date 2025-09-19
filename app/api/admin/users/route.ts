@@ -8,7 +8,7 @@ import {
   validateInput,
   withErrorHandler,
   ApiError,
-  ApiErrorCode
+  API_ERROR_CODES
 } from "@/lib/api/error-handler"
 
 export const GET = withErrorHandler(async (request: NextRequest) => {
@@ -124,7 +124,7 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
   const validRoles = ['ADMIN', 'USER', 'GUEST']
   if (!validRoles.includes(role.toUpperCase())) {
     return createErrorResponse(new ApiError(
-      ApiErrorCode.VALIDATION_FAILED, 
+      API_ERROR_CODES.VALIDATION_FAILED, 
       "无效的用户角色", 
       400, 
       { validRoles, providedRole: role }
@@ -138,7 +138,7 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
 
   if (existingUser) {
     return createErrorResponse(new ApiError(
-      ApiErrorCode.RESOURCE_CONFLICT, 
+      API_ERROR_CODES.RESOURCE_CONFLICT, 
       "邮箱已被使用", 
       409, 
       { conflictField: 'email' }
@@ -153,7 +153,7 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
 
     if (existingUsername) {
       return createErrorResponse(new ApiError(
-        ApiErrorCode.RESOURCE_CONFLICT, 
+        API_ERROR_CODES.RESOURCE_CONFLICT, 
         "用户名已被使用", 
         409, 
         { conflictField: 'username' }
@@ -229,3 +229,5 @@ function generatePermissions(role: string): string[] {
       return ["chat"]
   }
 }
+
+

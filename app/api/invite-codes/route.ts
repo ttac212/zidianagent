@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getToken } from 'next-auth/jwt'
+import { createErrorResponse, requireAuth } from '@/lib/api/error-handler'
 
-// 获取邀请码列表
+// 获取邀请码列表（需要ADMIN权限）
 export async function GET(request: NextRequest) {
   try {
+    const token = await getToken({ req: request as any })
+    
+    // 使用统一认证检查，需要ADMIN权限
+    const authError = requireAuth(token, 'ADMIN')
+    if (authError) return createErrorResponse(authError)
+    
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
@@ -79,9 +87,15 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// 创建新邀请码
+// 创建新邀请码（需要ADMIN权限）
 export async function POST(request: NextRequest) {
   try {
+    const token = await getToken({ req: request as any })
+    
+    // 使用统一认证检查，需要ADMIN权限
+    const authError = requireAuth(token, 'ADMIN')
+    if (authError) return createErrorResponse(authError)
+    
     const body = await request.json()
     const { 
       code,
@@ -113,10 +127,10 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // 创建邀请码
+    // 创建邀请码（标准化为大写）
     const inviteCode = await prisma.inviteCode.create({
       data: {
-        code,
+        code: code.trim().toUpperCase(),
         description,
         maxUses,
         expiresAt: expiresAt ? new Date(expiresAt) : null,

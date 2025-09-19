@@ -4,15 +4,14 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -40,9 +39,7 @@ import {
   Play,
   Clock,
   Hash,
-  Filter,
   BarChart3,
-  ArrowUpDown,
   ArrowUp,
   ArrowDown
 } from 'lucide-react'
@@ -72,27 +69,31 @@ export default function MerchantDetailPage() {
     page: 1,
     limit: 20
   })
-  const [contentTotal, setContentTotal] = useState(0)
   const [tagAnalysisOpen, setTagAnalysisOpen] = useState(false)
   const [exportLoading, setExportLoading] = useState(false)
 
   // 获取商家详情
-  const fetchMerchant = async () => {
+  const fetchMerchant = useCallback(async () => {
+    const merchantId = params.id
+    if (!merchantId) {
+      return
+    }
+
     try {
       setLoading(true)
-      const response = await fetch(`/api/merchants/${params.id}`)
+      const response = await fetch(`/api/merchants/${merchantId}`)
       const data = await response.json()
-      
+
       if (response.ok) {
         setMerchant(data.merchant)
         setContents(data.merchant.contents || [])
-      } else {
-        }
-    } catch (error) {
-      } finally {
+      }
+    } catch (_error) {
+      // TODO: 接入统一的错误上报
+    } finally {
       setLoading(false)
     }
-  }
+  }, [params.id])
 
   // 获取商家内容
   const fetchContents = async () => {
@@ -143,7 +144,6 @@ export default function MerchantDetailPage() {
         }
         
         setContents(sortedContents)
-        setContentTotal(data.total)
       } else {
         }
     } catch (error) {
@@ -602,3 +602,5 @@ export default function MerchantDetailPage() {
     </div>
   )
 }
+
+

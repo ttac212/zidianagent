@@ -23,13 +23,13 @@ async function testMerchantFeatures() {
       return
     }
 
-    `)
+    console.log(`找到测试商家: ${testMerchant.name}, 内容数量: ${testMerchant.contents.length}`)
     // 2. 测试标签解析
     const tagMap = new Map<string, { count: number; engagementSum: number }>()
     let totalTags = 0
 
     testMerchant.contents.forEach((content, index) => {
-      }...`)
+      console.log('处理内容', index + 1, '/', testMerchant.contents.length)
       
       const tags = parseAndCleanTags(content.tags)
       const engagement = content.diggCount + content.commentCount + content.collectCount + content.shareCount

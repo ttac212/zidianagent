@@ -224,13 +224,18 @@ export async function logVerificationAttempt(
   success: boolean,
   userAgent?: string
 ) {
-  // 在生产环境中，应该记录到数据库或日志系统
-  .toISOString(),
-    ipHash,
-    codePrefix: code.substring(0, 4) + '***', // 不记录完整邀请码
-    success,
-    userAgent: userAgent?.substring(0, 50) // 截断User-Agent
-  })
+  // 仅在开发环境记录到控制台，生产环境可扩展为数据库或日志服务
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Invite code attempt:', {
+      timestamp: new Date().toISOString(),
+      ipHash,
+      codePrefix: code.substring(0, 4) + '***', // 不记录完整邀请码
+      success,
+      userAgent: userAgent?.substring(0, 50) // 截断User-Agent
+    })
+  }
+  
+  // TODO: 在生产环境中添加数据库日志记录或发送到日志服务
   
   // 可选：记录到数据库
   // await prisma.auditLog.create({

@@ -75,14 +75,16 @@ async function fixUsageTracking() {
       const diff = Math.abs(actual - recorded)
       
       if (diff > 100) {
-        } else {
-        ${colors.reset}`)
+        console.log(`${colors.red}用户 ${user.id} 使用量不匹配: 实际=${actual}, 记录=${recorded}, 差异=${diff}${colors.reset}`)
+      } else {
+        console.log(`${colors.green}用户 ${user.id} 使用量正常: ${actual}${colors.reset}`)
       }
     }
     
     // 4. 生成修复建议
-    需要await')
+    console.log(`\n${colors.yellow}修复建议: 运行使用量同步脚本${colors.reset}`)
     } catch (error) {
+      console.error('修复使用量统计时出错:', error)
     } finally {
     await prisma.$disconnect()
   }

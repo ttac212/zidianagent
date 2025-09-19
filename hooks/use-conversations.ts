@@ -1,482 +1,308 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { DEFAULT_MODEL } from "@/lib/ai/models"
 import type { ChatMessage, Conversation } from "@/types/chat"
 import { LocalStorage, STORAGE_KEYS } from "@/lib/storage"
+import { useConversationsQuery, conversationApi } from "@/hooks/api/use-conversations-query"
+import {
+  useCreateConversationMutation,
+  useDeleteConversationMutation,
+  useUpdateConversationMutation
+} from "@/hooks/api/use-conversation-mutations"
+import { useConversationStore } from "@/stores/conversation-store"
 
-// 为了兼容性，暂时保留 Message 类型别名
-export type Message = ChatMessage
-
-// API 响应类型
-interface ConversationResponse {
-  id: string
-  title: string
-  modelId: string
-  temperature: number
-  maxTokens: number
-  messageCount: number
-  totalTokens: number
-  createdAt: string
-  updatedAt: string
-  lastMessageAt: string | null
-  messages?: MessageResponse[]
-}
-
-interface MessageResponse {
-  id: string
-  role: 'USER' | 'ASSISTANT' | 'SYSTEM' | 'FUNCTION'
-  content: string
-  modelId: string | null
-  temperature: number | null
-  promptTokens: number
-  completionTokens: number
-  totalTokens: number
-  finishReason: string | null
-  metadata: any
-  createdAt: string
-}
-
-// 转换 API 响应为前端格式
-function apiToConversation(apiConv: ConversationResponse): Conversation {
-  return {
-    id: apiConv.id,
-    title: apiConv.title,
-    messages: apiConv.messages?.map(msg => ({
-      id: msg.id,
-      role: msg.role.toLowerCase() as ChatMessage['role'],
-      content: msg.content,
-      timestamp: new Date(msg.createdAt).getTime(),
-      tokens: msg.totalTokens || undefined,
-      metadata: {
-        ...msg.metadata,
-        // 确保从数据库的modelId字段映射到metadata.model
-        model: msg.modelId || msg.metadata?.model,
-        temperature: msg.temperature || msg.metadata?.temperature,
-        processingTime: msg.metadata?.processingTime
-      }
-    })) || [],
-    model: apiConv.modelId,
-    createdAt: new Date(apiConv.createdAt).getTime(),
-    updatedAt: new Date(apiConv.updatedAt).getTime(),
-  }
-}
+const LOCAL_STORAGE_KEY = STORAGE_KEYS.CURRENT_CONVERSATION_ID
 
 export function useConversations() {
-  const [conversations, setConversations] = useState<Conversation[]>([])
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(() => {
-    // 从 localStorage 恢复上次选中的对话ID
+  const conversations = useConversationStore(state => state.conversations)
+  const currentConversationId = useConversationStore(state => state.currentConversationId)
+  const setConversations = useConversationStore(state => state.setConversations)
+  const selectConversation = useConversationStore(state => state.selectConversation)
+  const updateConversationInStore = useConversationStore(state => state.updateConversation)
+  const deleteConversationFromStore = useConversationStore(state => state.deleteConversation)
+  const addConversationToStore = useConversationStore(state => state.addConversation)
+  const setLoadingState = useConversationStore(state => state.setLoading)
+  const setCreatingState = useConversationStore(state => state.setCreating)
+  const setUpdatingState = useConversationStore(state => state.setUpdating)
+  const setDeletingState = useConversationStore(state => state.setDeleting)
+  const setErrorState = useConversationStore(state => state.setError)
+  const clearErrorState = useConversationStore(state => state.clearError)
+  const error = useConversationStore(state => state.error)
+  const isStoreLoading = useConversationStore(state => state.isLoading)
+
+  const createConversationMutation = useCreateConversationMutation()
+  const updateConversationMutation = useUpdateConversationMutation()
+  const deleteConversationMutation = useDeleteConversationMutation()
+
+  const {
+    data: conversationsFromApi,
+    isLoading: isQueryLoading,
+    isFetching: isQueryFetching,
+    error: queryError,
+    refetch,
+  } = useConversationsQuery({ limit: 100, includeMessages: true })
+
+  const [loadingConversationId, setLoadingConversationId] = useState<string | null>(null)
+  const [initialPersistedId] = useState<string | null>(() => {
     try {
-      return LocalStorage.getItem(STORAGE_KEYS.CURRENT_CONVERSATION_ID, null)
-    } catch (error) {
+      return LocalStorage.getItem(LOCAL_STORAGE_KEY, null)
+    } catch (err) {
+      void err
       return null
     }
   })
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [loadingConversationId, setLoadingConversationId] = useState<string | null>(null)
-  
-  // 🔒 操作锁状态管理 - 防止竞态条件
-  const [operationLocks, setOperationLocks] = useState<Set<string>>(new Set())
-  const [pendingOperations, setPendingOperations] = useState<Map<string, number>>(new Map())
 
-  // 从后端加载对话列表
-  const loadConversations = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      
-      const response = await fetch('/api/conversations?limit=100')
-      if (!response.ok) {
-        if (response.status === 401) {
-          // 用户未登录，返回空列表
-          setConversations([])
-          return
-        }
-        throw new Error(`Failed to load conversations: ${response.status}`)
-      }
-
-      const data = await response.json()
-      if (data.success && data.data) {
-        const convs = data.data.conversations.map(apiToConversation)
-        setConversations(convs)
-        
-        // 智能选择当前对话
-        if (convs.length > 0) {
-          let targetConversationId: string | null = null
-          
-          // 1. 优先使用已恢复的对话ID（如果存在于对话列表中）
-          if (currentConversationId && convs.find((c: Conversation) => c.id === currentConversationId)) {
-            targetConversationId = currentConversationId
-          }
-          // 2. 如果没有已选对话或已选对话不存在，选择第一个对话
-          else if (!currentConversationId) {
-            targetConversationId = convs[0].id
-            // 保存新选择的对话ID
-            setCurrentConversationId(targetConversationId)
-            LocalStorage.setItem(STORAGE_KEYS.CURRENT_CONVERSATION_ID, targetConversationId)
-          }
-          // 3. 如果已选对话不存在，清除无效的选择并选择第一个
-          else {
-            targetConversationId = convs[0].id
-            setCurrentConversationId(targetConversationId)
-            LocalStorage.setItem(STORAGE_KEYS.CURRENT_CONVERSATION_ID, targetConversationId)
-          }
-          
-          // 异步加载目标对话的详情
-          if (targetConversationId) {
-            loadConversationDetail(targetConversationId).then(detailConv => {
-              if (detailConv) {
-                // 对话详情已加载完成
-              }
-            })
-          }
-        }
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '加载对话失败')
-    } finally {
-      setLoading(false)
-    }
+  const currentIdRef = useRef<string | null>(currentConversationId)
+  useEffect(() => {
+    currentIdRef.current = currentConversationId
   }, [currentConversationId])
 
-  // 加载单个对话的详细信息（包含消息）
-  const loadConversationDetail = useCallback(async (id: string): Promise<Conversation | null> => {
-    try {
-      setLoadingConversationId(id)
-      
-      const response = await fetch(`/api/conversations/${id}?includeMessages=true`)
-      if (!response.ok) {
-        if (response.status === 404) {
-          // 对话不存在，从列表中移除
-          setConversations(prev => prev.filter(c => c.id !== id))
-          if (currentConversationId === id) {
-            setCurrentConversationId(null)
-          }
-          return null
-        }
-        throw new Error(`Failed to load conversation: ${response.status}`)
-      }
+  const initialisedRef = useRef(false)
 
-      const data = await response.json()
-      if (data.success && data.data) {
-        const conv = apiToConversation(data.data)
-        // 更新对话列表中的这个对话
-        setConversations(prev => {
-          const index = prev.findIndex(c => c.id === id)
-          if (index >= 0) {
-            const updated = [...prev]
-            updated[index] = conv
-            return updated
-          } else {
-            return [conv, ...prev]
-          }
-        })
-        
-        return conv
+  const persistCurrentConversationId = useCallback((conversationId: string | null) => {
+    try {
+      if (conversationId) {
+        LocalStorage.setItem(LOCAL_STORAGE_KEY, conversationId)
+      } else {
+        LocalStorage.removeItem(LOCAL_STORAGE_KEY)
       }
-      return null
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载对话详情失败')
+      void err
+    }
+  }, [])
+
+  useEffect(() => {
+    persistCurrentConversationId(currentConversationId)
+  }, [currentConversationId, persistCurrentConversationId])
+
+  useEffect(() => {
+    setLoadingState(isQueryLoading || isQueryFetching)
+  }, [isQueryLoading, isQueryFetching, setLoadingState])
+
+  useEffect(() => {
+    if (queryError) {
+      const message = queryError instanceof Error ? queryError.message : "加载对话失败"
+      setErrorState(message)
+    }
+  }, [queryError, setErrorState])
+
+  const fetchConversationDetail = useCallback(async (conversationId: string) => {
+    const existing = useConversationStore.getState().conversations.find(conv => conv.id === conversationId)
+    if (existing && existing.messages && existing.messages.length > 0) {
+      return existing
+    }
+
+    setLoadingConversationId(conversationId)
+    try {
+      const detail = await conversationApi.fetchConversation(conversationId)
+      if (detail) {
+        const hasConversation = useConversationStore.getState().conversations.some(conv => conv.id === conversationId)
+        if (hasConversation) {
+          updateConversationInStore(conversationId, detail)
+        } else {
+          addConversationToStore(detail)
+        }
+      }
+      return detail
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "加载对话失败"
+      setErrorState(message)
       return null
     } finally {
       setLoadingConversationId(null)
     }
-  }, [currentConversationId])
+  }, [addConversationToStore, setErrorState, updateConversationInStore])
 
-  // 初始加载
   useEffect(() => {
-    loadConversations()
-  }, [])
-
-  // 创建新对话
-  const createConversation = useCallback(
-    async (model = DEFAULT_MODEL) => {
-      try {
-        const response = await fetch('/api/conversations', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: '新对话',
-            modelId: model,
-            temperature: 0.7,
-            maxTokens: 2000,
-            contextAware: true
-          })
-        })
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            setError('请先登录')
-            return null
-          }
-          throw new Error(`Failed to create conversation: ${response.status}`)
-        }
-
-        const data = await response.json()
-        if (data.success && data.data) {
-          const newConversation = apiToConversation(data.data)
-          
-          setConversations(prev => [newConversation, ...prev])
-          setCurrentConversationId(newConversation.id)
-          
-          // 持久化新创建的对话选择
-          try {
-            LocalStorage.setItem(STORAGE_KEYS.CURRENT_CONVERSATION_ID, newConversation.id)
-          } catch (error) {
-            // localStorage错误处理，忽略
-          }
-          
-          return newConversation
-        }
-        return null
-      } catch (err) {
-        setError(err instanceof Error ? err.message : '创建对话失败')
-        return null
-      }
-    },
-    []
-  )
-
-  // 🔒 操作锁管理辅助函数
-  const acquireLock = useCallback((operationKey: string): boolean => {
-    if (operationLocks.has(operationKey)) {
-      return false
+    if (!conversationsFromApi) {
+      return
     }
-    
-    setOperationLocks(prev => new Set([...prev, operationKey]))
-    return true
-  }, [operationLocks])
 
-  const releaseLock = useCallback((operationKey: string) => {
-    setOperationLocks(prev => {
-      const next = new Set(prev)
-      next.delete(operationKey)
-      return next
-    })
-    
-    // 清理待处理计数
-    setPendingOperations(prev => {
-      const next = new Map(prev)
-      next.delete(operationKey)
-      return next
-    })
-  }, [])
+    setConversations(conversationsFromApi)
 
-  const incrementPendingCount = useCallback((operationKey: string) => {
-    setPendingOperations(prev => {
-      const next = new Map(prev)
-      const current = next.get(operationKey) || 0
-      next.set(operationKey, current + 1)
-      return next
-    })
-  }, [])
+    if (conversationsFromApi.length === 0) {
+      selectConversation(null)
+      initialisedRef.current = true
+      return
+    }
 
-  // 🔒 防竞态条件的更新对话函数
-  const updateConversation = useCallback(
-    async (id: string, updates: Partial<Conversation>) => {
-      const operationKey = `update-${id}`
-      
-      // 检查操作锁
-      if (!acquireLock(operationKey)) {
-        incrementPendingCount(operationKey)
-        return // 跳过重复操作
+    let targetConversationId: string | null = currentIdRef.current
+
+    if (!initialisedRef.current) {
+      if (initialPersistedId && conversationsFromApi.some(conv => conv.id === initialPersistedId)) {
+        targetConversationId = initialPersistedId
+      } else if (!targetConversationId) {
+        targetConversationId = conversationsFromApi[0]?.id ?? null
+      }
+    } else if (targetConversationId && !conversationsFromApi.some(conv => conv.id === targetConversationId)) {
+      targetConversationId = conversationsFromApi[0]?.id ?? null
+    }
+
+    if (targetConversationId && targetConversationId !== currentIdRef.current) {
+      selectConversation(targetConversationId)
+      void fetchConversationDetail(targetConversationId)
+    } else if (targetConversationId) {
+      void fetchConversationDetail(targetConversationId)
+    }
+
+    initialisedRef.current = true
+  }, [conversationsFromApi, fetchConversationDetail, initialPersistedId, selectConversation, setConversations])
+
+  const refreshConversations = useCallback(async () => {
+    setLoadingState(true)
+    clearErrorState()
+    const result = await refetch()
+    if (result.error) {
+      const message = result.error instanceof Error ? result.error.message : "刷新对话失败"
+      setErrorState(message)
+    }
+    setLoadingState(false)
+  }, [clearErrorState, refetch, setErrorState, setLoadingState])
+
+  const createConversation = useCallback(async (model: string = DEFAULT_MODEL) => {
+    setCreatingState(true)
+    clearErrorState()
+    try {
+      const newConversation = await createConversationMutation.mutateAsync(model)
+      if (!newConversation) {
+        setErrorState("创建对话失败")
+        return null
       }
 
-      try {
-        // 只发送后端支持的字段
-        const apiUpdates: any = {}
-        if (updates.title !== undefined) apiUpdates.title = updates.title
-        if (updates.model !== undefined) apiUpdates.modelId = updates.model
-        
-        const response = await fetch(`/api/conversations/${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(apiUpdates)
-        })
+      const storeState = useConversationStore.getState()
+      const exists = storeState.conversations.some(conv => conv.id === newConversation.id)
 
-        if (!response.ok) {
-          throw new Error(`Failed to update conversation: ${response.status}`)
-        }
-
-        const data = await response.json()
-        if (data.success && data.data) {
-          const updatedConv = apiToConversation(data.data)
-          
-          setConversations(prev => {
-            const updatedConversations = prev.map(conv =>
-              conv.id === id ? { 
-                ...conv, 
-                ...updatedConv,
-                // 🛡️ 保护messages字段：如果API返回空消息，保持原有消息
-                messages: updatedConv.messages && updatedConv.messages.length > 0 
-                  ? updatedConv.messages 
-                  : conv.messages
-              } : conv
-            )
-            
-            return updatedConversations
-          })
-      }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : '更新对话失败')
-      } finally {
-        // 始终释放锁
-        releaseLock(operationKey)
-      }
-    },
-    [acquireLock, releaseLock, incrementPendingCount]
-  )
-
-  // 🔒 防竞态条件的删除对话函数
-  const deleteConversation = useCallback(
-    async (id: string) => {
-      const operationKey = `delete-${id}`
-      
-      // 检查操作锁
-      if (!acquireLock(operationKey)) {
-        incrementPendingCount(operationKey)
-        return // 跳过重复操作
+      if (!exists) {
+        addConversationToStore(newConversation)
+      } else {
+        updateConversationInStore(newConversation.id, newConversation)
       }
 
-      try {
-        const response = await fetch(`/api/conversations/${id}`, {
-          method: 'DELETE'
-        })
+      selectConversation(newConversation.id)
+      currentIdRef.current = newConversation.id
+      persistCurrentConversationId(newConversation.id)
 
-        if (!response.ok) {
-          throw new Error(`Failed to delete conversation: ${response.status}`)
-        }
+      if (!newConversation.messages || newConversation.messages.length === 0) {
+        await fetchConversationDetail(newConversation.id)
+      }
 
-        setConversations(prev => prev.filter(conv => conv.id !== id))
-        
-        if (currentConversationId === id) {
-          const remaining = conversations.filter(c => c.id !== id)
-          const newCurrentId = remaining.length > 0 ? remaining[0].id : null
-          setCurrentConversationId(newCurrentId)
-          
-          // 持久化删除后的对话选择
-          try {
-            if (newCurrentId) {
-              LocalStorage.setItem(STORAGE_KEYS.CURRENT_CONVERSATION_ID, newCurrentId)
-            } else {
-              LocalStorage.removeItem(STORAGE_KEYS.CURRENT_CONVERSATION_ID)
-            }
-          } catch (error) {
-            // localStorage错误处理，忽略
-          }
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : '删除对话失败')
-      } finally {
-        // 始终释放锁
-        releaseLock(operationKey)
-      }
-    },
-    [conversations, currentConversationId, acquireLock, releaseLock, incrementPendingCount]
-  )
+      return newConversation
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "创建对话失败"
+      setErrorState(message)
+      return null
+    } finally {
+      setCreatingState(false)
+    }
+  }, [addConversationToStore, clearErrorState, createConversationMutation, fetchConversationDetail, persistCurrentConversationId, selectConversation, setCreatingState, setErrorState, updateConversationInStore])
 
-  // 设置当前对话 - 改进版，确保正确处理消息加载和持久化
-  const setCurrentConversation = useCallback(
-    async (id: string | null) => {
-      // 如果是相同对话，不需要重复加载
-      if (id === currentConversationId) {
-        return
+  const updateConversation = useCallback(async (id: string, updates: Partial<Conversation>) => {
+    setUpdatingState(true)
+    clearErrorState()
+    try {
+      const updated = await updateConversationMutation.mutateAsync({ id, updates })
+      if (updated) {
+        updateConversationInStore(id, updated)
       }
-      
-      // 立即设置当前对话ID，以便UI能够立即响应
-      setCurrentConversationId(id)
-      
-      // 持久化当前对话选择
-      try {
-        if (id) {
-          LocalStorage.setItem(STORAGE_KEYS.CURRENT_CONVERSATION_ID, id)
-        } else {
-          LocalStorage.removeItem(STORAGE_KEYS.CURRENT_CONVERSATION_ID)
-        }
-      } catch (error) {
-        // localStorage错误处理，忽略
-      }
-      
-      // 清除之前的错误状态
-      setError(null)
-      
-      // 如果选择了对话，检查是否需要加载详细信息
-      if (id) {
-        const existingConv = conversations.find(c => c.id === id)
-        
-        // 如果对话存在但没有消息或消息数量为0，则加载详细信息
-        if (!existingConv || !existingConv.messages || existingConv.messages.length === 0) {
-          const detailConv = await loadConversationDetail(id)
-          if (detailConv) {
-            // 对话详情已加载完成
-          } else {
-            // 如果加载失败，恢复到null状态并清除localStorage
-            setCurrentConversationId(null)
-            try {
-              LocalStorage.removeItem(STORAGE_KEYS.CURRENT_CONVERSATION_ID)
-            } catch (error) {
-              // localStorage错误处理，忽略
-            }
-          }
-        }
-      }
-    },
-    [currentConversationId, conversations, loadConversationDetail]
-  )
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "更新对话失败"
+      setErrorState(message)
+    } finally {
+      setUpdatingState(false)
+    }
+  }, [clearErrorState, setUpdatingState, setErrorState, updateConversationInStore, updateConversationMutation])
 
-  // 获取当前对话
+  const updateConversationWithMessages = useCallback(async (id: string, updates: Partial<Conversation>) => {
+    if (updates.messages && updates.updatedAt) {
+      updateConversationInStore(id, updates)
+      return
+    }
+    await updateConversation(id, updates)
+  }, [updateConversation, updateConversationInStore])
+
+  const deleteConversation = useCallback(async (id: string) => {
+    setDeletingState(true)
+    clearErrorState()
+    try {
+      await deleteConversationMutation.mutateAsync(id)
+      deleteConversationFromStore(id)
+      const remaining = useConversationStore.getState().conversations
+      const fallback = remaining.length > 0 ? remaining[0].id : null
+      selectConversation(fallback)
+      currentIdRef.current = fallback
+      persistCurrentConversationId(fallback)
+      if (fallback) {
+        await fetchConversationDetail(fallback)
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "删除对话失败"
+      setErrorState(message)
+    } finally {
+      setDeletingState(false)
+    }
+  }, [clearErrorState, deleteConversationFromStore, deleteConversationMutation, fetchConversationDetail, selectConversation, setDeletingState, setErrorState, persistCurrentConversationId])
+
+  const setCurrentConversation = useCallback(async (conversationId: string | null) => {
+    if (conversationId === currentIdRef.current) {
+      return
+    }
+    selectConversation(conversationId)
+    currentIdRef.current = conversationId
+    persistCurrentConversationId(conversationId)
+    clearErrorState()
+    if (conversationId) {
+      await fetchConversationDetail(conversationId)
+    }
+  }, [clearErrorState, fetchConversationDetail, persistCurrentConversationId, selectConversation])
+
   const getCurrentConversation = useCallback(() => {
-    if (!currentConversationId) return null
-    return conversations.find((conv) => conv.id === currentConversationId) || null
-  }, [conversations, currentConversationId])
+    const state = useConversationStore.getState()
+    return state.currentConversation || state.conversations.find(conv => conv.id === state.currentConversationId) || null
+  }, [])
 
-  // 更新对话消息（本地更新，用于聊天时的即时响应）
-  const updateConversationMessages = useCallback(
-    (id: string, messages: ChatMessage[]) => {
-      setConversations(prev => prev.map(conv =>
-        conv.id === id ? { ...conv, messages, updatedAt: Date.now() } : conv
-      ))
-    },
-    []
-  )
-
-  // 更新对话（包含消息）- 改进版本，支持消息更新
-  const updateConversationWithMessages = useCallback(
-    async (id: string, updates: Partial<Conversation>) => {
-      // 如果只是更新消息，直接本地更新（因为消息已经在后端保存了）
-      if (updates.messages && Object.keys(updates).length === 2 && updates.updatedAt) {
-        setConversations(prev => prev.map(conv =>
-          conv.id === id ? { ...conv, messages: updates.messages!, updatedAt: updates.updatedAt! } : conv
-        ))
-        return
+  const updateConversationMessages = useCallback((id: string, messages: ChatMessage[]) => {
+    const now = Date.now()
+    const totalTokens = messages.reduce((sum, msg) => sum + (msg.tokens || 0), 0)
+    updateConversationInStore(id, {
+      messages,
+      updatedAt: now,
+      metadata: {
+        ...(useConversationStore.getState().conversations.find(conv => conv.id === id)?.metadata || {}),
+        messageCount: messages.length,
+        totalTokens,
+        lastActivity: now,
       }
+    })
+  }, [updateConversationInStore])
 
-      // 其他更新走原来的 API 更新逻辑
-      await updateConversation(id, updates)
-    },
-    [updateConversation]
-  )
+  const operationLocks = useMemo(() => new Set<string>(), [])
+  const pendingOperations = useMemo(() => new Map<string, number>(), [])
+  const isOperationLocked = useCallback(() => false, [])
+  const getPendingCount = useCallback(() => 0, [])
+
+  const loading = isStoreLoading || isQueryLoading || isQueryFetching
 
   return {
     conversations,
     currentConversationId,
     loading,
     error,
-    loadingConversationId, // 导出加载中的对话ID
+    loadingConversationId,
     createConversation,
     updateConversation,
-    updateConversationWithMessages, // 导出新的更新函数
+    updateConversationWithMessages,
     deleteConversation,
     setCurrentConversation,
     getCurrentConversation,
     updateConversationMessages,
-    refreshConversations: loadConversations,
-    
-    // 🔒 操作状态导出 - 用于UI反馈
+    refreshConversations,
     operationLocks,
     pendingOperations,
-    isOperationLocked: (operationKey: string) => operationLocks.has(operationKey),
-    getPendingCount: (operationKey: string) => pendingOperations.get(operationKey) || 0,
+    isOperationLocked,
+    getPendingCount,
   }
 }
+
+
+
