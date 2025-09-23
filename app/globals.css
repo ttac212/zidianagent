@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
 /* 字体回退方案 - 解决 Google Fonts 连接问题 */
 @font-face {
   font-family: 'Inter Fallback';
@@ -142,7 +144,7 @@
     scrollbar-width: none; /* Firefox */
     -ms-overflow-style: none; /* IE and Edge */
   }
-  
+
   .scrollbar-hide::-webkit-scrollbar {
     display: none; /* Chrome, Safari and Opera */
   }
@@ -192,11 +194,11 @@
   .connection-pulse {
     animation: statusPulse 2s ease-in-out infinite;
   }
-  
+
   .connection-icon-bounce {
     animation: iconBounce 1s ease-in-out;
   }
-  
+
   .connection-fade-in {
     animation: fadeIn 0.3s ease-out;
   }
@@ -205,16 +207,25 @@
   .connection-responsive {
     @apply transition-all duration-300 ease-in-out;
   }
-  
+
   @media (max-width: 768px) {
     .connection-responsive {
       @apply px-2 py-1 text-xs gap-1.5;
     }
   }
-  
+
   @media (min-width: 1024px) {
     .connection-responsive {
       @apply px-4 py-2 gap-2.5;
     }
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
   }
 }

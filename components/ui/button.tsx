@@ -5,21 +5,20 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 ease-out disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border-0 relative will-change-transform",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
   {
     variants: {
       variant: {
-        default:
-          "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 hover:-translate-y-[1px] hover:shadow-lg active:translate-y-0 active:scale-[0.98] active:shadow-xs hover:shadow-primary/15",
+        default: "bg-primary text-primary-foreground hover:bg-primary/90",
         destructive:
-          "bg-destructive text-white shadow-xs hover:bg-destructive/90 hover:-translate-y-[1px] hover:shadow-lg active:translate-y-0 active:scale-[0.98] active:shadow-xs focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60 hover:shadow-destructive/15",
+          "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
         outline:
-          "border bg-background shadow-xs hover:bg-black/10 hover:-translate-y-[1px] hover:shadow-lg active:translate-y-0 active:scale-[0.98] active:shadow-xs dark:border-transparent dark:hover:bg-white/10 hover:shadow-black/10 dark:hover:shadow-white/10",
+          "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
         secondary:
-          "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80 hover:-translate-y-[1px] hover:shadow-lg active:translate-y-0 active:scale-[0.98] active:shadow-xs hover:shadow-secondary/15",
+          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost:
-          "hover:bg-black/10 hover:-translate-y-[1px] active:translate-y-0 active:scale-[0.98] dark:hover:bg-white/10",
-        link: "text-primary underline-offset-4 hover:underline active:scale-[0.98]",
+          "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
+        link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",
@@ -50,16 +49,7 @@ function Button({
   return (
     <Comp
       data-slot="button"
-      className={cn(
-        buttonVariants({ variant, size }),
-        // 移动设备触摸优化：使用touch代替hover
-        "md:hover:translate-y-0 md:active:translate-y-0 touch:hover:translate-y-0",
-        // 触摸反馈：移动设备上使用active状态
-        "touch:active:bg-primary/10 touch:active:scale-[0.98]",
-        // 无障碍支持：尊重用户的运动偏好
-        "motion-reduce:transition-none motion-reduce:hover:transform-none motion-reduce:active:transform-none",
-        className
-      )}
+      className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />
   )

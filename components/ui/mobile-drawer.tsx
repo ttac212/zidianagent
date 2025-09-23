@@ -12,9 +12,10 @@ import type { NavItem } from "@/config/navigation"
 interface MobileDrawerProps {
   children?: React.ReactNode
   navItems?: NavItem[]
+  secondaryNavItems?: NavItem[]
 }
 
-export function MobileDrawer({ children, navItems }: MobileDrawerProps) {
+export function MobileDrawer({ children, navItems, secondaryNavItems }: MobileDrawerProps) {
   const [open, setOpen] = useState(false)
 
   const handleItemClick: NavigationProps["onItemClick"] = () => setOpen(false)
@@ -35,8 +36,20 @@ export function MobileDrawer({ children, navItems }: MobileDrawerProps) {
               <X className="h-4 w-4" />
             </Button>
           </div>
-          <div className="flex-1 p-4">
+          <div className="flex-1 p-4 space-y-6">
             <Navigation items={navItems} orientation="vertical" activeMatch="startsWith" onItemClick={handleItemClick} />
+            {secondaryNavItems && secondaryNavItems.length > 0 && (
+              <div className="border-t border-border pt-4">
+                <p className="px-1 pb-2 text-xs font-medium text-muted-foreground">工具与实验</p>
+                <Navigation
+                  items={secondaryNavItems}
+                  orientation="vertical"
+                  activeMatch="startsWith"
+                  onItemClick={handleItemClick}
+                  className="space-y-1"
+                />
+              </div>
+            )}
             {children}
           </div>
         </div>
