@@ -112,11 +112,9 @@ model User {
   accounts         Account[]
   sessions         Session[]
   conversations    Conversation[]
-  documents        Document[]
-  feedbacks        Feedback[]
+  messages         Message[]             // 新增：直接消息关联，配额查询优化
   usageStats       UsageStats[]
   userSessions     UserSession[]
-  uploadedAttachments ResourceAttachment[]
 
   @@map("users")
 }
@@ -171,34 +169,37 @@ model Conversation {
 model Message {
   id             String   @id @default(cuid())
   conversationId String
-  
+  userId         String                     // 用户ID冗余存储，避免JOIN查询（现已填充）
+
   // 消息内容
   role           MessageRole
   content        String                     // 使用 TEXT 类型支持长文本
   originalContent String?                   // 原始输入（用于分析）
-  
+
   // Token 统计
   promptTokens     Int @default(0)
   completionTokens Int @default(0)
-  totalTokens      Int @default(0)
-  
+
   // 模型信息
   modelId     String
   temperature Float?
   finishReason String?  // stop, length, content_filter等
-  
+
   // 消息元数据
   metadata    Json?    // 存储额外信息，如工具调用、函数参数等
-  
+
   // 时间戳
   createdAt DateTime @default(now())
-  
+
   // 关联关系
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // 索引
+  // 索引 - 优化配额和统计查询
   @@index([conversationId, createdAt])
   @@index([role, createdAt])
+  @@index([userId, createdAt])           // 配额查询优化
+  @@index([userId, modelId, createdAt])  // 按模型统计优化
   @@map("messages")
 }
 
@@ -208,148 +209,6 @@ enum MessageRole {
   ASSISTANT
   SYSTEM
   FUNCTION
-}
-
-// 文档表
-model Document {
-  id          String   @id @default(cuid())
-  title       String
-  content     String                       // 文档内容
-  excerpt     String?                      // 文档摘要
-  
-  // 分类和标签
-  categoryId  String?
-  tags        String   @default("[]")      // JSON 字符串存储标签
-  
-  // 外部资源字段
-  source      DocumentSource @default(INTERNAL)  // 资料来源
-  externalUrl String?                             // 外部链接
-  fileUrl     String?                             // 文件URL
-  fileType    String?                             // 文件类型：pdf, doc, excel等
-  fileSize    Int?                                // 文件大小(bytes)
-  
-  // 外部资源元数据
-  externalId    String?                           // 外部系统ID
-  importedFrom  String?                           // 导入来源系统
-  lastSyncAt    DateTime?                         // 最后同步时间
-  syncStatus    SyncStatus @default(SYNCED)       // 同步状态
-  
-  // 文档元数据
-  wordCount   Int      @default(0)
-  readTime    Int      @default(0)      // 预计阅读时间（分钟）
-  
-  // 版本控制
-  version     Int      @default(1)
-  isPublished Boolean  @default(false)
-  isDeleted   Boolean  @default(false)
-  
-  // 所有者信息
-  userId      String
-  
-  // 时间戳
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  publishedAt DateTime?
-
-  // 关联关系
-  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category    DocumentCategory?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  attachments ResourceAttachment[]
-
-  // 索引
-  @@index([userId, updatedAt])
-  @@index([categoryId])
-  @@index([isPublished, publishedAt])
-  @@index([source])
-  @@index([externalId])
-  @@index([syncStatus])
-  @@map("documents")
-}
-
-// 文档分类表
-model DocumentCategory {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String?
-  color       String?  @default("#6366f1")  // 分类颜色
-  sortOrder   Int      @default(0)
-  
-  // 时间戳
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // 关联关系
-  documents Document[]
-
-  @@map("document_categories")
-}
-
-// 用户反馈表
-model Feedback {
-  id          String   @id @default(cuid())
-  userId      String?
-  
-  // 反馈内容
-  type        FeedbackType
-  title       String
-  content     String                       // 反馈内容
-  rating      Int?                         // 1-5分评分
-  
-  // 匿名反馈字段
-  authorName  String?                      // 匿名时的显示名称
-  contactInfo String?                      // 可选的联系方式
-  
-  // 反馈状态
-  status      FeedbackStatus @default(OPEN)
-  priority    FeedbackPriority @default(MEDIUM)
-  
-  // 处理信息
-  response    String?                      // 处理回复
-  handledBy   String?
-  handledAt   DateTime?
-  
-  // 关联的会话信息（可选）
-  conversationId String?
-  messageId      String?
-  
-  // 时间戳
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // 关联关系
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
-
-  // 索引
-  @@index([type, status])
-  @@index([createdAt])
-  @@map("feedbacks")
-}
-
-// 反馈类型枚举
-enum FeedbackType {
-  BUG_REPORT      // 错误报告
-  FEATURE_REQUEST // 功能请求
-  IMPROVEMENT     // 改进建议
-  COMPLAINT       // 投诉
-  COMPLIMENT      // 表扬
-  OTHER           // 其他
-}
-
-// 反馈状态枚举
-enum FeedbackStatus {
-  OPEN
-  IN_PROGRESS
-  RESOLVED
-  CLOSED
-  REJECTED
-}
-
-// 反馈优先级枚举
-enum FeedbackPriority {
-  LOW
-  MEDIUM
-  HIGH
-  URGENT
 }
 
 // 用量统计表（按天统计）
@@ -370,16 +229,11 @@ model UsageStats {
   // Token 使用统计
   promptTokens     Int @default(0)
   completionTokens Int @default(0)
-  totalTokens      Int @default(0)
   
   // 对话统计
   conversationsCreated Int @default(0)
   messagesCreated      Int @default(0)
-  
-  // 文档统计
-  documentsCreated Int @default(0)
-  documentsUpdated Int @default(0)
-  
+
   // 时长统计
   totalActiveTime Int @default(0)  // 活跃时长（秒）
   
@@ -451,46 +305,6 @@ enum ConfigType {
   NUMBER
   BOOLEAN
   JSON
-}
-
-// 文档来源枚举
-enum DocumentSource {
-  INTERNAL    // 内部创建
-  IMPORTED    // 外部导入
-  LINKED      // 外部链接
-  UPLOADED    // 文件上传
-}
-
-// 同步状态枚举
-enum SyncStatus {
-  SYNCED      // 已同步
-  PENDING     // 等待同步
-  FAILED      // 同步失败
-  OUTDATED    // 已过期
-}
-
-// 资源附件表
-model ResourceAttachment {
-  id         String   @id @default(cuid())
-  documentId String
-  
-  // 附件信息
-  fileName   String
-  fileUrl    String
-  fileType   String
-  fileSize   Int
-  mimeType   String?
-  
-  // 上传信息
-  uploadedBy String
-  uploadedAt DateTime @default(now())
-  
-  // 关联关系
-  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  uploader User     @relation(fields: [uploadedBy], references: [id])
-  
-  @@index([documentId])
-  @@map("resource_attachments")
 }
 
 // ===== 商家数据管理模型 =====
