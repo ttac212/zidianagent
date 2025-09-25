@@ -287,9 +287,34 @@ export function useConversationsQuery(options: {
   limit?: number
   includeMessages?: boolean
 } = {}) {
+  const { page = 1, limit = 20, includeMessages = false } = options
+
   return useQuery({
-    queryKey: conversationKeys.lists(),
+    queryKey: [...conversationKeys.lists(), { page, limit, includeMessages }],
     queryFn: () => conversationApi.fetchConversations(options),
+    staleTime: 5 * 60 * 1000, // 5分钟内数据保持新鲜
+    gcTime: 10 * 60 * 1000,   // 10分钟后清理缓存
+    retry: 2,
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
+  })
+}
+
+/**
+ * 获取对话摘要列表的专用hook - 轻量级，不包含消息内容
+ */
+export function useConversationsSummary(options: {
+  page?: number
+  limit?: number
+} = {}) {
+  const { page = 1, limit = 20 } = options
+
+  return useQuery({
+    queryKey: [...conversationKeys.lists(), 'summary', { page, limit }],
+    queryFn: () => conversationApi.fetchConversations({
+      page,
+      limit,
+      includeMessages: false
+    }),
     staleTime: 5 * 60 * 1000, // 5分钟内数据保持新鲜
     gcTime: 10 * 60 * 1000,   // 10分钟后清理缓存
     retry: 2,
@@ -311,85 +336,10 @@ export function useConversationQuery(id: string, enabled: boolean = true) {
   })
 }
 
-// ==================== Mutation Hooks ====================
-
-/**
- * 创建对话的mutation hook
- */
-export function useCreateConversationMutation() {
-  const queryClient = useQueryClient()
-  
-  return useMutation({
-    mutationFn: conversationApi.createConversation,
-    onSuccess: (newConversation) => {
-      // 更新对话列表缓存
-      queryClient.setQueryData<Conversation[]>(conversationKeys.lists(), (old) => {
-        if (!old) return [newConversation]
-        return [newConversation, ...old]
-      })
-      
-      // 缓存新对话的详情
-      queryClient.setQueryData(
-        conversationKeys.detail(newConversation.id),
-        newConversation
-      )
-    },
-    onError: (error: Error) => {
-      }
-  })
-}
-
-/**
- * 删除对话的mutation hook
- */
-export function useDeleteConversationMutation() {
-  const queryClient = useQueryClient()
-  
-  return useMutation({
-    mutationFn: conversationApi.deleteConversation,
-    onSuccess: (_, deletedId) => {
-      // 从对话列表缓存中移除
-      queryClient.setQueryData<Conversation[]>(conversationKeys.lists(), (old) => {
-        if (!old) return []
-        return old.filter(conv => conv.id !== deletedId)
-      })
-      
-      // 清除对话详情缓存
-      queryClient.removeQueries({ queryKey: conversationKeys.detail(deletedId) })
-    },
-    onError: (error: Error) => {
-      }
-  })
-}
-
-/**
- * 更新对话的mutation hook
- */
-export function useUpdateConversationMutation() {
-  const queryClient = useQueryClient()
-  
-  return useMutation({
-    mutationFn: ({ id, updates }: { id: string, updates: Partial<Conversation> }) =>
-      conversationApi.updateConversation(id, updates),
-    onSuccess: (updatedConversation) => {
-      // 更新对话列表缓存
-      queryClient.setQueryData<Conversation[]>(conversationKeys.lists(), (old) => {
-        if (!old) return [updatedConversation]
-        return old.map(conv =>
-          conv.id === updatedConversation.id ? updatedConversation : conv
-        )
-      })
-
-      // 更新对话详情缓存
-      queryClient.setQueryData(
-        conversationKeys.detail(updatedConversation.id),
-        updatedConversation
-      )
-    },
-    onError: (error: Error) => {
-      }
-  })
-}
+// ==================== 已移除重复的Mutation Hooks ====================
+//
+// 注意：Mutation hooks已迁移到 @/hooks/api/use-conversation-mutations.ts
+// 避免重复定义，使用统一的mutation管理
 
 /**
  * 批量无效化对话相关缓存的工具函数

@@ -4,7 +4,7 @@
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast/toast'
 import type { Conversation } from '@/types/chat'
 import { conversationApi, conversationKeys } from './use-conversations-query'
 
@@ -19,142 +19,156 @@ type CreateConversationInput = string | (Partial<CreateConversationPayload> & { 
  * - 错误回滚
  * - Toast 反馈
  */
+
 export function useUpdateConversationMutation() {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: ({ id, updates }: { id: string; updates: Partial<Conversation> }) =>
       conversationApi.updateConversation(id, updates),
-    
-    // 乐观更新
+
     onMutate: async ({ id, updates }) => {
-      // 取消正在进行的查询
       await queryClient.cancelQueries({ queryKey: conversationKeys.detail(id) })
-      await queryClient.cancelQueries({ queryKey: conversationKeys.lists() })
-      
-      // 保存之前的数据用于回滚
-      const previousDetail = queryClient.getQueryData(conversationKeys.detail(id))
-      const previousList = queryClient.getQueryData(conversationKeys.lists())
-      
-      // 乐观更新缓存
-      queryClient.setQueryData(conversationKeys.detail(id), (old: any) => {
-        if (!old) return old
-        return { ...old, ...updates }
-      })
-      
-      queryClient.setQueryData(conversationKeys.lists(), (old: any) => {
-        if (!old) return old
-        return old.map((conv: Conversation) =>
-          conv.id === id ? { ...conv, ...updates } : conv
-        )
-      })
-      
-      return { previousDetail, previousList }
+
+      const previousDetail = queryClient.getQueryData<Conversation | undefined>(
+        conversationKeys.detail(id)
+      )
+
+      if (previousDetail) {
+        queryClient.setQueryData(conversationKeys.detail(id), { ...previousDetail, ...updates })
+      }
+
+      return { previousDetail }
     },
-    
-    // 错误时回滚
+
     onError: (err, { id }, context) => {
       if (context?.previousDetail) {
         queryClient.setQueryData(conversationKeys.detail(id), context.previousDetail)
       }
-      if (context?.previousList) {
-        queryClient.setQueryData(conversationKeys.lists(), context.previousList)
-      }
-      
+
       toast.error('更新失败，请重试', {
         description: err instanceof Error ? err.message : '未知错误'
       })
     },
-    
-    // 成功后重新验证数据
-    onSuccess: (data, { id }) => {
-      // 可选：显示成功提示（根据需求决定是否显示）
-      // toast.success('更新成功')
-      
-      // 重新验证以确保数据同步
-      queryClient.invalidateQueries({ queryKey: conversationKeys.detail(id) })
-    }
+
+    onSuccess: (updatedConversation) => {
+      // 立即在所有对话列表缓存中更新对话
+      queryClient.setQueriesData(
+        { queryKey: conversationKeys.lists(), type: 'active' },
+        (oldData: any) => {
+          if (Array.isArray(oldData)) {
+            return oldData.map(conv =>
+              conv.id === updatedConversation.id ? updatedConversation : conv
+            )
+          }
+          return oldData
+        }
+      )
+
+      // 不直接覆盖详情缓存，而是 invalidate 让它重新请求完整数据（包含消息）
+      // 避免 PATCH 响应（不含 messages）污染缓存导致消息瞬间消失
+      queryClient.invalidateQueries({
+        queryKey: conversationKeys.detail(updatedConversation.id),
+        exact: true
+      })
+
+      // 刷新所有相关查询
+      queryClient.invalidateQueries({ queryKey: conversationKeys.lists(), exact: false })
+      queryClient.invalidateQueries({
+        queryKey: [...conversationKeys.lists(), 'summary'],
+        exact: false,
+      })
+    },
   })
 }
 
-/**
- * 删除对话的 Mutation Hook
- */
+
 export function useDeleteConversationMutation() {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: async (id: string) => {
       await conversationApi.deleteConversation(id)
       return id
     },
-    
-    // 乐观删除
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: conversationKeys.lists() })
-      
-      const previousList = queryClient.getQueryData(conversationKeys.lists())
-      
-      queryClient.setQueryData(conversationKeys.lists(), (old: any) => {
-        if (!old) return old
-        return old.filter((conv: Conversation) => conv.id !== id)
+
+    onSuccess: (id) => {
+      // 立即从所有对话列表缓存中移除已删除的对话
+      queryClient.setQueriesData(
+        { queryKey: conversationKeys.lists(), type: 'active' },
+        (oldData: any) => {
+          if (Array.isArray(oldData)) {
+            return oldData.filter(conv => conv.id !== id)
+          }
+          return oldData
+        }
+      )
+
+      // 移除详情缓存
+      queryClient.removeQueries({ queryKey: conversationKeys.detail(id) })
+
+      // 作为后备，刷新所有相关查询
+      queryClient.invalidateQueries({ queryKey: conversationKeys.lists(), exact: false })
+      queryClient.invalidateQueries({
+        queryKey: [...conversationKeys.lists(), 'summary'],
+        exact: false,
       })
-      
-      return { previousList }
+
+      toast.success('对话已删除')
     },
-    
-    onError: (err, _id, context) => {
-      if (context?.previousList) {
-        queryClient.setQueryData(conversationKeys.lists(), context.previousList)
-      }
-      
+
+    onError: (err) => {
       toast.error('删除失败，请重试', {
         description: err instanceof Error ? err.message : '未知错误'
       })
     },
-    
-    onSuccess: (id) => {
-      // 清除详情缓存
-      queryClient.removeQueries({ queryKey: conversationKeys.detail(id) })
-      toast.success('对话已删除')
-    }
   })
 }
 
-/**
- * 创建对话的 Mutation Hook
- */
+
 export function useCreateConversationMutation() {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: (input: CreateConversationInput) => {
-      const payload: CreateConversationPayload = typeof input === 'string'
-        ? { modelId: input }
-        : {
-            modelId: input.modelId,
-            title: input.title,
-            temperature: input.temperature,
-            maxTokens: input.maxTokens,
-            contextAware: input.contextAware,
-          }
+      const payload: CreateConversationPayload =
+        typeof input === 'string'
+          ? { modelId: input }
+          : {
+              modelId: input.modelId,
+              title: input.title,
+              temperature: input.temperature,
+              maxTokens: input.maxTokens,
+              contextAware: input.contextAware,
+            }
 
       return conversationApi.createConversation(payload)
     },
 
     onSuccess: (newConversation) => {
-      // 更新会话列表缓存
-      queryClient.setQueryData<Conversation[]>(conversationKeys.lists(), (old) => {
-        if (!old) return [newConversation]
-        const withoutDup = old.filter(conv => conv.id !== newConversation.id)
-        return [newConversation, ...withoutDup]
-      })
+      // 立即将新对话添加到所有对话列表缓存的开头
+      queryClient.setQueriesData(
+        { queryKey: conversationKeys.lists(), type: 'active' },
+        (oldData: any) => {
+          if (Array.isArray(oldData)) {
+            return [newConversation, ...oldData]
+          }
+          return [newConversation]
+        }
+      )
 
-      // 写入会话详情缓存
+      // 缓存新对话的详情
       queryClient.setQueryData(
         conversationKeys.detail(newConversation.id),
         newConversation
       )
+
+      // 作为后备，刷新所有相关查询
+      queryClient.invalidateQueries({ queryKey: conversationKeys.lists(), exact: false })
+      queryClient.invalidateQueries({
+        queryKey: [...conversationKeys.lists(), 'summary'],
+        exact: false,
+      })
 
       toast.success('新对话已创建')
     },
@@ -163,14 +177,10 @@ export function useCreateConversationMutation() {
       toast.error('创建对话失败', {
         description: err instanceof Error ? err.message : '未知错误'
       })
-    }
+    },
   })
 }
 
-
-/**
- * 获取所有 mutation 的加载状态
- */
 export function useConversationMutationStates() {
   const updateMutation = useUpdateConversationMutation()
   const deleteMutation = useDeleteConversationMutation()

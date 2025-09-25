@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getToken } from 'next-auth/jwt'
-import { ALLOWED_MODEL_IDS, DEFAULT_MODEL, isAllowed } from '@/lib/ai/models'
+import { DEFAULT_MODEL, isAllowed } from '@/lib/ai/models'
 
 // 获取对话列表（受保护）
 export async function GET(request: NextRequest) {
@@ -12,12 +12,13 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
+    const includeMessages = searchParams.get('includeMessages') === 'true'
     const userId = String(token.sub)
 
     // userId 从 token 解析，无需校验查询参数
-    
+
     const skip = (page - 1) * limit
-    
+
     // 获取对话列表
     const conversations = await prisma.conversation.findMany({
       where: {
@@ -26,23 +27,34 @@ export async function GET(request: NextRequest) {
           status: { not: 'DELETED' }
         }
       },
-      select: {
-        id: true,
-        title: true,
-        modelId: true,
-        temperature: true,
-        messageCount: true,
-        totalTokens: true,
-        createdAt: true,
-        updatedAt: true,
-        lastMessageAt: true,
+      include: {
         user: {
           select: {
             id: true,
             displayName: true,
             email: true,
           }
-        }
+        },
+        _count: {
+          select: {
+            messages: true
+          }
+        },
+        messages: includeMessages ? {
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            role: true,
+            content: true,
+            promptTokens: true,
+            completionTokens: true,
+            modelId: true,
+            temperature: true,
+            finishReason: true,
+            metadata: true,
+            createdAt: true,
+          }
+        } : false,
       },
       orderBy: [
         { lastMessageAt: 'desc' },
@@ -62,10 +74,17 @@ export async function GET(request: NextRequest) {
       }
     })
     
+    // 映射消息计数到messageCount字段
+    const conversationsWithCount = conversations.map((conv: any) => ({
+      ...conv,
+      messageCount: conv._count?.messages || 0,
+      _count: undefined  // 移除内部字段，不暴露给前端
+    }))
+
     return NextResponse.json({
       success: true,
       data: {
-        conversations,
+        conversations: conversationsWithCount,
         pagination: {
           page,
           limit,

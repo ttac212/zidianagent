@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
+import { useSearchParams } from 'next/navigation'
 import { useConversations } from "@/hooks/use-conversations"
 import { useSafeLocalStorage } from "@/hooks/use-safe-local-storage"
 import { Button } from "@/components/ui/button"
@@ -15,7 +16,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import {
   AlertDialog,
-  AlertDialogTrigger,
   AlertDialogContent,
   AlertDialogHeader,
   AlertDialogTitle,
@@ -24,39 +24,24 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog"
-import { toast } from "@/hooks/use-toast"
-import { toast as unifiedToast } from '@/lib/toast/unified-toast'
-import { useInlineFeedback } from '@/components/ui/inline-feedback'
+import { toast } from '@/lib/toast/toast'
 import { ChevronLeft, ChevronRight, MessageSquare, Plus, MoreHorizontal } from "lucide-react"
 import dynamic from "next/dynamic"
 import { ChatCenterSkeleton } from "@/components/skeletons/chat-center-skeleton"
 const SmartChatCenterV2 = dynamic(
-  () => import("@/components/chat/smart-chat-center-v2-fixed").then(m => m.SmartChatCenterV2),
+  () => import("@/components/chat/smart-chat-center").then(m => m.SmartChatCenter),
   { ssr: false, loading: () => <ChatCenterSkeleton /> }
 )
 import { Header } from "@/components/header"
-import { ALLOWED_MODELS, DEFAULT_MODEL, ALLOWED_MODEL_IDS, isAllowed } from "@/lib/ai/models"
+import { ALLOWED_MODELS, DEFAULT_MODEL, isAllowed } from "@/lib/ai/models"
 import { WorkspaceSkeleton } from "@/components/skeletons/workspace-skeleton"
 import { ConnectionStatus } from "@/components/ui/connection-status"
 
-interface Message {
-  id: string
-  role: "user" | "assistant"
-  content: string
-  timestamp: number
-  tokens?: number
-}
-
-interface Conversation {
-  id: string
-  title: string
-  messages: Message[]
-  model: string
-  createdAt: number
-  updatedAt: number
-}
+import type { Conversation, ChatMessage } from '@/types/chat'
 
 export default function WorkspacePage() {
+  const searchParams = useSearchParams()
+
   // 使用安全的localStorage hook，并验证模型
   const defaultModelId = ALLOWED_MODELS.length > 0 ? ALLOWED_MODELS[0].id : DEFAULT_MODEL
   const [storedModel, setStoredModel] = useSafeLocalStorage('lastSelectedModelId', defaultModelId)
@@ -67,12 +52,12 @@ export default function WorkspacePage() {
     return isAllowed(storedModel) ? storedModel : defaultModelId
   })
   
-  // 同步到localStorage（仅在有效时）
+  // 同步到localStorage（仅在有效且值变化时）
   useEffect(() => {
-    if (isAllowed(selectedModel)) {
+    if (isAllowed(selectedModel) && storedModel !== selectedModel) {
       setStoredModel(selectedModel)
     }
-  }, [selectedModel, setStoredModel])
+  }, [selectedModel, storedModel, setStoredModel])
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     // 移动端默认折叠侧边栏
     if (typeof window !== 'undefined') {
@@ -85,30 +70,41 @@ export default function WorkspacePage() {
   const [editingConvId, setEditingConvId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
 
+  // 删除确认对话框状态
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [conversationToDelete, setConversationToDelete] = useState<Conversation | null>(null)
 
-  // 原有对话管理hooks - 保持操作功能
+
+  // 管理当前对话ID状态
+  const [currentConversationId, setCurrentConversationId] = useSafeLocalStorage<string | null>('currentConversationId', null)
+
+  // 解析 URL 参数，支持复制对话链接功能
+  useEffect(() => {
+    const conversationIdFromUrl = searchParams.get('conversation')
+    if (conversationIdFromUrl && conversationIdFromUrl !== currentConversationId) {
+      setCurrentConversationId(conversationIdFromUrl)
+      // 使用 replaceState 清除 URL 参数，避免刷新时重复触发
+      window.history.replaceState({}, '', window.location.pathname)
+      // 显示友好提示
+      toast.success('已自动选中对话', { description: '链接分享成功' })
+    }
+  }, [searchParams, currentConversationId, setCurrentConversationId])
+
+  // 原有对话管理hooks - 传入当前对话ID
   const {
     conversations: fallbackConversations,
-    currentConversationId,
+    currentConversation: fallbackCurrentConversation,
     loading: fallbackLoading,
-    error: fallbackError,
-    loadingConversationId, // 获取加载中的对话ID
+    error: _fallbackError,
     createConversation,
     updateConversation,
-    updateConversationWithMessages, // 使用新的更新函数
     deleteConversation,
-    setCurrentConversation,
-    getCurrentConversation,
-    updateConversationMessages,
-  } = useConversations()
+  } = useConversations(currentConversationId)
 
   // 使用传统对话数据
   const conversations = fallbackConversations
   const loading = fallbackLoading
-  const error = fallbackError
-  
-  // 获取当前对话
-  const currentConversation = getCurrentConversation()
+  const currentConversation = fallbackCurrentConversation
 
   // 基础性能监控
   useEffect(() => {
@@ -133,27 +129,68 @@ export default function WorkspacePage() {
       const modelToUse = isAllowed(selectedModel) ? selectedModel : defaultModelId
       const newConversation = await createConversation(modelToUse)
       if (newConversation) {
+        // 设置为当前对话
+        setCurrentConversationId(newConversation.id)
         // 移动端创建对话后自动折叠侧边栏，专注聊天
         if (typeof window !== 'undefined' && window.innerWidth < 768) {
           setSidebarCollapsed(true)
         }
-        }
+      }
       return newConversation
-    } catch (error) {
+    // eslint-disable-next-line no-unused-vars
+    } catch (_error) {
       return null
     }
   }
 
   const handleUpdateConversation = (id: string, updates: Partial<Conversation>) => {
-    updateConversationWithMessages(id, updates) // 使用支持消息更新的函数
+    updateConversation(id, updates)
   }
 
-  const handleDeleteConversation = (id: string) => {
-    deleteConversation(id)
+  // 打开删除确认对话框
+  const handleOpenDeleteConfirm = (conversation: Conversation) => {
+    setConversationToDelete(conversation)
+    setDeleteConfirmOpen(true)
   }
 
-  const handleSelectConversation = (id: string) => {
-    setCurrentConversation(id)
+  // 确认删除对话
+  const handleConfirmDelete = async () => {
+    if (!conversationToDelete) return
+
+    try {
+      const msgCount = conversationToDelete.metadata?.messageCount ?? 0
+      await deleteConversation(conversationToDelete.id)
+      // 如果删除的是当前对话，清空当前对话ID
+      if (currentConversationId === conversationToDelete.id) {
+        setCurrentConversationId(null)
+      }
+      toast.success('已删除对话', {
+        description: `"${conversationToDelete.title}" 已删除（${msgCount} 条消息）。`
+      })
+    } catch (_error) {
+      toast.error('删除对话失败')
+    } finally {
+      setDeleteConfirmOpen(false)
+      setConversationToDelete(null)
+    }
+  }
+
+  // 取消删除
+  const handleCancelDelete = () => {
+    setDeleteConfirmOpen(false)
+    setConversationToDelete(null)
+  }
+
+  const handleSelectConversation = async (id: string) => {
+    try {
+      // 直接设置当前对话ID
+      setCurrentConversationId(id)
+    // eslint-disable-next-line no-unused-vars
+    } catch (_error) {
+      // 使用简洁的toast提示
+      toast.error('切换对话失败')
+    }
+
     // 移动端选择对话后自动折叠侧边栏
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
       setSidebarCollapsed(true)
@@ -171,7 +208,8 @@ export default function WorkspacePage() {
       try {
         // 调用更新对话函数
         await handleUpdateConversation(editingConvId, { title: editTitle.trim() })
-      } catch (error) {
+      // eslint-disable-next-line no-unused-vars
+      } catch (_error) {
         // 错误处理
       }
     }
@@ -185,27 +223,55 @@ export default function WorkspacePage() {
     setEditTitle('')
   }
 
-  // 导出对话功能
-  const handleExportConversation = (conversation: Conversation) => {
+  // 导出对话功能 - 修复：必须先获取完整对话详情
+  const handleExportConversation = async (conversation: Conversation) => {
     try {
-      const data = JSON.stringify({ 
-        id: conversation.id, 
-        title: conversation.title, 
-        messages: conversation.messages 
+      // 显示加载状态
+      toast.loading('正在准备导出数据...', { id: 'export-loading' })
+
+      // 从详情 API 获取完整对话数据，确保包含所有消息
+      const response = await fetch(`/api/conversations/${conversation.id}?includeMessages=true`)
+      if (!response.ok) {
+        throw new Error(`获取对话详情失败: ${response.status}`)
+      }
+
+      const result = await response.json()
+      if (!result.success) {
+        throw new Error(result.message || '获取对话详情失败')
+      }
+
+      // 使用完整数据进行导出
+      const fullConversation = result.data
+      const data = JSON.stringify({
+        id: fullConversation.id,
+        title: fullConversation.title,
+        model: fullConversation.modelId,
+        createdAt: fullConversation.createdAt,
+        messageCount: fullConversation.messageCount || fullConversation.messages?.length || 0,
+        messages: fullConversation.messages || []
       }, null, 2)
+
       const blob = new Blob([data], { type: 'application/json;charset=utf-8' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${conversation.title || 'conversation'}.json`
+      a.download = `${conversation.title || 'conversation'}-${new Date().toISOString().split('T')[0]}.json`
       document.body.appendChild(a)
       a.click()
       a.remove()
       URL.revokeObjectURL(url)
-      // 使用轻量级toast提示
-      unifiedToast.success('导出成功')
-    } catch (e) {
-      unifiedToast.error('导出失败', { description: '请稍后重试' })
+
+      // 成功提示
+      toast.success('对话已导出', {
+        id: 'export-loading',
+        description: `已导出 ${fullConversation.messages?.length || 0} 条消息`
+      })
+    } catch (error: any) {
+      // 错误提示
+      toast.error('导出失败', {
+        id: 'export-loading',
+        description: error.message || '请稍后重试'
+      })
     }
   }
 
@@ -216,8 +282,9 @@ export default function WorkspacePage() {
       await navigator.clipboard.writeText(url)
       // 不显示复制成功toast，只在失败时提示
       // 浏览器已经有原生的复制反馈
-    } catch (e) {
-      unifiedToast.error('复制失败', { description: '无法复制到剪贴板' })
+    // eslint-disable-next-line no-unused-vars
+    } catch (_e) {
+      toast.error('复制失败', { description: '无法复制到剪贴板' })
     }
   }
 
@@ -367,14 +434,22 @@ export default function WorkspacePage() {
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex-1 min-w-0">
                               <div className="font-medium truncate">{conv.title}</div>
-                              <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                {loadingConversationId === conv.id ? (
+                              <div className="text-xs text-muted-foreground flex items-center gap-2">
+                                <span>{conv.metadata?.messageCount || 0} 条消息</span>
+                                <span>•</span>
+                                <span title={`创建于 ${new Date(conv.createdAt).toLocaleString('zh-CN')}`}>
+                                  {new Date(conv.updatedAt).toLocaleDateString('zh-CN', {
+                                    month: 'short',
+                                    day: 'numeric'
+                                  })}
+                                </span>
+                                {conv.model && (
                                   <>
-                                    <div className="w-3 h-3 border border-primary border-t-transparent rounded-full animate-spin"></div>
-                                    加载中...
+                                    <span>•</span>
+                                    <span className="px-1.5 py-0.5 rounded text-xs bg-muted/50 text-muted-foreground">
+                                      {conv.model.split('-')[0]}
+                                    </span>
                                   </>
-                                ) : (
-                                  <span>{conv.messages.length} 条消息</span>
                                 )}
                               </div>
                             </div>
@@ -418,46 +493,16 @@ export default function WorkspacePage() {
                                     复制链接
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
-                                  <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                      <DropdownMenuItem
-                                        className="text-destructive focus:text-destructive"
-                                        onSelect={(e) => {
-                                          e.preventDefault()
-                                          e.stopPropagation()
-                                        }}
-                                      >
-                                        删除对话
-                                      </DropdownMenuItem>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent onClick={(e) => e.stopPropagation()}>
-                                      <AlertDialogHeader>
-                                        <AlertDialogTitle>删除对话</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                          将删除&ldquo;{conv.title}&rdquo;
-                                          {conv.messages?.length ? `（${conv.messages.length} 条消息）` : ''}。
-                                          此操作不可撤销。
-                                        </AlertDialogDescription>
-                                      </AlertDialogHeader>
-                                      <AlertDialogFooter>
-                                        <AlertDialogCancel>取消</AlertDialogCancel>
-                                        <AlertDialogAction
-                                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            const msgCount = conv.messages?.length ?? 0
-                                            handleDeleteConversation(conv.id)
-                                            toast({
-                                              title: '已删除对话',
-                                              description: `"${conv.title}" 已删除（${msgCount} 条消息）。`,
-                                            })
-                                          }}
-                                        >
-                                          确认删除
-                                        </AlertDialogAction>
-                                      </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                  </AlertDialog>
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={(e) => {
+                                      e.preventDefault()
+                                      e.stopPropagation()
+                                      handleOpenDeleteConfirm(conv)
+                                    }}
+                                  >
+                                    删除对话
+                                  </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </div>
@@ -491,23 +536,42 @@ export default function WorkspacePage() {
           <div className="flex-1 flex justify-center px-4 md:px-6 min-h-0 overflow-hidden">
             <div className="w-full max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl flex flex-col h-full">
               <SmartChatCenterV2
-                data-testid="chat-center"
-                conversation={currentConversation || undefined}
-                conversations={conversations}
-                selectedModel={selectedModel}
-                selectedText=""
-                editorContextEnabled={false}
-                editorContent=""
+                conversationId={currentConversation?.id}
                 onUpdateConversation={handleUpdateConversation}
                 onCreateConversation={handleCreateConversation}
-                onDeleteConversation={handleDeleteConversation}
                 onSelectConversation={handleSelectConversation}
-                onSelectedModelChange={setSelectedModel}
               />
             </div>
           </div>
         </div>
       </div>
+
+      {/* 顶层删除确认对话框 */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>删除对话</AlertDialogTitle>
+            <AlertDialogDescription>
+              {conversationToDelete && (
+                <>
+                  将删除&ldquo;{conversationToDelete.title}&rdquo;
+                  {conversationToDelete.metadata?.messageCount ? `（${conversationToDelete.metadata.messageCount} 条消息）` : ''}。
+                  此操作不可撤销。
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelDelete}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleConfirmDelete}
+            >
+              确认删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
