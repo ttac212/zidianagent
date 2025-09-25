@@ -29,3 +29,8 @@ next-env.d.ts
 playwright-report/
 test-results/
 playwright/.cache/
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
