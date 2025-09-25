@@ -1,0 +1,11 @@
+total 18564
+drwxr-xr-x 1 ADMIN 197121       0  9月 25 15:48 .
+drwxr-xr-x 1 ADMIN 197121       0  9月 25 15:46 ..
+-rw-r--r-- 1 ADMIN 197121    1902  9月 25 15:48 BACKUP_INFO.txt
+-rw-r--r-- 1 ADMIN 197121       0  9月 25 15:48 BACKUP_SUMMARY.txt
+-rw-r--r-- 1 ADMIN 197121 8564736  9月 25 15:47 main_dev.db
+drwxr-xr-x 1 ADMIN 197121       0  9月 25 15:47 migrations
+-rw-r--r-- 1 ADMIN 197121 9867264  9月 25 15:47 prisma_dev.db
+-rw-r--r-- 1 ADMIN 197121   32768  9月 25 15:47 prisma_dev.db-shm
+-rw-r--r-- 1 ADMIN 197121  519152  9月 25 15:47 prisma_dev.db-wal
+-rw-r--r-- 1 ADMIN 197121   13244  9月 25 15:47 schema.prisma

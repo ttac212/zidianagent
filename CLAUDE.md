@@ -2,333 +2,158 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 项目概览
+## 项目概述
 
-智点AI平台 - 基于 Next.js 15 + React 19 + TypeScript 的智能对话平台，采用 App Router 架构。核心功能包括AI聊天、文档管理、商家数据分析、视频内容洞察、连接可靠性监控等。
+**智点AI平台** - Next.js 15 + React 19 + TypeScript 智能对话平台
+- **端口**: 3007
+- **包管理**: pnpm 9.6.0（必须使用pnpm，不要使用npm/yarn）
+- **数据库**: Prisma + SQLite（开发）/ PostgreSQL（生产）
+- **AI服务**: 302.AI API代理（支持Claude、Gemini、GPT等模型）
 
-**应用端口**: 3007（开发和生产环境）  
-**包管理器**: pnpm 9.6.0（必须使用pnpm，不要使用npm/yarn）  
-**Node版本**: 22.17.2+  
-**TypeScript**: 严格模式启用
+## 常用命令
 
-## 常用开发命令
-
-### 开发与构建
+### 开发环境
 ```bash
-pnpm dev:fast              # ⚡ Turbopack开发服务器 (推荐 - 修复热加载问题)
-pnpm dev                   # ⚠️ Webpack开发服务器 (存在API路由编译错误)
-pnpm dev:debug             # 调试模式（Node.js inspector）
-pnpm build                 # 构建生产版本
-pnpm build:safe            # 安全构建（含验证）
-pnpm build:prod            # 生产构建（含安全检查）
-pnpm start                 # 启动生产服务器
-pnpm lint                  # ESLint检查
-tsc --noEmit               # TypeScript类型检查
-
-# 安全与部署
-pnpm security:check        # 安全检查
-pnpm security:check:prod   # 生产安全检查
-pnpm pre-deploy            # 部署前验证
-pnpm deploy:validate       # 部署验证（security + pre-deploy）
+pnpm dev            # 启动开发服务器（Turbopack模式，端口3007）
+pnpm build          # 构建生产版本
+pnpm lint           # ESLint代码检查
+pnpm type-check     # TypeScript类型检查
+pnpm check          # 运行lint + type-check + test:run
+pnpm deploy:check   # 生产部署前的完整检查
 ```
 
 ### 数据库操作
 ```bash
-pnpm db:generate           # 生成Prisma客户端（修改schema后必须执行）
-pnpm db:push               # 快速同步数据库（开发环境）
-pnpm db:seed               # 运行数据库种子
-pnpm db:studio             # Prisma Studio可视化管理
-npx prisma migrate dev     # 创建迁移
-npx prisma migrate deploy  # 应用迁移（生产环境）
+pnpm db:generate    # Prisma Client生成（修改schema后必须运行）
+pnpm db:push        # 同步schema到数据库（开发环境）
+pnpm db:migrate     # 创建并执行迁移（生产环境）
+pnpm db:studio      # Prisma Studio可视化管理
 ```
 
 ### 测试
 ```bash
-# 单元测试（Vitest）
-pnpm test                  # 运行测试（watch模式）
-pnpm test:run              # 单次运行所有测试
-vitest run <file>          # 运行单个测试文件
-pnpm test:ui               # 测试UI界面
+pnpm test           # Vitest单元测试（watch模式）
+pnpm test:run       # 运行所有测试（单次）
+pnpm test:e2e       # Playwright E2E测试
 
-# 端到端测试（Playwright）
-pnpm test:e2e              # 基础E2E测试
-pnpm test:e2e:ui           # 交互式测试界面
-pnpm test:e2e:debug        # 调试模式
-pnpm test:e2e:codegen      # 生成测试代码
-pnpm test:e2e:report       # 查看测试报告
-pnpm test:e2e:concurrent   # 高并发测试（8workers）
-pnpm test:e2e:stress       # 压力测试（12workers）
-pnpm test:e2e:extreme      # 极限测试（300并发）
-pnpm test:e2e:basic        # 单线程基础测试
-
-# 分阶段测试
-pnpm test:phase0           # 阶段0：基础检查
-pnpm test:phase1           # 阶段1：单元测试
-pnpm test:phase2           # 阶段2：集成测试
-pnpm test:phase3           # 阶段3：E2E测试
-pnpm test:full             # 运行全部测试阶段
+# 运行单个测试文件
+npx vitest tests/specific-test.test.ts
 ```
 
-### 诊断与调试
+### 常用脚本
 ```bash
-pnpm health:check          # 完整健康检查
-pnpm health:quick          # 快速健康检查
-pnpm debt:track            # 技术债务追踪
-node scripts/diagnose-health-api.js  # 诊断健康API问题
-node scripts/diagnose-usage-stats.ts # 检查使用量统计问题
-node scripts/check-encoding-issues.js # 检查文件编码问题
-pnpm monitor               # 性能监控
-
-# 环境配置
-pnpm env:validate          # 验证环境变量
-pnpm env:toggle            # 切换环境配置
-```
-
-### 数据备份
-```bash
-pnpm backup:db             # 备份数据库
-pnpm backup:full           # 完整备份（含压缩）
-pnpm backup:schema         # 仅备份schema
-pnpm backup:auto           # 自动备份调度器
-pnpm backup:test           # 测试备份功能
-pnpm restore:db            # 恢复数据库
-pnpm restore:help          # 恢复帮助文档
-```
-
-### 商家数据管理
-```bash
-pnpm import:merchants      # 导入商家数据
-pnpm verify:merchants      # 验证导入结果
-pnpm test:features         # 测试商家功能
+npx tsx scripts/backfill-last-message-at.ts    # 回填历史对话时间戳
+npx tsx scripts/diagnose-usage-stats.ts        # 诊断用量统计
+npx tsx scripts/project-health-check.js        # 项目健康检查
 ```
 
 ## 核心架构
 
-### 认证与安全
-- **NextAuth**: 基于JWT的认证系统，配置在`app/api/auth/[...nextauth]/route.ts`
-- **邀请码系统**: 支持使用限制、有效期、权限配置
-- **速率限制**: 多层级限制（用户/IP/API端点）
-- **内容过滤**: 消息内容安全验证
+### 聊天系统架构（事件驱动 + SSE流式处理）
+- **SSE流式响应**: 使用原生fetch实现（`hooks/use-chat-actions.ts`），无第三方依赖
+- **事件协议**: `started` → `chunk` → `done`/`error` 事件流，支持状态管理
+- **上下文管理**: 统一裁剪器（`lib/chat/context-trimmer.ts`），前后端共享规则
+- **消息持久化**: 冗余存储用户ID优化查询，支持token使用统计
+- **虚拟滚动**: 超过100条消息自动启用，优化长对话性能
 
-### 聊天系统
-核心组件位于 `components/chat/smart-chat-center-v2-fixed.tsx`：
+### 认证系统（NextAuth + 邀请码）
+- **开发环境**: 支持开发登录码，快速调试
+- **生产环境**: 严格邀请码验证，支持使用次数限制和过期时间
+- **中间件缓存**: Token缓存5分钟，减少数据库查询
+- **权限控制**: 用户角色和月度Token配额管理
 
-- **状态管理**: `hooks/use-chat-state.ts` - useReducer管理聊天状态
-- **消息发送**: `hooks/use-chat-actions-fixed.ts` - 纯fetch实现SSE流（不使用AI SDK）
-- **对话管理**: `stores/conversation-store.ts` - Zustand统一状态管理
-- **虚拟滚动**: 100条消息阈值，自动启用优化渲染
-- **时间轴导航**: `components/chat/timeline-scrollbar.tsx` - 混合时间/结构定位算法
-- **API端点**: `/api/chat` - 代理302.AI请求，支持流式响应
+### API Key管理（多模型支持）
+- **多Key架构**: 按模型提供商智能选择API Key
+  ```typescript
+  // Claude模型使用专用Key，其他模型fallback到通用Key
+  if (modelId.includes('claude')) {
+    apiKey = process.env.LLM_CLAUDE_API_KEY || process.env.LLM_API_KEY
+  }
+  ```
+- **错误恢复**: Key失效时自动fallback到备用Key
 
-### API路由结构
-```
-app/api/
-├── auth/          # 认证系统（NextAuth）
-├── chat/          # 聊天核心（SSE流式响应）
-├── conversations/ # 对话管理CRUD
-├── health/        # 健康检查（增强诊断）
-├── users/         # 用户和使用量统计
-├── merchants/     # 商家数据分析
-└── model-stats/   # 模型使用统计
-```
+### 数据库设计优化
+- **Conversation**: 冗余lastMessageAt字段，优化排序查询
+- **Message**: 冗余userId字段，避免JOIN查询配额统计
+- **UsageStats**: 按天聚合，支持按模型分类统计
+- **关键索引**: `@@index([userId, lastMessageAt(sort: Desc)])` 优化对话列表
 
-### 多KEY架构
-`lib/ai/key-manager.ts` 实现智能Key管理：
-1. 模型专属Key匹配（LLM_CLAUDE_API_KEY等）
-2. 供应商推断（claude-* → Claude Key）
-3. 通用Key回退机制（LLM_API_KEY）
+### 前端架构（React 19 + TypeScript）
+- **状态管理**: React Query（服务器状态）+ useReducer（复杂本地状态）
+- **组件设计**: shadcn/ui原子组件，Radix UI底层实现
+- **性能优化**: 虚拟滚动、动态导入、图片懒加载
+- **错误边界**: 统一ErrorBoundary + Sonner Toast系统
 
-### 数据库模型（Prisma）
-- **User**: 用户管理，角色权限，邀请码关联
-- **InviteCode**: 邀请码系统，使用限制和权限配置
-- **Conversation/Message**: 聊天记录，token统计
-- **UsageStats**: 使用量统计（双模式：总量/_total + 按模型）
-- **Merchant/MerchantContent**: 商家数据和内容管理
-- **Document**: 文档管理，支持外部资源
+### 商家数据分析系统
+- **多维分析**: 按分类、地区、业务类型统计商家和内容数据
+- **内容聚合**: 支持视频、文章、图片等多媒体类型
+- **社交指标**: 点赞、评论、收藏、分享数统计和趋势分析
+- **标签系统**: JSON存储灵活标签，支持复杂查询和分析
 
 ## 环境配置
 
-### 必需环境变量
+### 必需环境变量（.env.local）
 ```env
+# NextAuth配置
 NEXTAUTH_URL=http://localhost:3007
-NEXTAUTH_SECRET=<强随机字符串，至少32字符，使用 openssl rand -hex 32 生成>
+NEXTAUTH_SECRET=<使用 openssl rand -hex 32 生成>
+
+# 数据库
 DATABASE_URL=file:./prisma/dev.db
-NEXT_PUBLIC_CONNECTION_MONITORING=enabled
-```
 
-### AI服务配置
-```env
+# AI API配置（支持多Provider Key）
 LLM_API_BASE=https://api.302.ai/v1
-LLM_API_KEY=<通用Key>
-MODEL_ALLOWLIST=claude-opus-4-1-20250805,gemini-2.5-pro
+LLM_API_KEY=<你的302.AI通用Key>
+LLM_CLAUDE_API_KEY=<Claude专用Key（可选）>
+LLM_GEMINI_API_KEY=<Gemini专用Key（可选）>
+
+# 模型白名单
+MODEL_ALLOWLIST=claude-opus-4-1-20250805,gemini-2.5-pro,claude-3-5-haiku-20241022
+
+# 功能开关
+NEXT_PUBLIC_CONNECTION_MONITORING=enabled
+
+# 开发环境配置（可选）
+DEV_LOGIN_CODE=dev123  # 开发环境快速登录码
 ```
 
-### 多KEY配置（可选）
-```env
-LLM_CLAUDE_API_KEY=<Claude专用Key>
-LLM_GEMINI_API_KEY=<Gemini专用Key>
-LLM_OPENAI_API_KEY=<OpenAI专用Key>
-```
+## 关键工作流程
 
-详细配置参见 `.env.example` 文件
-
-## 开发注意事项
-
-### ⚠️ 已知问题：Webpack模式热加载
-**问题**: 标准 `pnpm dev` 存在API路由编译错误：
-```
-⨯ [Error: ENOENT: no such file or directory, open '.next\server\app\api\health\route.js']
-```
-**解决方案**: 使用Turbopack模式 `pnpm dev:fast` 可完全修复此问题
-
-### 性能优化
-- 使用`pnpm dev:fast`启动Turbopack（编译速度0.75s vs 14.6s）
-- 长对话>100条消息自动启用虚拟滚动
-- webpack已配置内存缓存（开发环境优化）
-- 生产环境自动清理console（保留error/warn）
-
-### Z-Index层级（已优化）
-```
-z-[100]: Toast通知
-z-[60]:  Tooltip弹出层（全局）
-z-50:    Modal对话框 + Header组件
-z-[45]:  ConnectionStatus组件
-z-[35]:  时间轴切换按钮
-z-[25]:  时间轴激活圆点
-z-20:    侧边栏
-z-[15]:  移动端遮罩层 + 时间轴圆点悬停
-z-10:    基础交互元素
-```
-
-### 数据库开发流程
+### Prisma开发流程
 1. 修改 `prisma/schema.prisma`
-2. 运行 `pnpm db:generate` 生成客户端（必须）
-3. 开发环境用 `pnpm db:push` 快速同步
-4. 生产环境用 `npx prisma migrate dev` 创建迁移
-5. 测试前运行 `npx prisma db push` 确保同步
+2. 运行 `pnpm db:generate` 生成Prisma Client
+3. 开发环境: `pnpm db:push` 直接同步
+4. 生产环境: `pnpm db:migrate` 创建迁移文件
+5. 索引修改后需要运行数据回填脚本（如适用）
 
-### E2E测试配置
-- **测试目录**: `e2e/` - Playwright端到端测试
-- **并发配置**: 支持1-300并发worker（通过CONCURRENT_WORKERS环境变量）
-- **测试模式**: 基础/并发/压力/极限四种模式
-- **全局设置**: `e2e/global-setup.ts` - 测试前准备
-- **报告输出**: HTML + JSON格式，位于`test-results/`
+### 消息上下文优化
+- 修改 `lib/constants/message-limits.ts` 调整token预算
+- `trimForChatAPI()` 用于API调用，`trimForDisplay()` 用于界面显示
+- 长文本用户配置: API 180k tokens，显示 500k tokens
 
-### 聊天功能实现
-- **SSE流处理**: `hooks/use-chat-actions-fixed.ts` - 纯fetch实现，不依赖AI SDK
-- **虚拟滚动**: `lib/config/chat-config.ts` - 100条消息自动启用
-- **使用量记录**: Message → User → UsageStats双重更新
-- **模型选择**: `hooks/use-model-state.ts` - 支持动态切换
-- **状态管理**: `stores/conversation-store.ts` - Zustand统一管理
-- **字符限制**: `lib/constants/message-limits.ts` - 20000字符上限
+### 数据库性能监控
+- 使用 `scripts/project-health-check.js` 监控数据库健康状态
+- 关注对话列表查询性能（依赖 lastMessageAt 索引）
+- 使用量统计查询优化（按日期和模型聚合）
 
-### 关键技术栈
-- **前端**: Next.js 15 + React 19 + TypeScript
-- **UI组件**: Radix UI + Tailwind CSS v4 + Framer Motion
-- **状态管理**: React Hooks (useReducer + Context) + Zustand
-- **数据库**: Prisma + SQLite (开发) / PostgreSQL (生产推荐)
-- **认证**: NextAuth v4
-- **AI集成**: 302.AI API代理，支持Claude/Gemini/OpenAI
-- **测试**: Vitest + Testing Library + Playwright（支持极限并发测试）
-- **包管理**: pnpm 9.6.0
-- **TypeScript配置**: 严格模式，路径别名 `@/*`
+## 核心文件结构
 
-## 常见问题排查
+### API路由
+- `app/api/chat/route.ts` - SSE流式聊天API，包含权限验证和消息存储
+- `app/api/conversations/[id]/route.ts` - 单个对话管理
+- `app/api/users/[id]/model-stats/route.ts` - 用户使用量统计
 
-### 健康检查503错误
-```bash
-node scripts/diagnose-health-api.js  # 诊断问题
-# 确保 NEXT_PUBLIC_CONNECTION_MONITORING=enabled
-```
+### 关键Hooks
+- `hooks/use-chat-actions.ts` - 聊天消息发送，事件驱动架构
+- `hooks/use-conversations.ts` - React Query对话状态管理
+- `hooks/use-chat-state.ts` - 本地聊天状态管理
 
-### 使用量统计异常
-```bash
-node scripts/diagnose-usage-stats.ts  # 检查统计问题
-npx prisma db push                    # 同步schema
-```
+### 核心工具库
+- `lib/chat/context-trimmer.ts` - 统一的消息上下文裁剪器
+- `lib/ai/key-manager.ts` - 多模型API Key选择策略
+- `lib/constants/message-limits.ts` - 消息长度和token配置
+- `lib/prisma.ts` - Prisma客户端单例，包含SQLite优化
 
-### 数据库问题
-```bash
-node scripts/db-integrity-check.ts    # 检查数据完整性
-pnpm backup:db                        # 备份当前数据
-pnpm restore:db                       # 恢复数据库
-```
-
-### 编码问题
-```bash
-node scripts/check-encoding-issues.js # 检查文件编码问题
-# 常见问题：混合换行符（LF和CRLF）、乱码字符
-```
-
-### 调试技巧
-```bash
-pnpm dev:debug                        # 启用Node.js调试（端口9229）
-# Chrome DevTools: chrome://inspect
-```
-
-## 安全注意事项
-
-### 生产部署前必须
-```bash
-pnpm security:check:prod   # 安全检查
-pnpm pre-deploy           # 部署前验证
-pnpm build:prod           # 生产构建
-```
-
-### 生产环境必须删除的配置
-- DEV_LOGIN_CODE
-- NEXT_PUBLIC_DEV_LOGIN_CODE
-- 所有DEBUG相关配置
-
-### 邀请码管理
-```bash
-node scripts/generate-secure-invite-codes.js  # 生成安全邀请码
-node scripts/check-invite-codes.js           # 检查邀请码状态
-```
-
-## Git检查点
-
-- `v20250911-optimization`: 优化前版本
-- `v20250911-optimized`: 优化后版本
-- `feature/2025-09-09`: 当前开发分支
-- `20250917`: 当前工作分支
-
-回滚命令：
-```bash
-git checkout v20250911-optimization  # 完全回滚
-git checkout v20250911-optimization -- [文件路径]  # 恢复特定文件
-```
-
-## 工作流注意事项
-
-### 开发流程
-1. **启动开发服务器**: 始终使用 `pnpm dev:fast`（Turbopack模式）
-2. **数据库修改**: 修改schema后必须执行 `pnpm db:generate`
-3. **类型检查**: 提交前运行 `tsc --noEmit` 确保类型正确
-4. **测试运行**: 单个测试文件使用 `vitest run <file>`
-
-### 代码提交前检查
-```bash
-pnpm lint                  # ESLint检查
-tsc --noEmit              # TypeScript类型检查
-pnpm test:run             # 运行所有测试
-pnpm security:check        # 安全检查（生产前必须）
-```
-
-## 重要提示
-
-### API路由编译问题
-使用 `pnpm dev:fast`（Turbopack）避免Webpack模式下的API路由编译错误。
-
-### 聊天功能注意
-- 使用纯fetch实现SSE流，不依赖AI SDK
-- 消息发送hook: `use-chat-actions-fixed.ts`（已修复版本）
-- 避免使用废弃的 `use-chat-actions.ts`
-
-### 状态管理
-- 优先使用Zustand store (`stores/conversation-store.ts`)
-- 避免在多个地方管理相同状态
-
-### 编码问题
-- 项目中存在混合换行符（LF和CRLF），但不影响运行
-- 如发现乱码，运行 `node scripts/check-encoding-issues.js` 检查
+### 认证和中间件
+- `auth.ts` - NextAuth配置，邀请码验证
+- `middleware.ts` - 路由保护，token缓存，速率限制

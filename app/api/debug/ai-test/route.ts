@@ -2,7 +2,7 @@ import { NextRequest } from "next/server"
 import { selectApiKey } from "@/lib/ai/key-manager"
 
 // 直接测试AI服务连接
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   if (process.env.NODE_ENV === 'production') {
     return new Response('Not available in production', { status: 403 })
   }
@@ -17,9 +17,7 @@ export async function GET(request: NextRequest) {
     const apiKey = keySelection.apiKey
     const endpoint = `${base}/chat/completions`
 
-    console.log(`[AI-TEST] Testing endpoint: ${endpoint}`)
-    console.log(`[AI-TEST] Using key: ${apiKey.slice(0, 10)}...`)
-    console.log(`[AI-TEST] Model: ${model}`)
+    // Test endpoint configuration (debug info available in logs)
 
     const payload = {
       model: model,
@@ -49,7 +47,7 @@ export async function GET(request: NextRequest) {
     const response = await fetch(endpoint, fetchOptions)
 
     const duration = Date.now() - startTime
-    console.log(`[AI-TEST] Response status: ${response.status}, duration: ${duration}ms`)
+    // Response status and duration included in API response
 
     if (!response.ok) {
       let errorBody: any = null
@@ -90,8 +88,8 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error: any) {
-    console.error('[AI-TEST] Error:', error)
-    
+    // Error details included in API response
+
     return new Response(JSON.stringify({
       success: false,
       error: error.message,

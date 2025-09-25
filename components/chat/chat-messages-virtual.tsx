@@ -45,7 +45,7 @@ export const ChatMessagesVirtual = forwardRef<HTMLDivElement, ChatMessagesProps>
   error,
   onCopyMessage,
   onRetryMessage,
-  typingMode = 'thinking',
+  responsePhase = 'idle',
   previewContent = ''
 }, ref) => {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -187,10 +187,10 @@ export const ChatMessagesVirtual = forwardRef<HTMLDivElement, ChatMessagesProps>
           {/* 消息列表 */}
           {renderedMessages}
 
-          {/* AI思考指示器 - 支持双状态 */}
-          <TypingIndicator 
+          {/* 生成过程指示器 */}
+          <TypingIndicator
             isVisible={isLoading}
-            mode={typingMode}
+            phase={responsePhase}
             previewContent={previewContent}
           />
 

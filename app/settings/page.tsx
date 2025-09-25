@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
 import { Header } from "@/components/header"
-import { toast } from "sonner"
+import { toast } from "@/lib/toast/toast"
 import { useSession, signOut } from "next-auth/react"
 import {
   User,

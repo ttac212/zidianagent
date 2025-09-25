@@ -14,19 +14,15 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
-import { 
+import {
   ArrowLeft,
-  BarChart3, 
-  TrendingUp, 
+  BarChart3,
+  TrendingUp,
   TrendingDown,
-  Users,
   Heart,
   MessageCircle,
   Share2,
   Star,
-  Calendar,
-  Tag,
-  Clock,
   Eye
 } from 'lucide-react'
 import type { MerchantWithDetails } from '@/types/merchant'
@@ -87,7 +83,7 @@ export default function MerchantAnalyticsPage() {
         setAnalytics(data)
       } else {
         }
-    } catch (error) {
+    } catch {
       } finally {
       setLoading(false)
     }

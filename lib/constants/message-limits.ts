@@ -4,19 +4,36 @@
  */
 export const MESSAGE_LIMITS = {
   // 单条消息最大长度
-  MAX_LENGTH: 15000,
-  
+  MAX_LENGTH: 150000,
+
   // 显示字符计数器的阈值
   SHOW_COUNTER_THRESHOLD: 10000,
-  
+
   // 警告阈值（接近最大限制时显示警告）
   WARNING_THRESHOLD: 13000,
-  
+
   // 危险阈值（即将超出限制）
-  DANGER_THRESHOLD: 14500,
-  
+  DANGER_THRESHOLD: 145000,
+
   // 消息截断时的后缀提示
-  TRUNCATION_SUFFIX: '\n\n[消息已被截断，请分段发送]'
+  TRUNCATION_SUFFIX: '\n\n[消息已被截断，请分段发送]',
+
+  // 上下文裁剪配置
+  CONTEXT_LIMITS: {
+    // API调用时的裁剪配置（长文本优化版本）
+    API: {
+      maxMessages: 120,      // 最大消息数量
+      maxTokens: 180000,     // 最大token预算（Claude上下文窗口约200k，预留20k缓冲）
+      reserveTokens: 40000   // 为回复预留token
+    },
+
+    // 显示时的裁剪配置（较为宽松）
+    DISPLAY: {
+      maxMessages: 200,     // 客户端可显示更多长对话
+      maxTokens: 500000,    // 内存限制更宽松（纯显示用途）
+      reserveTokens: 0      // 显示时不需要预留token
+    }
+  }
 } as const
 
 /**

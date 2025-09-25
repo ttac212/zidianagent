@@ -28,25 +28,16 @@ export async function GET(
             totalTokens: true,
             createdAt: true,
             updatedAt: true,
+            lastMessageAt: true,
           },
-          orderBy: { updatedAt: 'desc' },
-          take: 5, // 最近5个对话
-        },
-        documents: {
-          select: {
-            id: true,
-            title: true,
-            wordCount: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-          orderBy: { updatedAt: 'desc' },
-          take: 5, // 最近5个文档
+          orderBy: { lastMessageAt: 'desc' },
+          take: 5, // 最近5个对话（按最后消息时间排序，利用现有索引）
         },
         usageStats: {
           select: {
             date: true,
-            totalTokens: true,
+            promptTokens: true,
+            completionTokens: true,
             apiCalls: true,
             modelId: true,          // 新增
             modelProvider: true,    // 新增
@@ -57,8 +48,7 @@ export async function GET(
         _count: {
           select: {
             conversations: true,
-            documents: true,
-            feedbacks: true,
+            messages: true,
           }
         }
       }
@@ -200,7 +190,7 @@ export async function DELETE(
     }
     
     // 软删除：更新状态为 DELETED
-    const deletedUser = await prisma.user.update({
+    const _deletedUser = await prisma.user.update({
       where: { id },
       data: {
         status: 'DELETED',

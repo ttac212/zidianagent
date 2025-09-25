@@ -2,7 +2,7 @@ import { NextRequest } from "next/server"
 import { selectApiKey, getKeyHealthStatus } from "@/lib/ai/key-manager"
 
 // 开发环境调试API - 检查环境变量加载状态
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   if (process.env.NODE_ENV === 'production') {
     return new Response('Not available in production', { status: 403 })
   }

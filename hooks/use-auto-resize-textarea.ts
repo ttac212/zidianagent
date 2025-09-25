@@ -5,9 +5,10 @@ import { useCallback, useEffect, useRef } from "react"
 export interface UseAutoResizeTextareaOptions {
   minHeight: number
   maxHeight?: number
+  value?: string // 新增：监听值变化自动重置
 }
 
-export function useAutoResizeTextarea({ minHeight, maxHeight }: UseAutoResizeTextareaOptions) {
+export function useAutoResizeTextarea({ minHeight, maxHeight, value }: UseAutoResizeTextareaOptions) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const scrollTimerRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -70,6 +71,16 @@ export function useAutoResizeTextarea({ minHeight, maxHeight }: UseAutoResizeTex
     window.addEventListener("resize", handler)
     return () => window.removeEventListener("resize", handler)
   }, [adjustHeight])
+
+  // 监听value变化，自动调整高度（包括模板注入、快捷按钮等所有外部写入）
+  useEffect(() => {
+    // 每次value变化都调整高度，空值时传true实现reset
+    const adjustHeightForValue = () => {
+      adjustHeight(value === '')
+    }
+    const frameId = requestAnimationFrame(adjustHeightForValue)
+    return () => cancelAnimationFrame(frameId)
+  }, [value, adjustHeight])
 
   // 组件卸载时清理定时器
   useEffect(() => {

@@ -1,178 +1,58 @@
 /**
- * AI模型API Key管理器
- * 支持按模型自动选择对应的API Key
+ * API Key管理 - 多Key架构
+ * 每个模型提供商使用独立的API Key
  */
 
-interface KeyConfig {
-  key: string
-  provider: string
-  models: string[]
-}
+export function selectApiKey(modelId: string): KeySelectionResult {
+  let apiKey = ''
+  let provider = 'Unknown'
 
-// API Key配置映射
-const KEY_CONFIGS: KeyConfig[] = [
-  {
-    key: process.env.LLM_CLAUDE_API_KEY || '',
-    provider: 'Claude',
-    models: ['claude-opus-4-1-20250805', 'claude-3-5-sonnet', 'claude-3-opus']
-  },
-  {
-    key: process.env.LLM_GEMINI_API_KEY || '',
-    provider: 'Google',
-    models: ['gemini-2.5-pro', 'gemini-1.5-pro']
-  },
-  {
-    key: process.env.LLM_OPENAI_API_KEY || '',
-    provider: 'OpenAI',
-    models: ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo']
+  // 根据模型ID选择对应的API Key
+  if (modelId.includes('claude')) {
+    provider = 'Claude'
+    // 优先使用Claude专用Key，如果没有则使用通用Key
+    apiKey = process.env.LLM_CLAUDE_API_KEY || process.env.LLM_API_KEY || ''
+  } else if (modelId.includes('gemini')) {
+    provider = 'Google'
+    // 优先使用Gemini专用Key，如果没有则使用通用Key
+    apiKey = process.env.LLM_GEMINI_API_KEY || process.env.LLM_API_KEY || ''
+  } else if (modelId.includes('gpt')) {
+    provider = 'OpenAI'
+    // 优先使用OpenAI专用Key，如果没有则使用通用Key
+    apiKey = process.env.LLM_OPENAI_API_KEY || process.env.LLM_API_KEY || ''
+  } else {
+    // 其他模型使用通用Key
+    apiKey = process.env.LLM_API_KEY || ''
   }
-]
 
-// 回退API Key（兼容旧配置）
-const FALLBACK_KEY = process.env.LLM_API_KEY || ''
+  // 如果没有找到合适的Key，记录警告
+  if (!apiKey) {
+    console.warn(`[KeyManager] No API key found for model: ${modelId} (provider: ${provider})`)
+  }
+
+  return { apiKey, provider }
+}
 
 export interface KeySelectionResult {
   apiKey: string
   provider: string
-  keySource: 'specific' | 'fallback' | 'none'
-  confidence: 'high' | 'medium' | 'low'
 }
 
-/**
- * 根据模型ID选择最合适的API Key
- */
-export function selectApiKey(modelId: string): KeySelectionResult {
-  // 1. 精确匹配：在配置中查找支持该模型的专属key
-  for (const config of KEY_CONFIGS) {
-    if (config.key && config.models.includes(modelId)) {
-      const result: KeySelectionResult = {
-        apiKey: config.key,
-        provider: config.provider,
-        keySource: 'specific',
-        confidence: 'high'
-      }
-      return result
-    }
-  }
-
-  // 2. 模糊匹配：根据模型名称推断供应商
-  const modelLower = modelId.toLowerCase()
-  for (const config of KEY_CONFIGS) {
-    if (!config.key) continue
-
-    const providerMatches = [
-      { provider: 'Claude', patterns: ['claude'] },
-      { provider: 'Google', patterns: ['gemini', 'palm', 'bard'] },
-      { provider: 'OpenAI', patterns: ['gpt', 'text-davinci', 'text-ada'] }
-    ]
-
-    const match = providerMatches.find(pm =>
-      pm.provider === config.provider &&
-      pm.patterns.some(pattern => modelLower.includes(pattern))
-    )
-
-    if (match) {
-      const result: KeySelectionResult = {
-        apiKey: config.key,
-        provider: config.provider,
-        keySource: 'specific',
-        confidence: 'medium'
-      }
-      return result
-    }
-  }
-
-  // 3. 回退到统一KEY（保持兼容性）
-  if (FALLBACK_KEY) {
-    const result: KeySelectionResult = {
-      apiKey: FALLBACK_KEY,
-      provider: 'Unknown',
-      keySource: 'fallback',
-      confidence: 'low'
-    }
-    return result
-  }
-
-  // 4. 无可用Key - 返回错误状态而不是抛出异常
-  const result: KeySelectionResult = {
-    apiKey: '',
-    provider: 'None',
-    keySource: 'none',
-    confidence: 'low'
-  }
-  return result
-}
-
-/**
- * 获取所有已配置的Key信息（用于健康检查）
- */
+// 健康检查
 export function getKeyHealthStatus() {
-  const status = {
-    configuredKeys: 0,
-    availableProviders: [] as string[],
-    fallbackKey: !!FALLBACK_KEY,
-    keyStatus: {} as Record<string, boolean>
+  const hasClaudeKey = !!process.env.LLM_CLAUDE_API_KEY
+  const hasGeminiKey = !!process.env.LLM_GEMINI_API_KEY
+  const hasOpenAIKey = !!process.env.LLM_OPENAI_API_KEY
+  const hasFallbackKey = !!process.env.LLM_API_KEY
+
+  return {
+    hasKey: hasClaudeKey || hasGeminiKey || hasOpenAIKey || hasFallbackKey,
+    keys: {
+      claude: hasClaudeKey,
+      gemini: hasGeminiKey,
+      openai: hasOpenAIKey,
+      fallback: hasFallbackKey
+    },
+    apiBase: process.env.LLM_API_BASE || 'https://api.302.ai/v1'
   }
-
-  KEY_CONFIGS.forEach(config => {
-    if (config.key) {
-      status.configuredKeys++
-      status.availableProviders.push(config.provider)
-      status.keyStatus[config.provider] = true
-    } else {
-      status.keyStatus[config.provider] = false
-    }
-  })
-
-  return status
-}
-
-/**
- * 验证特定模型的Key配置
- */
-export function validateModelKeyConfig(modelId: string): {
-  isValid: boolean
-  keyInfo: KeySelectionResult
-  recommendation?: string
-} {
-  const keyInfo = selectApiKey(modelId)
-  
-  const validation = {
-    isValid: !!keyInfo.apiKey,
-    keyInfo,
-    recommendation: undefined as string | undefined
-  }
-
-  if (!keyInfo.apiKey) {
-    validation.recommendation = `请配置 ${modelId} 对应供应商的API Key`
-  } else if (keyInfo.confidence === 'low') {
-    validation.recommendation = `建议为 ${modelId} 配置专属API Key以提高稳定性`
-  }
-
-  return validation
-}
-
-/**
- * 开发环境调试工具
- */
-export const KeyDebugTools = {
-  showAllKeys: () => {
-    KEY_CONFIGS.forEach(config => {
-      })
-  },
-
-  testKeySelection: (modelId: string) => {
-    const result = selectApiKey(modelId)
-    return result
-  },
-
-  getAllSupportedModels: () => {
-    const allModels = KEY_CONFIGS.flatMap(config => config.models)
-    return allModels
-  }
-}
-
-// 开发环境暴露调试工具
-if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
-  (window as any).KeyDebugTools = KeyDebugTools
 }

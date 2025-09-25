@@ -119,8 +119,6 @@ export default defineConfig({
   expect: {
     // 降低期望超时以快速失败
     timeout: 3000,
-    // 截图比较容差
-    threshold: 0.3,
     // 动画处理
     toHaveScreenshot: { threshold: 0.3, animations: 'disabled' },
     toMatchSnapshot: { threshold: 0.3 }

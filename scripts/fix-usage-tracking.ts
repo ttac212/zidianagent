@@ -30,7 +30,10 @@ async function fixUsageTracking() {
     const messagesWithoutTokens = await prisma.message.findMany({
       where: {
         role: 'ASSISTANT',
-        totalTokens: 0
+        AND: [
+          { promptTokens: 0 },
+          { completionTokens: 0 }
+        ]
       },
       select: {
         id: true,
@@ -66,11 +69,12 @@ async function fixUsageTracking() {
           }
         },
         _sum: {
-          totalTokens: true
+          promptTokens: true,
+          completionTokens: true
         }
       })
-      
-      const actual = actualUsage._sum.totalTokens || 0
+
+      const actual = (actualUsage._sum.promptTokens || 0) + (actualUsage._sum.completionTokens || 0)
       const recorded = user.totalTokenUsed
       const diff = Math.abs(actual - recorded)
       

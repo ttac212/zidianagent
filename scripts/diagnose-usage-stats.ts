@@ -184,27 +184,49 @@ class DataCollector {
 
   private async collectMessages(since: Date): Promise<CollectedData['messages']> {
     const [withTokens, withoutTokens, recent] = await Promise.all([
-      prisma.message.count({ 
-        where: { totalTokens: { gt: 0 }, createdAt: { gte: since } } 
+      prisma.message.count({
+        where: {
+          OR: [
+            { promptTokens: { gt: 0 } },
+            { completionTokens: { gt: 0 } }
+          ],
+          createdAt: { gte: since }
+        }
       }),
-      prisma.message.count({ 
-        where: { totalTokens: { lte: 0 }, createdAt: { gte: since } } 
+      prisma.message.count({
+        where: {
+          AND: [
+            { promptTokens: { lte: 0 } },
+            { completionTokens: { lte: 0 } }
+          ],
+          createdAt: { gte: since }
+        } 
       }),
       prisma.message.findMany({
         where: { role: 'ASSISTANT', createdAt: { gte: since } },
         take: this.options.limit,
         orderBy: { createdAt: 'desc' },
-        select: { 
-          id: true, 
-          modelId: true, 
-          totalTokens: true, 
+        select: {
+          id: true,
+          modelId: true,
+          promptTokens: true,
+          completionTokens: true,
           createdAt: true,
           conversation: { select: { title: true } }
         }
       })
     ])
 
-    return { withTokens, withoutTokens, recent }
+    // Map recent messages to include totalTokens
+    const mappedRecent = recent.map(msg => ({
+      id: msg.id,
+      modelId: msg.modelId,
+      totalTokens: msg.promptTokens + msg.completionTokens,
+      createdAt: msg.createdAt,
+      conversation: msg.conversation
+    }))
+
+    return { withTokens, withoutTokens, recent: mappedRecent }
   }
 
   private async collectUsage(since: Date): Promise<CollectedData['usage']> {
@@ -213,16 +235,23 @@ class DataCollector {
       take: this.options.limit,
       orderBy: { createdAt: 'desc' },
       select: {
-        userId: true, 
-        date: true, 
+        userId: true,
+        date: true,
         modelId: true,
-        totalTokens: true, 
+        promptTokens: true,
+        completionTokens: true,
         apiCalls: true,
         user: { select: { email: true } }
       }
     })
 
-    return { recent }
+    // Map to include totalTokens
+    const mappedRecent = recent.map(r => ({
+      ...r,
+      totalTokens: r.promptTokens + r.completionTokens
+    }))
+
+    return { recent: mappedRecent }
   }
 
   private async collectUsers(): Promise<CollectedData['users']> {
@@ -248,12 +277,13 @@ class ConsistencyAnalyzer {
   private async fetchRecordsForAnalysis(since: Date) {
     return prisma.usageStats.findMany({
       where: { date: { gte: since } },
-      select: { 
-        userId: true, 
-        date: true, 
-        modelId: true, 
-        apiCalls: true, 
-        totalTokens: true 
+      select: {
+        userId: true,
+        date: true,
+        modelId: true,
+        apiCalls: true,
+        promptTokens: true,
+        completionTokens: true
       }
     })
   }
@@ -272,12 +302,12 @@ class ConsistencyAnalyzer {
       const group = groups.get(key)!
       
       if (record.modelId === '_total') {
-        group.total = { 
-          totalTokens: record.totalTokens, 
-          apiCalls: record.apiCalls 
+        group.total = {
+          totalTokens: record.promptTokens + record.completionTokens,
+          apiCalls: record.apiCalls
         }
       } else if (record.modelId) {
-        group.perModel.totalTokens += record.totalTokens
+        group.perModel.totalTokens += (record.promptTokens + record.completionTokens)
         group.perModel.apiCalls += record.apiCalls
       }
     }

@@ -12,19 +12,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { 
-  Search, 
-  Filter, 
-  BarChart3, 
-  Building2, 
-  MapPin, 
+  Filter,
+  Building2,
+  MapPin,
   Calendar,
   Eye,
   Heart,
   MessageCircle,
-  Share2,
-  Star
+  Share2
 } from 'lucide-react'
 import type { 
   MerchantListItem, 
@@ -73,7 +69,7 @@ export default function MerchantsPage() {
         setTotal(data.total)
       } else {
         }
-    } catch (error) {
+    } catch {
       } finally {
       setLoading(false)
     }
@@ -96,7 +92,7 @@ export default function MerchantsPage() {
         const statsData = await statsRes.json()
         setStats(statsData.stats)
       }
-    } catch (error) {
+    } catch (_error) {
       }
   }
 

@@ -7,7 +7,6 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import type {
-  MCPServerConfig,
   MCPClientWrapper,
   MCPTool,
   MCPHealthStatus,
@@ -115,7 +114,7 @@ export class MCPClientManager {
       clientWrapper.connectedAt = new Date()
 
       if (this.config.enableLogging) {
-        console.log(`MCP client connected with ${tools.length} tools`)
+        // MCP client connected with ${tools.length} tools
       }
 
       return clientWrapper
@@ -153,7 +152,8 @@ export class MCPClientManager {
       }
       
       return tools
-    } catch (error) {
+    // eslint-disable-next-line no-unused-vars
+    } catch (_error) {
       return {}
     }
   }
@@ -186,7 +186,7 @@ export class MCPClientManager {
    */
   async callTool(toolName: string, args: any): Promise<any> {
     // 找到包含该工具的客户端
-    for (const [serverId, clientWrapper] of this.clients) {
+    for (const [_serverId, clientWrapper] of this.clients) {
       if (clientWrapper.status === 'connected' && 
           clientWrapper.tools && 
           clientWrapper.tools[toolName]) {
@@ -226,7 +226,7 @@ export class MCPClientManager {
       await clientWrapper.client.close()
       if (this.config.enableLogging) {
         }
-    } catch (error: any) {
+    } catch (_error: any) {
       } finally {
       this.clients.delete(serverId)
     }
@@ -317,7 +317,7 @@ export class MCPClientManager {
     this.healthCheckTimer = setInterval(async () => {
       try {
         await this.healthCheck()
-      } catch (error) {
+      } catch (_error) {
         }
     }, this.config.healthCheckInterval)
   }

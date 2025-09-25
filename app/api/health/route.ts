@@ -124,6 +124,20 @@ async function performHealthChecks(): Promise<{
       checks.push('⚠ Database URL not configured');
     }
 
+    // 7. API Key配置检查
+    const { getKeyHealthStatus } = await import('@/lib/ai/key-manager');
+    const keyStatus = getKeyHealthStatus();
+    if (keyStatus.hasKey) {
+      const keyList = [];
+      if (keyStatus.keys.claude) keyList.push('Claude');
+      if (keyStatus.keys.gemini) keyList.push('Gemini');
+      if (keyStatus.keys.openai) keyList.push('OpenAI');
+      if (keyStatus.keys.fallback) keyList.push('Fallback');
+      checks.push(`✓ API Keys configured: ${keyList.join(', ')}`);
+    } else {
+      checks.push('⚠ No API keys configured');
+    }
+
     // 7. 运行模式检查
     const runMode = process.env.NODE_ENV || 'development';
     checks.push(`ℹ Running in ${runMode} mode`);

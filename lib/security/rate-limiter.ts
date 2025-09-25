@@ -4,9 +4,8 @@
  */
 
 import { NextRequest } from 'next/server'
-import { createHash } from 'crypto'
 import { ApiError, API_ERROR_CODES } from '@/lib/api/error-handler'
-import { getRateLimiter, RATE_LIMIT_PRESETS } from './distributed-rate-limiter'
+import { getRateLimiter } from './distributed-rate-limiter'
 
 // 速率限制配置
 export const RATE_LIMIT_CONFIG = {
@@ -38,42 +37,13 @@ export const RATE_LIMIT_CONFIG = {
 // 限制类型
 export type RateLimitType = keyof typeof RATE_LIMIT_CONFIG
 
-// 请求记录接口
-interface RequestRecord {
-  count: number
-  firstRequest: number
-  lastRequest: number
-  blocked: boolean
-  blockedUntil?: number
-}
 
 // 使用分布式速率限制器替代内存存储
 const rateLimiter = getRateLimiter()
 
 // 注意：在Serverless环境中不使用定时器
 
-/**
- * 生成限制键
- */
-function generateLimitKey(identifier: string, type: RateLimitType): string {
-  // 对标识符进行哈希处理以保护隐私
-  const hash = createHash('sha256').update(identifier).digest('hex').substring(0, 16)
-  return `ratelimit:${type}:${hash}`
-}
 
-/**
- * 获取客户端标识符
- */
-function getClientIdentifier(request: NextRequest, userId?: string): string {
-  // 优先使用用户ID，其次使用IP
-  if (userId) return `user:${userId}`
-  
-  const forwarded = request.headers.get('x-forwarded-for')
-  const realIP = request.headers.get('x-real-ip') 
-  const ip = forwarded?.split(',')[0] || realIP || 'unknown'
-  
-  return `ip:${ip}`
-}
 
 /**
  * 检查速率限制（使用分布式存储）
@@ -126,9 +96,9 @@ export async function checkRateLimit(
  * 速率限制装饰器
  */
 export function withRateLimit<T extends any[], R>(
-  handler: (...args: T) => Promise<R>,
+  handler: (..._args: T) => Promise<R>,
   type: RateLimitType,
-  getUserId?: (request: NextRequest) => Promise<string | undefined>
+  getUserId?: (_request: NextRequest) => Promise<string | undefined>
 ) {
   return async (request: NextRequest, ...restArgs: any[]): Promise<R> => {
     // 获取用户ID（如果提供了获取函数）
@@ -136,7 +106,7 @@ export function withRateLimit<T extends any[], R>(
     if (getUserId) {
       try {
         userId = await getUserId(request)
-      } catch (error) {
+      } catch (_error) {
         // 忽略获取用户ID的错误，继续使用IP限制
         }
     }
@@ -219,7 +189,7 @@ export async function clearRateLimit(identifier: string, type: RateLimitType): P
     await rateLimiter.reset(dummyRequest as any, type, identifier.startsWith('user:') ? identifier.replace('user:', '') : undefined)
     return true
   } catch (error) {
-    console.error('[RateLimiter] Failed to clear rate limit:', error)
+    // Failed to clear rate limit
     return false
   }
 }
@@ -228,15 +198,15 @@ export async function clearRateLimit(identifier: string, type: RateLimitType): P
  * 预设的速率限制中间件
  */
 export const RateLimitMiddleware = {
-  chat: <T extends any[], R>(handler: (...args: T) => Promise<R>) => 
+  chat: <T extends any[], R>(handler: (..._args: T) => Promise<R>) =>
     withRateLimit(handler, 'CHAT'),
-    
-  auth: <T extends any[], R>(handler: (...args: T) => Promise<R>) =>
+
+  auth: <T extends any[], R>(handler: (..._args: T) => Promise<R>) =>
     withRateLimit(handler, 'AUTH'),
-    
-  admin: <T extends any[], R>(handler: (...args: T) => Promise<R>) =>
+
+  admin: <T extends any[], R>(handler: (..._args: T) => Promise<R>) =>
     withRateLimit(handler, 'ADMIN'),
-    
-  general: <T extends any[], R>(handler: (...args: T) => Promise<R>) =>
+
+  general: <T extends any[], R>(handler: (..._args: T) => Promise<R>) =>
     withRateLimit(handler, 'GENERAL')
 }

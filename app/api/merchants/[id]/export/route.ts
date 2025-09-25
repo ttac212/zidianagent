@@ -19,7 +19,7 @@ export async function GET(
   try {
     const { id } = await params
     const { searchParams } = new URL(request.url)
-    const format = searchParams.get('format') || 'csv'
+    const _format = searchParams.get('format') || 'csv' // TODO: 实现格式选择功能
     const type = searchParams.get('type') || 'content' // content | analytics | tags
     
     if (!id) {

@@ -5,15 +5,15 @@
 
 import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { User, Copy, Check, ThumbsUp, ThumbsDown, RotateCcw } from 'lucide-react'
+import { Copy, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast/toast'
 import type { MessageItemProps } from '@/types/chat'
 import { getModelDisplayName, getModelProvider } from '@/lib/model-utils'
+import { SecureMarkdown } from '@/components/ui/secure-markdown'
 
 export const MessageItem = React.memo<MessageItemProps>(({
   message,
-  onCopy,
   onRetry
 }) => {
   const isUser = message.role === 'user'
@@ -55,17 +55,14 @@ export const MessageItem = React.memo<MessageItemProps>(({
 
   const handleCopy = async () => {
     try {
-      // 调用父组件的复制函数
-      onCopy(message.content)
-      
-      // 尝试使用浏览器 API 复制
+      // 直接使用浏览器 API 复制，移除重复操作
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(message.content)
       }
-      
+
       // 设置复制状态
       setCopied(true)
-      
+
       // 显示成功提示
       toast.success('已复制到剪贴板', {
         duration: 2000,
@@ -73,7 +70,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
         icon: <Check className="w-4 h-4" />,
         className: 'text-sm'
       })
-      
+
       // 2秒后重置复制状态
       setTimeout(() => {
         setCopied(false)
@@ -84,11 +81,10 @@ export const MessageItem = React.memo<MessageItemProps>(({
         duration: 3000,
         position: 'bottom-right'
       })
-      console.error('复制失败:', err)
     }
   }
 
-  const handleRetry = () => {
+  const _handleRetry = () => {
     if (onRetry) {
       onRetry()
     }
@@ -98,25 +94,27 @@ export const MessageItem = React.memo<MessageItemProps>(({
     <div 
       data-message-id={message.id}
       className={cn(
-        "flex gap-4 transition-all duration-300",
+        "flex gap-2 sm:gap-4 transition-all duration-300",
         isUser ? "justify-end" : "justify-start",
         isNewMessage && "animate-in slide-in-from-bottom-2 fade-in-0"
       )}
     >
       {/* 消息内容 */}
       <div className={cn(
-        "max-w-[90%] group",
+        "max-w-[95%] sm:max-w-[90%] md:max-w-[85%] group",
         isUser && "flex flex-col items-end"
       )}>
         <div className={cn(
-          "rounded-2xl px-6 py-4 text-sm leading-relaxed relative overflow-hidden transition-all duration-500",
+          "text-sm leading-relaxed relative overflow-hidden transition-all duration-500",
+          // 用户消息：紧凑型气泡设计
           isUser
-            ? "bg-primary/90 text-primary-foreground rounded-2xl"
+            ? "bg-primary/90 text-primary-foreground rounded-2xl rounded-br-md px-4 py-3"
             : hasError
-              ? "bg-destructive/10 border border-destructive/20 text-destructive"
-              : "bg-black/5 dark:bg-white/5 border border-white/10",
-          // 微光闪烁效果
-          isAssistant && shouldGlow && "shadow-md ring-2 ring-primary/20 bg-gradient-to-r from-black/5 via-primary/5 to-black/5 dark:from-white/5 dark:via-primary/10 dark:to-white/5"
+              ? "bg-destructive/10 border border-destructive/20 text-destructive rounded-2xl px-6 py-4"
+              // 助手消息：宽松型设计，更适合长内容
+              : "bg-muted/30 dark:bg-muted/20 border border-border/50 rounded-2xl rounded-bl-md px-6 py-4",
+          // 微光闪烁效果 - 增强视觉反馈
+          isAssistant && shouldGlow && "shadow-lg ring-2 ring-primary/30 bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5"
         )}>
           
           {/* 微光效果 - 仅对助手消息 */}
@@ -133,16 +131,26 @@ export const MessageItem = React.memo<MessageItemProps>(({
           )}
 
           {/* 消息文本 */}
-          <div className="whitespace-pre-wrap relative z-10">
-            {message.content}
+          <div className="relative z-10">
+            {isAssistant ? (
+              <SecureMarkdown
+                content={message.content}
+                variant="compact"
+                className="leading-relaxed"
+              />
+            ) : (
+              <div className="whitespace-pre-wrap leading-relaxed">
+                {message.content}
+              </div>
+            )}
           </div>
 
         </div>
 
-        {/* 消息元信息 */}
+        {/* 消息元信息 - 渐进式信息披露，减少认知负荷 */}
         <div className="flex items-center justify-between gap-2 mt-1 text-xs text-muted-foreground">
           <div className="flex items-center gap-2">
-            {/* 时间戳 */}
+            {/* 基础信息：时间戳 */}
             <span>
               {new Date(message.timestamp).toLocaleTimeString('zh-CN', {
                 hour: '2-digit',
@@ -150,63 +158,44 @@ export const MessageItem = React.memo<MessageItemProps>(({
               })}
             </span>
 
-            {/* 字数统计 - 新增 */}
-            {wordCount > 0 && (
-              <>
-                <span>•</span>
-                <span className={cn(
-                  "transition-colors duration-300",
-                  shouldGlow && isAssistant ? "text-primary font-medium" : ""
-                )}>
-                  {wordCount} 字
-                </span>
-              </>
-            )}
-
-            {/* 模型信息 - 优化显示，所有消息都显示 */}
-            {message.metadata?.model && (() => {
-              const provider = getModelProvider(message.metadata.model)
-              return (
+            {/* 扩展信息：hover 时显示 */}
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center gap-2">
+              {/* 模型信息 - 仅在 hover 时显示 */}
+              {message.metadata?.model && (
                 <>
                   <span>•</span>
                   <span className={cn(
-                    "transition-colors duration-300 px-1.5 py-0.5 rounded text-xs bg-muted/50 border border-muted/20",
-                    shouldGlow && isAssistant ? "text-primary font-medium bg-primary/10 border-primary/20" : "text-muted-foreground"
-                  )} title={`使用 ${provider.name} 模型`}>
-                    {getModelDisplayName(message.metadata.model)}
+                    "px-1.5 py-0.5 rounded text-xs bg-muted/50 border border-muted/20 transition-all duration-200",
+                    shouldGlow && isAssistant ? "bg-primary/10 border-primary/20 text-primary" : "text-muted-foreground"
+                  )} title={`使用 ${getModelProvider(message.metadata.model).name} 模型`}>
+                    {getModelDisplayName(message.metadata.model).split(' ')[0]}
                   </span>
                 </>
-              )
-            })()}
+              )}
 
-            {/* Token 信息 */}
-            {message.tokens && (
-              <>
-                <span>•</span>
-                <span>{message.tokens} tokens</span>
-              </>
-            )}
-
-            {/* 处理时间 */}
-            {message.metadata?.processingTime && (
-              <>
-                <span>•</span>
-                <span>{message.metadata.processingTime}ms</span>
-              </>
-            )}
+              {/* 字数 - hover 时显示 */}
+              {wordCount > 0 && (
+                <>
+                  <span>•</span>
+                  <span className="text-muted-foreground/70">
+                    {wordCount} 字
+                  </span>
+                </>
+              )}
+            </div>
           </div>
 
-          {/* 复制按钮 - 只对助手消息显示，统一风格 */}
+          {/* 复制按钮 - 移动端友好化，增大触控面积 */}
           {isAssistant && (
             <Button
               variant="ghost"
               size="sm"
               className={cn(
-                "h-5 px-2 text-xs transition-all duration-200",
-                copied 
+                "min-h-[32px] min-w-[60px] px-2 text-xs transition-all duration-200 touch-manipulation",
+                copied
                   ? "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/30"
-                  : "opacity-70 hover:opacity-100 text-muted-foreground hover:text-primary hover:bg-primary/10",
-                "rounded"
+                  : "opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary hover:bg-primary/10",
+                "rounded-md"
               )}
               onClick={handleCopy}
               title={copied ? "已复制" : "复制消息内容"}

@@ -9,9 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, User, CheckCircle, Github, LogIn, UserPlus } from 'lucide-react'
+import { Loader2, User, CheckCircle, LogIn, UserPlus } from 'lucide-react'
 import { RouteTransitionOverlay } from '@/components/ui/route-transition-overlay'
 
 interface InviteCodeVerification {
@@ -123,7 +122,8 @@ export function InviteCodeAuth() {
       } else {
         setVerifyError(data.error || '邀请码验证失败')
       }
-    } catch (error) {
+    // eslint-disable-next-line no-unused-vars
+    } catch (_error) {
       setVerifyError('网络错误，请重试')
     } finally {
       setIsVerifying(false)
@@ -171,7 +171,7 @@ export function InviteCodeAuth() {
 
       // 跳转工作台（使用 App Router 导航）
       setRedirecting(true)
-      let startedRedirect = true
+      let _startedRedirect = true
       // 确保会话状态即时可见（如遇延迟问题可移除此调用）
       try { router.refresh() } catch {}
       router.replace('/workspace')

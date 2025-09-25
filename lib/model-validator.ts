@@ -125,7 +125,7 @@ export function validateModelConsistency(
  */
 export function createModelValidationMiddleware() {
   return {
-    beforeRequest: (modelId: string, endpoint: string) => {
+    beforeRequest: (modelId: string, _endpoint: string) => {
       const validation = validateModelId(modelId)
       
       if (!validation.isValid) {
@@ -151,7 +151,7 @@ export class ModelConsistencyChecker {
   private checkInterval: NodeJS.Timeout | null = null
   private isRunning = false
 
-  constructor(private intervalMs: number = 30000) {} // 默认30秒检查一次
+  constructor(private _intervalMs: number = 30000) {} // 默认30秒检查一次
 
   start(getModelStates: () => { ui: string; state: string; storage: string }) {
     if (this.isRunning) return
@@ -173,16 +173,22 @@ export class ModelConsistencyChecker {
 
         // 如果发现不一致，发出警告
         if (!validation.isValid) {
-          console.warn('[ModelValidator] Validation failed:', {
-            errors: validation.errors,
-            warnings: validation.warnings,
-            timestamp: new Date().toISOString()
-          })
+          // 开发环境输出警告
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[ModelValidator] Validation failed:', {
+              errors: validation.errors,
+              warnings: validation.warnings,
+              timestamp: new Date().toISOString()
+            })
+          }
         }
       } catch (error) {
-        console.error('[ModelValidator] Check failed:', error)
+        // 生产环境静默失败，开发环境记录错误
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[ModelValidator] Check failed:', error)
+        }
       }
-    }, this.intervalMs)
+    }, this._intervalMs)
   }
 
   stop() {
@@ -227,7 +233,8 @@ export const ModelDebugTools = {
       states.timestamp = new Date().toISOString()
       
       return states
-    } catch (error) {
+    // eslint-disable-next-line no-unused-vars
+    } catch (_error) {
       return null
     }
   },
@@ -237,7 +244,8 @@ export const ModelDebugTools = {
     try {
       localStorage.removeItem('lastSelectedModelId')
       // 建议刷新页面
-      } catch (error) {
+      // eslint-disable-next-line no-unused-vars
+      } catch (_error) {
       }
   },
 
@@ -251,7 +259,8 @@ export const ModelDebugTools = {
     try {
       localStorage.setItem('lastSelectedModelId', modelId)
       return true
-    } catch (error) {
+    // eslint-disable-next-line no-unused-vars
+    } catch (_error) {
       return false
     }
   }

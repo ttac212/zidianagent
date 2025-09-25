@@ -61,8 +61,8 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'SET_TEMP_TITLE':
       return { ...state, tempTitle: action.payload }
     
-    case 'SET_TYPING_MODE':
-      return { ...state, typingMode: action.payload }
+    case 'SET_RESPONSE_PHASE':
+      return { ...state, responsePhase: action.payload }
     
     case 'SET_PREVIEW_CONTENT':
       return { ...state, previewContent: action.payload }

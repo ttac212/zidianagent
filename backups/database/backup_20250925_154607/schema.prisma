@@ -1,0 +1,448 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// --- NextAuth required models (Account, Session, VerificationToken) and emailVerified on User ---
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?  @map("refresh_token")
+  access_token      String?  @map("access_token")
+  expires_in        Int?     @map("expires_in")
+  token_type        String?  @map("token_type")
+  scope             String?
+  id_token          String?  @map("id_token")
+  session_state     String?  @map("session_state")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// 邀请码表
+model InviteCode {
+  id          String   @id @default(cuid())
+  code        String   @unique                  // 邀请码
+  description String?                           // 邀请码描述
+  
+  // 使用限制
+  maxUses     Int      @default(1)             // 最大使用次数
+  usedCount   Int      @default(0)             // 已使用次数
+  isActive    Boolean  @default(true)          // 是否激活
+  
+  // 有效期
+  expiresAt   DateTime?                        // 过期时间（null表示永不过期）
+  
+  // 关联的用户权限
+  defaultRole        UserRole @default(USER)   // 默认用户角色
+  monthlyTokenLimit  Int      @default(50000)  // 默认月度Token限制
+  
+  // 创建信息
+  createdBy   String?                          // 创建者ID
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // 使用记录
+  usedBy      User[]   @relation("InviteCodeUsage")
+  
+  // 索引
+  @@index([code])
+  @@index([isActive, expiresAt])
+  @@map("invite_codes")
+}
+
+// 用户表
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  emailVerified DateTime?
+  username    String?  @unique
+  displayName String?
+  avatar      String?
+  role        UserRole @default(USER)
+  status      UserStatus @default(ACTIVE)
+
+  // 用量配额
+  monthlyTokenLimit    Int @default(100000)  // 月度 token 限制
+  currentMonthUsage    Int @default(0)       // 当月已用 token
+  totalTokenUsed       Int @default(0)       // 总计使用 token
+
+  // 邀请码信息
+  inviteCodeId String?                      // 使用的邀请码ID
+  inviteCode   InviteCode? @relation("InviteCodeUsage", fields: [inviteCodeId], references: [id])
+
+  // 时间戳
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastActiveAt DateTime?
+
+  // 关联关系
+  accounts         Account[]
+  sessions         Session[]
+  conversations    Conversation[]
+  messages         Message[]             // 新增：直接消息关联，配额查询优化
+  usageStats       UsageStats[]
+  userSessions     UserSession[]
+
+  @@map("users")
+}
+
+// 用户角色枚举
+enum UserRole {
+  ADMIN
+  USER
+  GUEST
+}
+
+// 用户状态枚举
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  DELETED
+}
+
+// 对话表
+model Conversation {
+  id          String   @id @default(cuid())
+  title       String   @default("新对话")
+  userId      String
+  
+  // 对话配置
+  modelId     String   @default("gpt-3.5-turbo")
+  temperature Float    @default(0.7)
+  maxTokens   Int      @default(2000)
+  contextAware Boolean @default(true)
+  
+  // 统计信息
+  messageCount Int @default(0)
+  totalTokens  Int @default(0)
+  
+  // 时间戳
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastMessageAt DateTime?
+
+  // 关联关系
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  // 索引
+  @@index([userId, updatedAt])
+  @@index([createdAt])
+  @@map("conversations")
+}
+
+// 消息表
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  userId         String                     // 用户ID冗余存储，避免JOIN查询（现已填充）
+
+  // 消息内容
+  role           MessageRole
+  content        String                     // 使用 TEXT 类型支持长文本
+  originalContent String?                   // 原始输入（用于分析）
+
+  // Token 统计
+  promptTokens     Int @default(0)
+  completionTokens Int @default(0)
+
+  // 模型信息
+  modelId     String
+  temperature Float?
+  finishReason String?  // stop, length, content_filter等
+
+  // 消息元数据
+  metadata    Json?    // 存储额外信息，如工具调用、函数参数等
+
+  // 时间戳
+  createdAt DateTime @default(now())
+
+  // 关联关系
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 索引 - 优化配额和统计查询
+  @@index([conversationId, createdAt])
+  @@index([role, createdAt])
+  @@index([userId, createdAt])           // 配额查询优化
+  @@index([userId, modelId, createdAt])  // 按模型统计优化
+  @@map("messages")
+}
+
+// 消息角色枚举
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  FUNCTION
+}
+
+// 用量统计表（按天统计）
+model UsageStats {
+  id     String   @id @default(cuid())
+  userId String
+  date   DateTime           // 统计日期
+  
+  // 模型相关字段（新增）
+  modelId         String?            // 模型ID（可选，兼容历史数据）
+  modelProvider   String?            // 模型提供商（Claude/Google/OpenAI）
+  
+  // API 调用统计
+  apiCalls         Int @default(0)
+  successfulCalls  Int @default(0)
+  failedCalls      Int @default(0)
+  
+  // Token 使用统计
+  promptTokens     Int @default(0)
+  completionTokens Int @default(0)
+  
+  // 对话统计
+  conversationsCreated Int @default(0)
+  messagesCreated      Int @default(0)
+
+  // 时长统计
+  totalActiveTime Int @default(0)  // 活跃时长（秒）
+  
+  // 时间戳
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 关联关系
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 唯一约束和索引
+  @@unique([userId, date, modelId])          // 按模型的唯一约束（modelId可为null用于总量统计）
+  @@index([date])                            // 原有索引
+  @@index([userId, date])                    // 原有索引  
+  @@index([modelId, date])                   // 按模型查询优化
+  @@index([modelProvider, date])             // 按提供商查询优化
+  @@map("usage_stats")
+}
+
+// 用户会话表（用于追踪活跃状态）
+model UserSession {
+  id        String   @id @default(cuid())
+  userId    String
+  
+  // 会话信息
+  sessionId String   @unique  // 客户端生成的会话ID
+  ipAddress String?
+  userAgent String?                        // 用户代理
+  
+  // 会话状态
+  isActive  Boolean  @default(true)
+  lastPing  DateTime @default(now())
+  
+  // 时间戳
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 关联关系
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 索引
+  @@index([userId, isActive])
+  @@index([lastPing])
+  @@map("user_sessions")
+}
+
+// 系统配置表
+model SystemConfig {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String                             // 配置值
+  type  ConfigType @default(STRING)
+  
+  // 配置元数据
+  description String?
+  category    String? @default("general")
+  isReadonly  Boolean @default(false)
+  
+  // 时间戳
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("system_configs")
+}
+
+// 配置类型枚举
+enum ConfigType {
+  STRING
+  NUMBER
+  BOOLEAN
+  JSON
+}
+
+// ===== 商家数据管理模型 =====
+
+// 商家分类表
+model MerchantCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique              // 分类名称（全屋定制工厂、系统门窗、建材批发、装饰公司等）
+  description String?                       // 分类描述
+  color       String?  @default("#6366f1") // 分类颜色
+  sortOrder   Int      @default(0)          // 排序权重
+  icon        String?                       // 分类图标
+  
+  // 时间戳
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // 关联关系
+  merchants Merchant[]
+  
+  @@map("merchant_categories")
+}
+
+// 商家表
+model Merchant {
+  id          String   @id @default(cuid())
+  uid         String   @unique              // 商家UID（从源数据中获取）
+  name        String                        // 商家名称
+  description String?                       // 商家描述
+  
+  // 分类信息
+  categoryId  String?
+  category    MerchantCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  
+  // 商家基本信息
+  location    String?                       // 所在地区
+  address     String?                       // 详细地址
+  contactInfo Json?                         // 联系信息（电话、微信等）
+  businessType BusinessType @default(B2C)  // 业务类型
+  
+  // 社交媒体统计汇总
+  totalDiggCount     Int @default(0)        // 总点赞数
+  totalCommentCount  Int @default(0)        // 总评论数
+  totalCollectCount  Int @default(0)        // 总收藏数
+  totalShareCount    Int @default(0)        // 总分享数
+  totalContentCount  Int @default(0)        // 总内容数
+  
+  // 数据收集信息
+  dataSource      String   @default("douyin") // 数据来源
+  lastCollectedAt DateTime?                    // 最后采集时间
+  
+  // 状态信息
+  status     MerchantStatus @default(ACTIVE)
+  isVerified Boolean        @default(false)     // 是否已验证
+  
+  // 时间戳
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // 关联关系
+  contents MerchantContent[]
+  
+  // 索引
+  @@index([categoryId])
+  @@index([location])
+  @@index([status])
+  @@index([uid])
+  @@map("merchants")
+}
+
+// 商家内容表（视频、文章等）
+model MerchantContent {
+  id          String   @id @default(cuid())
+  merchantId  String
+  
+  // 内容基本信息
+  externalId  String                        // 外部平台ID（如抖音视频ID）
+  title       String                        // 内容标题（通常是desc字段）
+  content     String?                       // 内容正文
+  transcript  String?                       // 转录文本
+  
+  // 内容类型和元数据
+  contentType ContentType @default(VIDEO)
+  duration    String?                       // 视频时长
+  shareUrl    String?                       // 分享链接
+  hasTranscript Boolean @default(false)     // 是否有转录
+  
+  // 社交指标
+  diggCount    Int @default(0)              // 点赞数
+  commentCount Int @default(0)              // 评论数
+  collectCount Int @default(0)              // 收藏数
+  shareCount   Int @default(0)              // 分享数
+  
+  // 标签和分类（JSON存储）
+  tags        String @default("[]")         // 标签列表（JSON数组）
+  textExtra   String @default("[]")         // 额外文本标签（JSON数组）
+  
+  // 时间信息
+  publishedAt    DateTime?                  // 发布时间
+  collectedAt    DateTime                   // 采集时间
+  externalCreatedAt DateTime?              // 外部平台创建时间
+  
+  // 创建和更新时间
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // 关联关系
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  
+  // 索引
+  @@index([merchantId, publishedAt])
+  @@index([contentType])
+  @@index([externalId])
+  @@index([collectedAt])
+  @@unique([externalId, merchantId]) // 确保同一商家的外部ID不重复
+  @@map("merchant_contents")
+}
+
+// 业务类型枚举
+enum BusinessType {
+  B2B     // 企业对企业
+  B2C     // 企业对消费者
+  B2B2C   // 混合模式
+}
+
+// 商家状态枚举
+enum MerchantStatus {
+  ACTIVE      // 正常
+  INACTIVE    // 停用
+  SUSPENDED   // 暂停
+  DELETED     // 已删除
+}
+
+// 内容类型枚举
+enum ContentType {
+  VIDEO       // 视频
+  ARTICLE     // 文章
+  IMAGE       // 图片
+  AUDIO       // 音频
+  OTHER       // 其他
+}

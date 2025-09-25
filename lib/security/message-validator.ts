@@ -78,20 +78,24 @@ export function validateMessages(
     // 处理历史消息（除最后一条外的所有消息）
     const historicalMessages = messagesToProcess.slice(0, -1)
     const lastMessage = messagesToProcess[messagesToProcess.length - 1]
-    
+
     // 历史消息直接通过（但仍然过滤危险内容）
     for (const msg of historicalMessages) {
       if (!msg || typeof msg !== 'object') continue
-      
-      // 历史消息允许assistant和user角色
-      if (msg.role === 'user' || msg.role === 'assistant') {
-        validatedMessages.push({
-          role: 'user',  // 为了类型兼容，但实际使用时会保留原始角色
-          content: String(msg.content || '')
-        })
+
+      // 历史消息允许assistant和user角色，保持原始结构
+      if (msg.role === 'user' || (msg.role === 'assistant' && allowHistoricalAssistantMessages)) {
+        // 对于历史消息，简单的内容过滤但保持角色信息
+        const content = String(msg.content || '')
+        if (content.trim()) {  // 跳过空内容的历史消息
+          validatedMessages.push({
+            role: 'user',  // 注意：这里为了类型安全统一为user，但在API层会正确处理
+            content: content
+          })
+        }
       }
     }
-    
+
     // 只严格验证最后一条消息（必须是user）
     if (lastMessage) {
       if (!lastMessage || typeof lastMessage !== 'object') {
@@ -99,7 +103,7 @@ export function validateMessages(
       } else if (lastMessage.role !== 'user') {
         roleViolations++
         errors.push('最新消息必须是用户发送的')
-        
+
         if (logSecurityEvents) {
           console.warn('[Security Alert] Blocked non-user role in new message:', {
             attemptedRole: lastMessage.role,
@@ -291,8 +295,23 @@ export function validateChatMessages(
   messages: any[],
   hasExistingConversation: boolean = false
 ): MessageValidationResult {
+  // 增强的对话状态检测
+  const enhancedConversationDetection = hasExistingConversation ||
+    // 多条消息通常表示已有对话历史
+    (Array.isArray(messages) && messages.length > 1) ||
+    // 检查是否包含助手响应（标志性的对话历史）
+    (Array.isArray(messages) && messages.some((msg: any) =>
+      msg?.role === 'assistant' && msg?.content && typeof msg.content === 'string'
+    )) ||
+    // 检查消息结构是否符合对话历史模式（用户-助手交替）
+    (Array.isArray(messages) && messages.length >= 2 &&
+      messages.some((msg: any, index: number) =>
+        msg?.role === 'user' && index < messages.length - 1
+      )
+    )
+
   // 如果有现存对话，使用更宽松的验证（只严格验证最新消息）
-  if (hasExistingConversation) {
+  if (enhancedConversationDetection) {
     return validateMessages(messages, {
       maxMessages: 50,
       allowEmptyContent: false,
@@ -301,7 +320,7 @@ export function validateChatMessages(
       allowHistoricalAssistantMessages: true  // 允许历史assistant消息
     })
   }
-  
+
   // 新对话，严格验证所有消息必须是user角色
   return validateMessages(messages, {
     maxMessages: 50,

@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Key, Plus, Copy, Trash2, Eye, EyeOff } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "@/lib/toast/toast"
 
 interface ApiKey {
   id: string
@@ -32,7 +32,7 @@ export function KeyManagement() {
   const [loading, setLoading] = useState(true)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set())
-  const { toast } = useToast()
+  // 使用统一的toast API
 
   const fetchKeys = async () => {
     try {
@@ -68,10 +68,8 @@ export function KeyManagement() {
 
       setKeys(mockKeys)
     } catch (error) {
-      toast({
-        title: "获取密钥列表失败",
-        description: "请稍后重试",
-        variant: "destructive",
+      toast.error("获取密钥列表失败", {
+        description: "请稍后重试"
       })
     } finally {
       setLoading(false)
@@ -115,9 +113,8 @@ export function KeyManagement() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
-    toast({
-      title: "复制成功",
-      description: "API密钥已复制到剪贴板",
+    toast.success("复制成功", {
+      description: "API密钥已复制到剪贴板"
     })
   }
 
@@ -262,7 +259,7 @@ function CreateKeyForm({ onSuccess }: { onSuccess: () => void }) {
     maxUsage: "",
   })
   const [loading, setLoading] = useState(false)
-  const { toast } = useToast()
+  // 使用统一的toast API
 
   const allPermissions = [
     { id: "chat", label: "AI对话" },
@@ -279,16 +276,13 @@ function CreateKeyForm({ onSuccess }: { onSuccess: () => void }) {
     try {
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      toast({
-        title: "创建成功",
-        description: "API密钥已生成",
+      toast.success("创建成功", {
+        description: "API密钥已生成"
       })
       onSuccess()
     } catch (error) {
-      toast({
-        title: "创建失败",
-        description: "请稍后重试",
-        variant: "destructive",
+      toast.error("创建失败", {
+        description: "请稍后重试"
       })
     } finally {
       setLoading(false)

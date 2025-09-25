@@ -183,11 +183,7 @@ export function createSafeContextMessage(editorExcerpt: string): { role: string;
 
   // 记录可疑内容
   if (filterResult.dangerLevel !== 'safe') {
-    console.warn('[ContentFilter] Suspicious content detected:', {
-      dangerLevel: filterResult.dangerLevel,
-      reasons: filterResult.reason,
-      timestamp: new Date().toISOString()
-    })
+    // Suspicious content detected - details in filterResult
   }
 
   return {

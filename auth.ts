@@ -32,20 +32,54 @@ export const authOptions: NextAuthOptions = {
           // 生产环境安全检查
           const isProduction = process.env.NODE_ENV === 'production'
           const devCode = process.env.DEV_LOGIN_CODE
-          
+
           // 生产环境不允许使用开发登录码
           if (isProduction && devCode) {
+            console.error('DEV_LOGIN_CODE detected in production environment')
             return null
           }
-          
+
           // 开发环境允许使用开发登录码
           if (!isProduction && devCode) {
             if (!credentials?.email || !credentials?.code) {
+              console.log('Missing credentials in dev mode')
               return null
             }
-            
+
             if (credentials.code !== devCode) {
+              console.log('Invalid dev code')
               return null
+            }
+
+            try {
+              // 开发环境：查找或创建用户
+              let user = await prisma.user.findUnique({
+                where: { email: credentials.email }
+              })
+
+              if (!user) {
+                // 开发环境自动创建用户
+                user = await prisma.user.create({
+                  data: {
+                    email: credentials.email,
+                    username: credentials.email.split('@')[0],
+                    displayName: credentials.email.split('@')[0],
+                    role: 'USER',
+                    status: 'ACTIVE',
+                    emailVerified: new Date(),
+                  }
+                })
+              }
+
+              return {
+                id: user.id,
+                email: user.email,
+                name: user.displayName || user.username || user.email,
+                role: user.role
+              }
+            } catch (dbError) {
+              console.error('Database error in dev mode:', dbError)
+              throw new Error('Database connection failed. Please run: pnpm db:generate && pnpm db:push')
             }
           } else if (isProduction) {
             // 生产环境认证逻辑
@@ -104,33 +138,21 @@ export const authOptions: NextAuthOptions = {
             return {
               id: user.id,
               email: user.email,
-              name: user.name,
+              name: user.displayName || user.username || user.email,
               role: user.role
             }
           } else {
             return null
           }
-
-          const user = await prisma.user.findUnique({ where: { email: credentials.email } })
-          if (!user) {
-            return null
-          }
-          
-          if (user.status !== "ACTIVE") {
-            return null
-          }
-          
-          return {
-            id: user.id,
-            email: user.email,
-            name: user.displayName ?? user.username ?? undefined,
-            role: user.role,
-            displayName: user.displayName ?? null,
-            currentMonthUsage: user.currentMonthUsage,
-            monthlyTokenLimit: user.monthlyTokenLimit,
-          } as any
         } catch (error) {
-          return null
+          // 详细记录错误信息，帮助调试
+          console.error('[NextAuth] Authorization error:', {
+            message: (error as Error).message,
+            stack: (error as Error).stack,
+            credentials: credentials ? { email: credentials.email } : undefined
+          })
+          // 重新抛出错误，让 NextAuth 能正确处理
+          throw error
         }
       },
     }),

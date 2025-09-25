@@ -1,0 +1,63 @@
+{
+  "mcpServers": {
+    "chrome-devtools": {
+      "command": "python",
+      "args": [
+        "D:\\zdqidongxiangmu\\mcp-tools\\chrome-devtools-mcp\\server.py"
+      ],
+      "env": {
+        "NODE_ENV": "development"
+      }
+    },
+    "browser-tools-mcp": {
+      "command": "node",
+      "args": [
+        "D:\\zdqidongxiangmu\\mcp-tools\\browser-tools-mcp\\browser-tools-mcp\\mcp-server.ts"
+      ],
+      "env": {
+        "NODE_ENV": "development",
+        "DATABASE_URL": "file:./prisma/dev.db"
+      }
+    },
+    "browser-tools-server": {
+      "command": "node",
+      "args": [
+        "D:\\zdqidongxiangmu\\mcp-tools\\browser-tools-mcp\\browser-tools-server"
+      ],
+      "env": {
+        "NODE_ENV": "development",
+        "DATABASE_URL": "file:./prisma/dev.db"
+      }
+    },
+    "database": {
+      "command": "node",
+      "args": [
+        "D:\\zdqidongxiangmu\\mcp-servers\\database-server.js"
+      ],
+      "env": {
+        "NODE_ENV": "development",
+        "DATABASE_URL": "file:./prisma/dev.db"
+      }
+    },
+    "sqlite": {
+      "command": "node",
+      "args": [
+        "D:\\zdqidongxiangmu\\mcp-servers\\sqlite-server.js"
+      ],
+      "env": {
+        "NODE_ENV": "development",
+        "DATABASE_URL": "file:./prisma/dev.db"
+      }
+    },
+    "documents": {
+      "command": "node",
+      "args": [
+        "D:\\zdqidongxiangmu\\mcp-servers\\documents-server.js"
+      ],
+      "env": {
+        "NODE_ENV": "development",
+        "DATABASE_URL": "file:./prisma/dev.db"
+      }
+    }
+  }
+}

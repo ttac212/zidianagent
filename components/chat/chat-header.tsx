@@ -4,7 +4,9 @@
  */
 
 import React from 'react'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Trash2 } from 'lucide-react'
 import type { ChatHeaderProps } from '@/types/chat'
 import { getModelDisplayName } from '@/lib/model-utils'
 
@@ -17,6 +19,7 @@ export const ChatHeader = React.memo<ChatHeaderProps>(({
   onEditTitle,
   onTitleChange,
   onTitleSubmit,
+  onCancelEdit,
   onDeleteConversation,
 }) => {
   // 获取当前对话使用的模型 - 优先从最新助手消息获取
@@ -39,7 +42,7 @@ export const ChatHeader = React.memo<ChatHeaderProps>(({
       onTitleSubmit()
     }
     if (e.key === 'Escape') {
-      onEditTitle() // 取消编辑
+      onCancelEdit() // 真正的取消编辑，不保存更改
     }
   }
 
@@ -82,6 +85,26 @@ export const ChatHeader = React.memo<ChatHeaderProps>(({
                     </span>
                   ) : null
                 })()}
+
+                {/* 删除按钮 - 增强触控友好性和安全性 */}
+                {conversation && onDeleteConversation && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="min-h-[32px] min-w-[32px] p-1 opacity-0 group-hover:opacity-70 hover:!opacity-100 transition-all duration-200 text-muted-foreground hover:text-destructive hover:bg-destructive/10 touch-manipulation"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      // 添加安全确认机制
+                      const confirmMessage = `确认删除对话「${conversation.title || '新对话'}」吗？\n\n此操作不可撤销，所有消息都将被永久删除。`
+                      if (window.confirm(confirmMessage)) {
+                        onDeleteConversation()
+                      }
+                    }}
+                    title="删除对话"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </>
           )}

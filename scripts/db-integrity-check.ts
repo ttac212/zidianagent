@@ -166,22 +166,25 @@ class DatabaseIntegrityChecker {
         include: {
           messages: {
             select: {
-              totalTokens: true
+              promptTokens: true,
+              completionTokens: true
             }
           }
         }
       })
 
       const inconsistentConversations = conversations.filter(conv => {
-        const actualTokens = conv.messages.reduce((sum, msg) => sum + msg.totalTokens, 0)
+        const actualTokens = conv.messages.reduce((sum, msg) =>
+          sum + (msg.promptTokens + msg.completionTokens), 0)
         return Math.abs(conv.totalTokens - actualTokens) > 1 // 允许1个token的误差
       })
 
       if (inconsistentConversations.length > 0) {
         log(`⚠️  发现 ${inconsistentConversations.length} 个对话的Token统计不一致`, 'yellow')
-        
+
         inconsistentConversations.slice(0, 3).forEach(conv => {
-          const actualTokens = conv.messages.reduce((sum, msg) => sum + msg.totalTokens, 0)
+          const actualTokens = conv.messages.reduce((sum, msg) =>
+            sum + (msg.promptTokens + msg.completionTokens), 0)
           log(`   对话 ${conv.id}: 记录=${conv.totalTokens}, 实际=${actualTokens}`, 'yellow')
         })
 
@@ -232,7 +235,8 @@ class DatabaseIntegrityChecker {
       })
 
       const inconsistentUsers = users.filter(user => {
-        const calculatedUsage = user.usageStats.reduce((sum, stat) => sum + stat.totalTokens, 0)
+        const calculatedUsage = user.usageStats.reduce((sum, stat) =>
+          sum + stat.promptTokens + stat.completionTokens, 0)
         return Math.abs(user.currentMonthUsage - calculatedUsage) > 10 // 允许10个token的误差
       })
 
@@ -240,7 +244,8 @@ class DatabaseIntegrityChecker {
         log(`⚠️  发现 ${inconsistentUsers.length} 个用户的配额统计不一致`, 'yellow')
         
         inconsistentUsers.slice(0, 3).forEach(user => {
-          const calculatedUsage = user.usageStats.reduce((sum, stat) => sum + stat.totalTokens, 0)
+          const calculatedUsage = user.usageStats.reduce((sum, stat) =>
+          sum + stat.promptTokens + stat.completionTokens, 0)
           log(`   用户 ${user.email}: 记录=${user.currentMonthUsage}, 计算=${calculatedUsage}`, 'yellow')
         })
 

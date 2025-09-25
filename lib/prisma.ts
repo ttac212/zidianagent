@@ -50,11 +50,11 @@ async function initializeDatabase() {
           await prisma.$executeRawUnsafe(opt.sql)
         }
       } catch (pragmaError) {
-        console.warn(`⚠️  ${opt.desc} 配置失败:`, pragmaError.message)
+        console.warn(`⚠️  ${opt.desc} 配置失败:`, (pragmaError as Error).message)
       }
     }
-    
-    console.log('✅ 数据库优化配置已应用')
+
+    // ✅ 数据库优化配置已应用
   } catch (error) {
     console.warn('⚠️  数据库优化配置失败，使用默认设置:', error)
   }

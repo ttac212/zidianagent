@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Search, Plus, Edit, Trash2, Key, Users } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "@/lib/toast/toast"
 
 interface User {
   id: string
@@ -34,7 +34,7 @@ export function UserManagement() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [showCreateDialog, setShowCreateDialog] = useState(false)
-  const { toast } = useToast()
+  // 使用统一的toast API
 
   const fetchUsers = async () => {
     try {
@@ -70,10 +70,8 @@ export function UserManagement() {
 
       setUsers(mockUsers)
     } catch (error) {
-      toast({
-        title: "获取用户列表失败",
-        description: "请稍后重试",
-        variant: "destructive",
+      toast.error("获取用户列表失败", {
+        description: "请稍后重试"
       })
     } finally {
       setLoading(false)
@@ -273,7 +271,7 @@ function CreateUserForm({ onSuccess }: { onSuccess: () => void }) {
     permissions: [] as string[],
   })
   const [loading, setLoading] = useState(false)
-  const { toast } = useToast()
+  // 使用统一的toast API
 
   const allPermissions = [
     { id: "chat", label: "AI对话" },
@@ -290,16 +288,13 @@ function CreateUserForm({ onSuccess }: { onSuccess: () => void }) {
     try {
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      toast({
-        title: "创建成功",
-        description: "用户已创建",
+      toast.success("创建成功", {
+        description: "用户已创建"
       })
       onSuccess()
     } catch (error) {
-      toast({
-        title: "创建失败",
-        description: "请稍后重试",
-        variant: "destructive",
+      toast.error("创建失败", {
+        description: "请稍后重试"
       })
     } finally {
       setLoading(false)

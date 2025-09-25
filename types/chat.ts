@@ -50,6 +50,8 @@ export interface ChatSettings {
 }
 
 // 聊天状态
+export type ResponsePhase = 'idle' | 'queueing' | 'organizing' | 'responding'
+
 export interface ChatState {
   // 消息相关
   messages: ChatMessage[]
@@ -64,13 +66,13 @@ export interface ChatState {
   editingTitle: boolean
   tempTitle: string
   
-  // 新增：打字预览状态
-  typingMode: 'thinking' | 'typing'
+  // 生成流程阶段
+  responsePhase: ResponsePhase
   previewContent: string
 }
 
 // 聊天操作类型
-export type ChatAction = 
+export type ChatAction =
   | { type: 'SET_INPUT'; payload: string }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
@@ -81,9 +83,15 @@ export type ChatAction =
   | { type: 'SET_SETTINGS'; payload: Partial<ChatSettings> }
   | { type: 'SET_EDITING_TITLE'; payload: boolean }
   | { type: 'SET_TEMP_TITLE'; payload: string }
-  | { type: 'SET_TYPING_MODE'; payload: 'thinking' | 'typing' }
+  | { type: 'SET_RESPONSE_PHASE'; payload: ResponsePhase }
   | { type: 'SET_PREVIEW_CONTENT'; payload: string }
   | { type: 'RESET_STATE' }
+  // 事件协议相关的新 actions
+  | { type: 'SEND_USER_MESSAGE'; payload: ChatMessage }
+  | { type: 'SET_PENDING_ASSISTANT'; payload: { id: string; pendingAssistantId: string } }
+  | { type: 'APPEND_ASSISTANT_DELTA'; payload: { pendingAssistantId: string; delta: string } }
+  | { type: 'FINALIZE_ASSISTANT_MESSAGE'; payload: { pendingAssistantId: string; finalMessage: ChatMessage } }
+  | { type: 'RESET_STREAM'; payload?: { pendingAssistantId?: string } }
 
 // 组件 Props 类型
 export interface SmartChatCenterProps {
@@ -109,6 +117,7 @@ export interface ChatHeaderProps {
   onEditTitle: () => void
   onTitleChange: (title: string) => void
   onTitleSubmit: () => void
+  onCancelEdit: () => void
   onDeleteConversation?: () => void
 }
 
@@ -116,10 +125,9 @@ export interface ChatMessagesProps {
   messages: ChatMessage[]
   isLoading: boolean
   error: string | null
-  onCopyMessage: (content: string) => void
   onRetryMessage?: (messageId: string) => void
   // 新增：支持打字预览状态
-  typingMode?: 'thinking' | 'typing'
+  responsePhase?: ResponsePhase
   previewContent?: string
 }
 
@@ -136,7 +144,6 @@ export interface ChatInputProps {
 
 export interface MessageItemProps {
   message: ChatMessage
-  onCopy: (content: string) => void
   onRetry?: () => void
 }
 
@@ -156,6 +163,46 @@ export interface ChatError {
   details?: any
   timestamp: number
 }
+
+// 事件协议类型
+export interface ChatEventProtocol {
+  started: {
+    type: 'started'
+    requestId: string
+    conversationId?: string
+    userMessage: ChatMessage
+    pendingAssistantId: string
+  }
+  chunk: {
+    type: 'chunk'
+    requestId: string
+    delta: string
+    pendingAssistantId: string
+  }
+  done: {
+    type: 'done'
+    requestId: string
+    conversationId?: string
+    assistantMessage: ChatMessage
+    tokens?: number
+    finishedAt: number
+  }
+  error: {
+    type: 'error'
+    requestId: string
+    pendingAssistantId: string
+    error: string
+    recoverable: boolean
+    fallbackMessage?: ChatMessage
+  }
+  warn: {
+    type: 'warn'
+    requestId?: string
+    message: string
+  }
+}
+
+export type ChatEvent = ChatEventProtocol[keyof ChatEventProtocol]
 
 // 性能监控类型
 export interface PerformanceMetrics {
@@ -250,6 +297,6 @@ export const DEFAULT_CHAT_STATE: ChatState = {
   settings: DEFAULT_CHAT_SETTINGS,
   editingTitle: false,
   tempTitle: '',
-  typingMode: 'thinking',
+  responsePhase: 'idle',
   previewContent: '',
 }

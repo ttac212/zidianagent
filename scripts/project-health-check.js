@@ -32,7 +32,10 @@ const healthReport = {
 
 // 工具函数
 function log(message, color = 'reset') {
-  }
+  const colorCode = colors[color] ?? colors.reset ?? ''
+  const resetCode = colors.reset ?? ''
+  console.log(`${colorCode}${message}${resetCode}`)
+}
 
 function runCommand(command, silent = false) {
   try {

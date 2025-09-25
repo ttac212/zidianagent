@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
         _count: {
           select: {
             conversations: true,
-            documents: true,
+            messages: true,
           }
         }
       },

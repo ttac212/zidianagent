@@ -93,9 +93,8 @@ export const ChatMessages = forwardRef<HTMLDivElement, ChatMessagesProps>(({
   messages,
   isLoading,
   error,
-  onCopyMessage,
   onRetryMessage,
-  typingMode = 'thinking',
+  responsePhase = 'idle',
   previewContent = ''
 }, ref) => {
   // 优化：使用 useMemo 缓存渲染的消息列表
@@ -104,11 +103,10 @@ export const ChatMessages = forwardRef<HTMLDivElement, ChatMessagesProps>(({
       <MessageItem
         key={message.id}
         message={message}
-        onCopy={onCopyMessage}
         onRetry={onRetryMessage ? () => onRetryMessage(message.id) : undefined}
       />
     ))
-  }, [messages, onCopyMessage, onRetryMessage])
+  }, [messages, onRetryMessage])
 
   // 如果有错误且没有消息，显示错误状态
   if (error && messages.length === 0) {
@@ -152,10 +150,27 @@ export const ChatMessages = forwardRef<HTMLDivElement, ChatMessagesProps>(({
         {/* 消息列表 */}
         {renderedMessages}
 
-        {/* AI思考指示器 - 支持双状态 */}
-        <TypingIndicator 
+        {/* 当前请求的错误提示 - 即使有历史消息也显示 */}
+        {error && messages.length > 0 && (
+          <div className="py-3">
+            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-5 h-5 rounded-full bg-destructive/20 flex items-center justify-center mt-0.5">
+                  <span className="text-destructive text-xs">!</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-medium text-destructive mb-1">本次回复失败</h4>
+                  <p className="text-xs text-muted-foreground">{error}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 生成过程指示器 - 根据阶段调整提示 */}
+        <TypingIndicator
           isVisible={isLoading}
-          mode={typingMode}
+          phase={responsePhase}
           previewContent={previewContent}
         />
 

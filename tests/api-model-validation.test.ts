@@ -17,7 +17,7 @@ import dotenv from 'dotenv'
 dotenv.config({ path: '.env.local' })
 dotenv.config({ path: '.env' })
 
-// 测试配置 - 从环境变量读取API keys
+
 const MODEL_CONFIGS: ModelTestConfig[] = [
   {
     modelId: 'claude-opus-4-1-20250805',
@@ -32,10 +32,16 @@ const MODEL_CONFIGS: ModelTestConfig[] = [
     displayName: 'Gemini 2.5 Pro'
   }
 ]
+const HAS_ALL_MODEL_KEYS = MODEL_CONFIGS.every(config => Boolean(config.apiKey))
+const RUN_EXTERNAL_API_TESTS = process.env.RUN_EXTERNAL_API_TESTS === 'true' && HAS_ALL_MODEL_KEYS
 
-// 检查API密钥是否存在
-if (!MODEL_CONFIGS[0].apiKey || !MODEL_CONFIGS[1].apiKey) {
-  }
+if (process.env.RUN_EXTERNAL_API_TESTS === 'true' && !HAS_ALL_MODEL_KEYS) {
+  console.warn('[api-model-validation] RUN_EXTERNAL_API_TESTS="true" 但缺少模型 API Key，已跳过对外调用测试')
+}
+
+const describeExternal = RUN_EXTERNAL_API_TESTS ? describe : describe.skip
+
+
 
 // 测试环境配置
 const TEST_CONFIG = {
@@ -94,7 +100,7 @@ describe('API模型验证测试', () => {
     })
   })
 
-  describe('API连接测试', () => {
+  describeExternal('API连接测试', () => {
     test.each(MODEL_CONFIGS)('测试 $modelId API连接', async (config) => {
       const payload = {
         model: config.modelId,
@@ -137,7 +143,7 @@ describe('API模型验证测试', () => {
     }, TEST_CONFIG.timeout)
   })
 
-  describe('流式响应测试', () => {
+  describeExternal('流式响应测试', () => {
     test.each(MODEL_CONFIGS)('测试 $modelId 流式响应', async (config) => {
       const payload = {
         model: config.modelId,

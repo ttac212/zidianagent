@@ -274,14 +274,24 @@ export function SmartChatCenter({
   })
 
   const handleSend = useCallback(() => {
-    if (!state.input.trim() || state.isLoading) return
+    if (state.isLoading) return
+
+    const trimmedInput = state.input.trim()
+
+    // 最终检查：如果trim后为空，提示用户
+    if (!trimmedInput) {
+      toast.warning('消息不能为空', {
+        description: '请输入有效内容后再发送'
+      })
+      return
+    }
 
     // 清除之前的错误
     if (state.error) {
       dispatch({ type: 'SET_ERROR', payload: null })
     }
 
-    const message = state.input
+    const message = trimmedInput // 使用trim后的内容
     dispatch({ type: 'SET_INPUT', payload: '' })
     sendMessage(message)
   }, [state.input, state.isLoading, state.error, sendMessage])

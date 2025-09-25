@@ -82,23 +82,26 @@ class APIMonitor {
   private checkAlerts(stat: APIStats): void {
     // 慢请求告警
     if (stat.duration > this.slowRequestThreshold) {
-      console.warn('[APIMonitor] Slow request detected:', {
-        endpoint: stat.endpoint,
-        duration: `${stat.duration}ms`,
-        threshold: `${this.slowRequestThreshold}ms`,
-        timestamp: stat.timestamp.toISOString()
-      })
+      // 开发环境输出慢请求警告
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[APIMonitor] Slow request detected:', {
+          endpoint: stat.endpoint,
+          duration: `${stat.duration}ms`,
+          threshold: `${this.slowRequestThreshold}ms`,
+          timestamp: stat.timestamp.toISOString()
+        })
+      }
     }
     
     // 错误告警（排除用户取消）
     if (!stat.success) {
       // 跳过用户取消的请求
       if (stat.status === 0 && stat.error?.toLowerCase().includes('cancel')) {
-        console.debug('[APIMonitor] Request cancelled by user:', stat.endpoint)
+        // Request cancelled by user - skipped from error reporting
         return
       }
       
-      // 确保错误信息正确显示
+      // 确保错误信息正确显示，过滤空错误对象
       const errorInfo = {
         endpoint: stat.endpoint,
         status: stat.status,
@@ -106,9 +109,20 @@ class APIMonitor {
         duration: `${stat.duration}ms`,
         timestamp: stat.timestamp.toISOString()
       }
-      
-      // 使用对象格式日志，更清晰且易于调试
-      console.error('[APIMonitor] Request failed:', errorInfo)
+
+      // 只有在有实际错误信息时才记录，避免空对象误报
+      if (stat.error && stat.error.trim()) {
+        // 开发环境记录错误
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[APIMonitor] Request failed:', errorInfo)
+        }
+      } else if (stat.status >= 400) {
+        // 有HTTP错误状态但没有具体错误信息时
+        // 开发环境记录HTTP错误
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[APIMonitor] HTTP error:', errorInfo)
+        }
+      }
     }
     
     // 检查错误率

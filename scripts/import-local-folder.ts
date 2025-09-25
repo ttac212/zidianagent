@@ -64,7 +64,7 @@ async function main() {
       // 仅预览模式
       const preview = await importer.preview()
       
-      preview.importPlan.forEach((plan, index) => {
+      preview.importPlan.forEach((plan: any, index: number) => {
         if (plan.categoryName) {
           }
         })
@@ -77,10 +77,11 @@ async function main() {
       
       if (result.categoryMapping.size > 0) {
         for (const [folder, categoryId] of result.categoryMapping) {
-          const category = await prisma.documentCategory.findUnique({
-            where: { id: categoryId }
-          })
-          console.log(`  文件夹 "${folder}" 映射到分类: ${category?.name || '未知'} (${categoryId})`)
+          // DocumentCategory 模型不存在，跳过分类查询
+          // const category = await prisma.documentCategory.findUnique({
+          //   where: { id: categoryId }
+          // })
+          console.log(`  文件夹 "${folder}" 映射到分类: ID=${categoryId}`)
         }
       }
       
@@ -89,8 +90,8 @@ async function main() {
         result.results.forEach((fileResult, index) => {
           if (!fileResult.success && fileResult.errors.length > 0) {
             console.log(`  文件 ${index + 1} 导入失败:`)
-            fileResult.errors.forEach(error => {
-              console.log(`    第${error.row}行: ${error.message}`)
+            fileResult.errors.forEach((error: any) => {
+              console.log(`    ${typeof error === 'string' ? error : error.message || JSON.stringify(error)}`)
             })
           }
         })

@@ -44,8 +44,7 @@ const PUBLIC_PREFIXES = [
 ]
 
 const PROTECTED_PATHS = new Set([
-  '/workspace', '/settings', '/admin', '/merchants', '/documents', 
-  '/feedback', '/help', '/inspiration'
+  '/workspace', '/settings', '/admin', '/merchants'
 ])
 
 const PROTECTED_API_PREFIXES = [
@@ -142,30 +141,28 @@ export default async function middleware(req: NextRequest) {
       return redirectToLogin(req)
     }
     
-    // 检查缓存
-    const cached = tokenCache.get(sessionToken)
-    if (cached && cached.expires > Date.now()) {
-      cacheHits++ // 缓存命中统计
-      
-      if (!cached.valid) {
-        return redirectToLogin(req)
+    // ��黺��
+    const cachedEntry = tokenCache.get(sessionToken)
+    if (cachedEntry && cachedEntry.expires > Date.now()) {
+      if (!cachedEntry.valid) {
+        tokenCache.delete(sessionToken)
+      } else {
+        cacheHits++ // ��������ͳ��
+
+        if (isAdminPath(pathname) && cachedEntry.role !== "ADMIN") {
+          return new NextResponse('Forbidden', { status: 403 })
+        }
+
+        if (pathname.startsWith('/api/') && cachedEntry.userId) {
+          const response = NextResponse.next()
+          response.headers.set('x-user-id', cachedEntry.userId)
+          logStatsIfNeeded() // ��¼ͳ����Ϣ
+          return response
+        }
+
+        logStatsIfNeeded() // ��¼ͳ����Ϣ
+        return NextResponse.next()
       }
-      
-      // 管理员路径额外检查
-      if (isAdminPath(pathname) && cached.role !== 'ADMIN') {
-        return new NextResponse('Forbidden', { status: 403 })
-      }
-      
-      // API请求添加用户ID到headers（便于API使用）
-      if (pathname.startsWith('/api/') && cached.userId) {
-        const response = NextResponse.next()
-        response.headers.set('x-user-id', cached.userId)
-        logStatsIfNeeded() // 记录统计信息
-        return response
-      }
-      
-      logStatsIfNeeded() // 记录统计信息
-      return NextResponse.next()
     }
     
     // 缓存未命中或已过期，验证token
@@ -175,15 +172,16 @@ export default async function middleware(req: NextRequest) {
       const userId = token?.sub as string
       const role = (token as any)?.role as string
       
-      // 缓存结果（5分钟）
-      tokenCache.set(sessionToken, {
-        valid,
-        userId,
-        role,
-        expires: Date.now() + 5 * 60 * 1000
-      })
-      
-      if (!valid) {
+      // ��������5���ӣ�ֻ��������Ч״̬
+      if (valid) {
+        tokenCache.set(sessionToken, {
+          valid,
+          userId,
+          role,
+          expires: Date.now() + 5 * 60 * 1000
+        })
+      } else {
+        tokenCache.delete(sessionToken)
         return redirectToLogin(req)
       }
       

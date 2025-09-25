@@ -13,7 +13,8 @@ export class LocalStorage {
     try {
       const serializedValue = JSON.stringify(value)
       window.localStorage.setItem(this.prefix + key, serializedValue)
-    } catch (error) {
+    // eslint-disable-next-line no-unused-vars
+    } catch (_error) {
       }
   }
 
@@ -24,7 +25,8 @@ export class LocalStorage {
       const item = window.localStorage.getItem(this.prefix + key)
       if (item === null) return defaultValue
       return JSON.parse(item) as T
-    } catch (error) {
+    // eslint-disable-next-line no-unused-vars
+    } catch (_error) {
       return defaultValue
     }
   }
@@ -34,7 +36,8 @@ export class LocalStorage {
     
     try {
       window.localStorage.removeItem(this.prefix + key)
-    } catch (error) {
+    // eslint-disable-next-line no-unused-vars
+    } catch (_error) {
       }
   }
 
@@ -44,7 +47,8 @@ export class LocalStorage {
     try {
       const keys = Object.keys(window.localStorage).filter((key) => key.startsWith(this.prefix))
       keys.forEach((key) => window.localStorage.removeItem(key))
-    } catch (error) {
+    // eslint-disable-next-line no-unused-vars
+    } catch (_error) {
       }
   }
 

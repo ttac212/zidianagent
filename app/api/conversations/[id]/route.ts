@@ -35,7 +35,6 @@ export async function GET(
             content: true,
             promptTokens: true,
             completionTokens: true,
-            totalTokens: true,
             modelId: true,
             temperature: true,
             finishReason: true,

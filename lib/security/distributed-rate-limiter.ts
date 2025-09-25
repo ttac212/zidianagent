@@ -7,6 +7,7 @@ import { NextRequest } from 'next/server'
 import { createHash } from 'crypto'
 
 // 速率限制存储接口
+/* eslint-disable no-unused-vars */
 export interface RateLimitStore {
   /**
    * 增加计数并返回当前值
@@ -43,6 +44,7 @@ export interface RateLimitStore {
    */
   reset(key: string): Promise<void>
 }
+/* eslint-enable no-unused-vars */
 
 // 内存存储实现（开发环境）
 export class MemoryRateLimitStore implements RateLimitStore {
@@ -125,12 +127,12 @@ export class MemoryRateLimitStore implements RateLimitStore {
 export class RedisRateLimitStore implements RateLimitStore {
   // 注意：这是一个示例实现，实际使用需要配置Redis客户端
   // private redis: Redis
-  
+
   // constructor(redis: Redis) {
   //   this.redis = redis
   // }
-  
-  async increment(key: string, window: number): Promise<{ count: number; ttl: number }> {
+
+  async increment(_key: string, window: number): Promise<{ count: number; ttl: number }> {
     // const multi = this.redis.multi()
     // multi.incr(key)
     // multi.expire(key, Math.ceil(window / 1000))
@@ -146,25 +148,25 @@ export class RedisRateLimitStore implements RateLimitStore {
     return { count: 1, ttl: window }
   }
   
-  async get(key: string): Promise<number> {
+  async get(_key: string): Promise<number> {
     // const count = await this.redis.get(key)
     // return count ? parseInt(count, 10) : 0
     return 0
   }
   
-  async block(key: string, duration: number): Promise<void> {
+  async block(_key: string, _duration: number): Promise<void> {
     // const blockKey = `${key}:blocked`
     // await this.redis.set(blockKey, Date.now() + duration, 'PX', duration)
   }
   
-  async isBlocked(key: string): Promise<number | null> {
+  async isBlocked(_key: string): Promise<number | null> {
     // const blockKey = `${key}:blocked`
     // const value = await this.redis.get(blockKey)
     // return value ? parseInt(value, 10) : null
     return null
   }
   
-  async reset(key: string): Promise<void> {
+  async reset(_key: string): Promise<void> {
     // await this.redis.del(key, `${key}:blocked`)
   }
 }
@@ -179,18 +181,18 @@ export class UpstashRateLimitStore implements RateLimitStore {
   
   // 实现类似Redis版本...
   
-  async increment(key: string, window: number): Promise<{ count: number; ttl: number }> {
+  async increment(_key: string, window: number): Promise<{ count: number; ttl: number }> {
     // 使用Upstash REST API
     return { count: 1, ttl: window }
   }
   
-  async get(key: string): Promise<number> {
+  async get(_key: string): Promise<number> {
     return 0
   }
   
-  async block(key: string, duration: number): Promise<void> {}
-  async isBlocked(key: string): Promise<number | null> { return null }
-  async reset(key: string): Promise<void> {}
+  async block(_key: string, _duration: number): Promise<void> {}
+  async isBlocked(_key: string): Promise<number | null> { return null }
+  async reset(_key: string): Promise<void> {}
 }
 
 // 速率限制配置

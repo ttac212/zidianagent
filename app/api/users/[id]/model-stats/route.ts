@@ -47,7 +47,6 @@ export async function GET(
         date: true,
         modelId: true,
         modelProvider: true,
-        totalTokens: true,
         apiCalls: true,
         promptTokens: true,
         completionTokens: true,
@@ -62,7 +61,7 @@ export async function GET(
     const modelStats = usageStats.filter(stat => stat.modelId && stat.modelId !== "_total")
 
     // 计算总体统计
-    const totalTokens = totalStats.reduce((sum, stat) => sum + stat.totalTokens, 0)
+    const totalTokens = totalStats.reduce((sum, stat) => sum + stat.promptTokens + stat.completionTokens, 0)
     const totalRequests = totalStats.reduce((sum, stat) => sum + stat.apiCalls, 0)
 
     // 按模型聚合统计
@@ -89,7 +88,7 @@ export async function GET(
         }
       }
 
-      modelAggregated[stat.modelId].totalTokens += stat.totalTokens
+      modelAggregated[stat.modelId].totalTokens += (stat.promptTokens + stat.completionTokens)
       modelAggregated[stat.modelId].requests += stat.apiCalls
       modelAggregated[stat.modelId].promptTokens += stat.promptTokens
       modelAggregated[stat.modelId].completionTokens += stat.completionTokens
@@ -123,7 +122,7 @@ export async function GET(
         dailyStatsMap[dateKey][stat.modelId] = { tokens: 0, requests: 0 }
       }
       
-      dailyStatsMap[dateKey][stat.modelId].tokens += stat.totalTokens
+      dailyStatsMap[dateKey][stat.modelId].tokens += (stat.promptTokens + stat.completionTokens)
       dailyStatsMap[dateKey][stat.modelId].requests += stat.apiCalls
     })
 

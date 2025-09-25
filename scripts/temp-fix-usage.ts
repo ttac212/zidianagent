@@ -23,7 +23,10 @@ async function tempFixUsage() {
     const messagesWithoutTokens = await prisma.message.findMany({
       where: {
         role: 'ASSISTANT',
-        totalTokens: 0
+        AND: [
+          { promptTokens: 0 },
+          { completionTokens: 0 }
+        ]
       }
     })
     
@@ -33,14 +36,13 @@ async function tempFixUsage() {
         const estimated = estimateTokens(msg.content)
         const promptTokens = Math.ceil(estimated * 0.3)
         const completionTokens = estimated
-        const totalTokens = Math.ceil(estimated * 1.3)
         
         await prisma.message.update({
           where: { id: msg.id },
           data: {
             promptTokens,
-            completionTokens,
-            totalTokens
+            completionTokens
+            // Note: Message model doesn't have totalTokens field
           }
         })
         fixedCount++
@@ -66,7 +68,8 @@ async function tempFixUsage() {
           }
         },
         _sum: {
-          totalTokens: true
+          promptTokens: true,
+          completionTokens: true
         }
       })
       
@@ -78,12 +81,13 @@ async function tempFixUsage() {
           }
         },
         _sum: {
-          totalTokens: true
+          promptTokens: true,
+          completionTokens: true
         }
       })
       
-      const currentMonth = monthlyUsage._sum.totalTokens || 0
-      const total = totalUsage._sum.totalTokens || 0
+      const currentMonth = (monthlyUsage._sum.promptTokens || 0) + (monthlyUsage._sum.completionTokens || 0)
+      const total = (totalUsage._sum.promptTokens || 0) + (totalUsage._sum.completionTokens || 0)
       
       // 更新用户记录
       await prisma.user.update({
@@ -113,16 +117,17 @@ async function tempFixUsage() {
         },
         select: {
           modelId: true,
-          totalTokens: true
+          promptTokens: true,
+          completionTokens: true
         }
       })
       
       // 按模型分组统计
       const modelStats = new Map<string, number>()
       let totalTokens = 0
-      
+
       for (const msg of todayMessages) {
-        const tokens = msg.totalTokens || 0
+        const tokens = (msg.promptTokens || 0) + (msg.completionTokens || 0)
         totalTokens += tokens
         
         if (msg.modelId) {
@@ -142,7 +147,8 @@ async function tempFixUsage() {
             }
           },
           update: {
-            totalTokens,
+            promptTokens: Math.ceil(totalTokens * 0.3),
+            completionTokens: Math.ceil(totalTokens * 0.7),
             messagesCreated: todayMessages.length,
             updatedAt: new Date()
           },
@@ -150,7 +156,8 @@ async function tempFixUsage() {
             userId: user.id,
             date: today,
             modelId: "_total",
-            totalTokens,
+            promptTokens: Math.ceil(totalTokens * 0.3),
+            completionTokens: Math.ceil(totalTokens * 0.7),
             messagesCreated: todayMessages.length,
             apiCalls: Math.ceil(todayMessages.length / 2),
             successfulCalls: Math.ceil(todayMessages.length / 2)
@@ -173,7 +180,8 @@ async function tempFixUsage() {
             }
           },
           update: {
-            totalTokens: tokens,
+            promptTokens: Math.ceil(tokens * 0.3),
+            completionTokens: Math.ceil(tokens * 0.7),
             updatedAt: new Date()
           },
           create: {
@@ -181,7 +189,8 @@ async function tempFixUsage() {
             date: today,
             modelId,
             modelProvider: provider,
-            totalTokens: tokens,
+            promptTokens: Math.ceil(tokens * 0.3),
+            completionTokens: Math.ceil(tokens * 0.7),
             apiCalls: 1,
             successfulCalls: 1
           }

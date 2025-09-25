@@ -62,16 +62,21 @@ export function useChatEffects({
    * 处理键盘快捷键
    */
   const handleKeyboardShortcuts = useCallback((e: KeyboardEvent) => {
+    // 修复中文输入法问题：如果正在输入中文（composing状态），跳过处理
+    if (e.isComposing) {
+      return
+    }
+
     // 检查是否在输入框中
     const isInInput = document.activeElement === textareaRef.current
-    
-    // Ctrl+Enter 或 Enter (在输入框中且不按 Shift)
-    if ((e.ctrlKey && e.key === 'Enter') || 
-        (isInInput && e.key === 'Enter' && !e.shiftKey)) {
+
+    // Ctrl+Enter - 触发表单提交（保留全局快捷键，但不处理普通Enter避免重复）
+    if (e.ctrlKey && e.key === 'Enter') {
       e.preventDefault()
-      if (state.input.trim() && !state.isLoading) {
-        onSendMessage(state.input)
-        dispatch({ type: 'SET_INPUT', payload: '' })
+      // 统一通过表单提交，避免重复发送
+      const form = textareaRef.current?.closest('form')
+      if (form && state.input.trim() && !state.isLoading) {
+        form.requestSubmit()
       }
       return
     }
@@ -163,11 +168,12 @@ export function useChatEffects({
   }, [handleKeyboardShortcuts])
 
   /**
-   * 模板注入事件监听
+   * 模板注入事件监听 - 统一状态管理入口
    */
   useEffect(() => {
     const handleTemplateInject = (e: CustomEvent) => {
       if (!e?.detail?.content) return
+      // 保持模板注入的直接状态更新，这是合理的外部事件入口
       dispatch({ type: 'SET_INPUT', payload: String(e.detail.content) })
       focusInput()
     }

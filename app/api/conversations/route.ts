@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getToken } from 'next-auth/jwt'
 import { DEFAULT_MODEL, isAllowed } from '@/lib/ai/models'
+import { checkRateLimit } from '@/lib/security/rate-limiter'
 
 // 获取对话列表（受保护）
 export async function GET(request: NextRequest) {
@@ -9,11 +10,19 @@ export async function GET(request: NextRequest) {
     const token = await getToken({ req: request as any })
     if (!token?.sub) return NextResponse.json({ error: '未认证' }, { status: 401 })
 
+    // 速率限制检查
+    const rateLimitResult = await checkRateLimit(request, 'GENERAL', String(token.sub))
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json(
+        { error: rateLimitResult.error?.message || '请求过于频繁' },
+        { status: 429 }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
     const includeMessages = searchParams.get('includeMessages') === 'true'
-    const userId = String(token.sub)
 
     // userId 从 token 解析，无需校验查询参数
 
@@ -22,7 +31,7 @@ export async function GET(request: NextRequest) {
     // 获取对话列表
     const conversations = await prisma.conversation.findMany({
       where: {
-        userId,
+        userId: String(token.sub),
         user: {
           status: { not: 'DELETED' }
         }
@@ -58,7 +67,7 @@ export async function GET(request: NextRequest) {
       },
       orderBy: [
         { lastMessageAt: 'desc' },
-        { updatedAt: 'desc' }
+        { createdAt: 'desc' }  // 使用createdAt作为第二排序，有索引支持
       ],
       skip,
       take: limit,
@@ -67,7 +76,7 @@ export async function GET(request: NextRequest) {
     // 获取总数
     const total = await prisma.conversation.count({
       where: {
-        userId,
+        userId: String(token.sub),
         user: {
           status: { not: 'DELETED' }
         }
@@ -108,6 +117,17 @@ export async function POST(request: NextRequest) {
     const token = await getToken({ req: request as any })
     if (!token?.sub) return NextResponse.json({ error: '未认证' }, { status: 401 })
 
+    const userId = String(token.sub)
+
+    // 速率限制检查
+    const rateLimitResult = await checkRateLimit(request, 'GENERAL', userId)
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json(
+        { error: rateLimitResult.error?.message || '请求过于频繁' },
+        { status: 429 }
+      )
+    }
+
     const body = await request.json()
     const {
       title = '新对话',
@@ -123,8 +143,6 @@ export async function POST(request: NextRequest) {
       // 如果没有提供模型或模型不在允许列表中，使用默认模型
       validatedModelId = DEFAULT_MODEL
     }
-
-    const userId = String(token.sub)
 
     // 检查用户是否存在
     const user = await prisma.user.findUnique({

@@ -6,12 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Textarea } from "@/components/ui/textarea"
 import { useStorage } from "@/components/providers/storage-provider"
 import { Download, Upload, Trash2, AlertTriangle } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "@/lib/toast/toast"
 
 export function DataManagement() {
   const [importData, setImportData] = useState("")
   const { clearAllData, exportData, importData: importDataFn } = useStorage()
-  const { toast } = useToast()
+  // 使用统一的toast API
 
   const handleExport = () => {
     const data = exportData()
@@ -26,35 +26,29 @@ export function DataManagement() {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
 
-      toast({
-        title: "导出成功",
-        description: "数据已导出到文件",
+      toast.success("导出成功", {
+        description: "数据已导出到文件"
       })
     }
   }
 
   const handleImport = () => {
     if (!importData.trim()) {
-      toast({
-        title: "导入失败",
-        description: "请输入要导入的数据",
-        variant: "destructive",
+      toast.error("导入失败", {
+        description: "请输入要导入的数据"
       })
       return
     }
 
     const success = importDataFn(importData)
     if (success) {
-      toast({
-        title: "导入成功",
-        description: "数据已导入，页面将刷新",
+      toast.success("导入成功", {
+        description: "数据已导入，页面将刷新"
       })
       setTimeout(() => window.location.reload(), 1000)
     } else {
-      toast({
-        title: "导入失败",
-        description: "数据格式不正确",
-        variant: "destructive",
+      toast.error("导入失败", {
+        description: "数据格式不正确"
       })
     }
   }

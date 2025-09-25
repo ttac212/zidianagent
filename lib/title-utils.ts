@@ -133,10 +133,10 @@ export function testTitleGeneration() {
     "A"
   ]
   
-  testCases.forEach((content, index) => {
-    const title12 = createSmartTitle(content, 12)
-    const title15 = createSmartTitle(content, 15) 
-    const title20 = createSmartTitle(content, 20)
+  testCases.forEach((content, _index) => {
+    const _title12 = createSmartTitle(content, 12)
+    const _title15 = createSmartTitle(content, 15)
+    const _title20 = createSmartTitle(content, 20)
     
     })
 }

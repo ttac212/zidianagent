@@ -9,7 +9,6 @@ import { PerformanceMonitor } from "@/components/performance/performance-monitor
 import { Preloader } from "@/components/performance/preloader"
 import { SessionProvider } from "@/components/providers/session-provider"
 import { QueryProvider } from "@/lib/providers/query-provider"
-import { Toaster } from "@/components/ui/toaster"
 import { Toaster as SonnerToaster } from "@/components/ui/sonner"
 
 // 使用系统字体配置，避免Google Fonts连接问题
@@ -55,8 +54,14 @@ html {
               <QueryProvider>
                 <Preloader resources={criticalResources} />
                 {children}
-                <Toaster />
-                <SonnerToaster position="top-center" richColors closeButton />
+                <SonnerToaster
+                  position="top-center"
+                  richColors
+                  closeButton
+                  duration={4000}
+                  visibleToasts={3}
+                  theme="system"
+                />
                 {process.env.NODE_ENV === "development" && <PerformanceMonitor />}
               </QueryProvider>
             </SessionProvider>

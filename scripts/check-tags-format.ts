@@ -48,16 +48,8 @@ async function checkTagsFormat() {
       } catch (error) {
         console.log(`  清理后解析失败: ${(error as Error).message}`)
       }
-      
-      // 方法3: 使用eval (不安全，仅用于调试)
-      try {
-        const evalResult = eval(content.tags || '[]')
-        console.log(`  eval解析成功: ${JSON.stringify(evalResult)}`)
-      } catch (error) {
-        console.log(`  eval解析失败: ${(error as Error).message}`)
-      }
     })
-    
+
   } catch (error) {
     console.error('检查标签格式时出错:', error)
   } finally {

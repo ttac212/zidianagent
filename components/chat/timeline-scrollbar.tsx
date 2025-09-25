@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useMemo } from 'react'
 
 // 导入现有的消息类型
 import type { ChatMessage } from '@/types/chat'

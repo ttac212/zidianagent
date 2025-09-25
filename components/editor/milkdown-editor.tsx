@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { toast } from "sonner"
+import { toast } from "@/lib/toast/toast"
 import { Bold, Italic, Code, List, ListOrdered, Quote, Heading1, Heading2, Save, FileText, Check } from "lucide-react"
 
 interface MilkdownEditorProps {

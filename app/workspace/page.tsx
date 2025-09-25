@@ -1,19 +1,12 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useDeferredValue } from "react"
 import { useSearchParams } from 'next/navigation'
 import { useConversations } from "@/hooks/use-conversations"
 import { useSafeLocalStorage } from "@/hooks/use-safe-local-storage"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu"
 import {
   AlertDialog,
   AlertDialogContent,
@@ -25,7 +18,7 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog"
 import { toast } from '@/lib/toast/toast'
-import { ChevronLeft, ChevronRight, MessageSquare, Plus, MoreHorizontal } from "lucide-react"
+import { ChevronLeft, ChevronRight, MessageSquare, Plus, Search } from "lucide-react"
 import dynamic from "next/dynamic"
 import { ChatCenterSkeleton } from "@/components/skeletons/chat-center-skeleton"
 const SmartChatCenterV2 = dynamic(
@@ -37,17 +30,31 @@ import { ALLOWED_MODELS, DEFAULT_MODEL, isAllowed } from "@/lib/ai/models"
 import { WorkspaceSkeleton } from "@/components/skeletons/workspace-skeleton"
 import { ConnectionStatus } from "@/components/ui/connection-status"
 
-import type { Conversation, ChatMessage } from '@/types/chat'
+// 导入新的数据处理工具和组件
+import {
+  buildConversationSections,
+  filterConversations,
+  toggleConversationPinned,
+  type DerivedConversation,
+  type ConversationSection
+} from "@/lib/utils/conversation-list"
+import { ConversationItem } from "@/components/conversation/conversation-item"
+
+import type { Conversation } from '@/types/chat'
 
 export default function WorkspacePage() {
   const searchParams = useSearchParams()
+
+  // 搜索状态管理
+  const [searchQuery, setSearchQuery] = useState('')
+  const deferredSearchQuery = useDeferredValue(searchQuery)
 
   // 使用安全的localStorage hook，并验证模型
   const defaultModelId = ALLOWED_MODELS.length > 0 ? ALLOWED_MODELS[0].id : DEFAULT_MODEL
   const [storedModel, setStoredModel] = useSafeLocalStorage('lastSelectedModelId', defaultModelId)
   
   // 验证存储的模型是否有效
-  const [selectedModel, setSelectedModel] = useState(() => {
+  const [selectedModel] = useState(() => {
     // 如果存储的模型在允许列表中，使用它；否则使用默认模型
     return isAllowed(storedModel) ? storedModel : defaultModelId
   })
@@ -106,6 +113,18 @@ export default function WorkspacePage() {
   const loading = fallbackLoading
   const currentConversation = fallbackCurrentConversation
 
+  // 数据处理：构建分组结构化数据
+  const conversationSections: ConversationSection[] = buildConversationSections(conversations)
+
+  // 搜索过滤逻辑
+  const isSearching = deferredSearchQuery.trim().length > 0
+  const filteredConversations = isSearching
+    ? filterConversations(
+        conversations.map(conv => buildConversationSections([conv])[0]?.conversations[0]).filter(Boolean) as DerivedConversation[],
+        deferredSearchQuery
+      )
+    : []
+
   // 基础性能监控
   useEffect(() => {
     if (!loading && conversations.length > 0) {
@@ -121,6 +140,23 @@ export default function WorkspacePage() {
       createConversation(modelToUse)
     }
   }, [loading, conversations.length, currentConversationId, createConversation, selectedModel, defaultModelId])
+
+  // 固定/取消固定对话功能
+  const handleTogglePin = async (conversation: DerivedConversation) => {
+    try {
+      const updates = toggleConversationPinned(conversation)
+      await handleUpdateConversation(conversation.id, updates)
+
+      const action = conversation.isPinned ? '取消固定' : '固定'
+      toast.success(`已${action}对话`, {
+        description: `"${conversation.title}" 已${action}`
+      })
+    } catch (error) {
+      toast.error('操作失败', {
+        description: '请稍后重试'
+      })
+    }
+  }
 
   // 简化的对话管理函数
   const handleCreateConversation = async () => {
@@ -288,16 +324,6 @@ export default function WorkspacePage() {
     }
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      handleSaveTitle()
-    } else if (e.key === 'Escape') {
-      e.preventDefault()
-      handleCancelEdit()
-    }
-  }
-
 
   // 响应式监听器 - 处理窗口大小变化
   useEffect(() => {
@@ -383,133 +409,88 @@ export default function WorkspacePage() {
 
           {/* 对话列表 - 可滚动区域 */}
           <div className="flex-1 overflow-y-auto p-2 min-h-0 scrollbar-hide">
+            {/* 搜索框 */}
+            <div className="sticky top-0 bg-card z-10 pb-2 mb-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="搜索对话..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 h-9 bg-background"
+                />
+              </div>
+            </div>
+
             {conversations.length === 0 ? (
               <div className="text-center text-muted-foreground py-8">
                 <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">暂无对话历史</p>
               </div>
-            ) : (
+            ) : isSearching ? (
+              // 搜索结果视图
               <div className="space-y-1">
-                {conversations.map((conv) => (
-                  <div key={conv.id} className="relative">
-                    {editingConvId === conv.id ? (
-                      // 编辑模式 - 增强的用户体验
-                      <div className="w-full p-3 bg-secondary rounded-md border border-primary/20 animate-in fade-in-0 duration-200">
-                        <Input
-                          value={editTitle}
-                          onChange={(e) => setEditTitle(e.target.value)}
-                          onBlur={handleSaveTitle}
-                          onKeyDown={handleKeyDown}
-                          className="text-sm font-medium bg-transparent border-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-0 p-0 h-auto shadow-none"
-                          autoFocus
-                          placeholder="输入对话标题..."
-                          maxLength={50}
+                {filteredConversations.length === 0 ? (
+                  <div className="text-center text-muted-foreground py-6">
+                    <Search className="h-6 w-6 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">未找到匹配的对话</p>
+                  </div>
+                ) : (
+                  filteredConversations.map((conv) => (
+                    <ConversationItem
+                      key={conv.id}
+                      conversation={conv}
+                      isSelected={currentConversation?.id === conv.id}
+                      editingConvId={editingConvId}
+                      editTitle={editTitle}
+                      onSelect={() => handleSelectConversation(conv.id)}
+                      onStartEdit={() => handleStartEdit(conv.id, conv.title)}
+                      onSaveTitle={handleSaveTitle}
+                      onCancelEdit={handleCancelEdit}
+                      onEditTitleChange={setEditTitle}
+                      onTogglePin={() => handleTogglePin(conv)}
+                      onExport={() => handleExportConversation(conv)}
+                      onCopyLink={() => handleCopyConversationLink(conv)}
+                      onDelete={() => handleOpenDeleteConfirm(conv)}
+                    />
+                  ))
+                )}
+              </div>
+            ) : (
+              // 分组视图
+              <div className="space-y-4">
+                {conversationSections.map((section) => (
+                  <div key={section.title}>
+                    {/* 分组标题 */}
+                    <div className="flex items-center gap-2 px-2 py-1 text-xs font-medium text-muted-foreground">
+                      <span>{section.title}</span>
+                      <div className="flex-1 h-px bg-border" />
+                      <span className="text-[10px] px-1.5 py-0.5 bg-muted/50 rounded">
+                        {section.conversations.length}
+                      </span>
+                    </div>
+
+                    {/* 分组对话列表 */}
+                    <div className="space-y-1">
+                      {section.conversations.map((conv) => (
+                        <ConversationItem
+                          key={conv.id}
+                          conversation={conv}
+                          isSelected={currentConversation?.id === conv.id}
+                          editingConvId={editingConvId}
+                          editTitle={editTitle}
+                          onSelect={() => handleSelectConversation(conv.id)}
+                          onStartEdit={() => handleStartEdit(conv.id, conv.title)}
+                          onSaveTitle={handleSaveTitle}
+                          onCancelEdit={handleCancelEdit}
+                          onEditTitleChange={setEditTitle}
+                          onTogglePin={() => handleTogglePin(conv)}
+                          onExport={() => handleExportConversation(conv)}
+                          onCopyLink={() => handleCopyConversationLink(conv)}
+                          onDelete={() => handleOpenDeleteConfirm(conv)}
                         />
-                        <div className="flex items-center justify-between mt-2">
-                          <div className="text-xs text-muted-foreground">
-                            回车保存 • ESC取消
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {editTitle.length}/50
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      // 正常模式 - 重新设计避免按钮嵌套
-                      <div className="relative w-full group">
-                        <div
-                          className={`w-full justify-start text-left h-auto p-3 transition-all duration-200 cursor-pointer rounded-md ${
-                            currentConversation?.id === conv.id 
-                              ? 'bg-secondary ring-1 ring-primary/20 shadow-sm' 
-                              : 'hover:bg-accent hover:shadow-sm'
-                          }`}
-                          onClick={() => handleSelectConversation(conv.id)}
-                          onDoubleClick={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            handleStartEdit(conv.id, conv.title)
-                          }}
-                          title="单击选择 • 双击编辑标题"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium truncate">{conv.title}</div>
-                              <div className="text-xs text-muted-foreground flex items-center gap-2">
-                                <span>{conv.metadata?.messageCount || 0} 条消息</span>
-                                <span>•</span>
-                                <span title={`创建于 ${new Date(conv.createdAt).toLocaleString('zh-CN')}`}>
-                                  {new Date(conv.updatedAt).toLocaleDateString('zh-CN', {
-                                    month: 'short',
-                                    day: 'numeric'
-                                  })}
-                                </span>
-                                {conv.model && (
-                                  <>
-                                    <span>•</span>
-                                    <span className="px-1.5 py-0.5 rounded text-xs bg-muted/50 text-muted-foreground">
-                                      {conv.model.split('-')[0]}
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                            
-                            {/* 操作菜单 - hover时显示 */}
-                            <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center gap-1">
-                              {/* 三点菜单 */}
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 w-6 p-0 hover:bg-accent"
-                                    onClick={(e) => {
-                                      e.preventDefault()
-                                      e.stopPropagation()
-                                    }}
-                                  >
-                                    <MoreHorizontal className="h-3 w-3" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent
-                                  align="end"
-                                  className="min-w-[10rem]"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <DropdownMenuItem 
-                                    onSelect={(e) => {
-                                      e.stopPropagation()
-                                      handleExportConversation(conv)
-                                    }}
-                                  >
-                                    导出对话
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem 
-                                    onSelect={(e) => {
-                                      e.stopPropagation()
-                                      handleCopyConversationLink(conv)
-                                    }}
-                                  >
-                                    复制链接
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    className="text-destructive focus:text-destructive"
-                                    onClick={(e) => {
-                                      e.preventDefault()
-                                      e.stopPropagation()
-                                      handleOpenDeleteConfirm(conv)
-                                    }}
-                                  >
-                                    删除对话
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>

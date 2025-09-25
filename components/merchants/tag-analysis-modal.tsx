@@ -11,9 +11,8 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { 
+import {
   Tag,
-  TrendingUp,
   Hash,
   BarChart3,
   Star
@@ -44,7 +43,7 @@ interface TagAnalysisData {
 
 interface TagAnalysisModalProps {
   open: boolean
-  onOpenChange: (open: boolean) => void
+  onOpenChange: (_open: boolean) => void
   merchantId: string
   merchantName: string
 }
@@ -69,7 +68,8 @@ export function TagAnalysisModal({
         setData(result)
       } else {
         }
-    } catch (error) {
+    // eslint-disable-next-line no-unused-vars
+    } catch (_error) {
       } finally {
       setLoading(false)
     }
@@ -197,7 +197,7 @@ export function TagAnalysisModal({
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-3">
-                        {data.engagementAnalysis.highPerformingTags.slice(0, 8).map((tag, index) => (
+                        {data.engagementAnalysis.highPerformingTags.slice(0, 8).map((tag, _index) => (
                           <div key={tag.tag} className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               <Star className="h-3 w-3 text-yellow-500" />
@@ -220,7 +220,7 @@ export function TagAnalysisModal({
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-3">
-                        {data.topTags.slice(0, 6).map((tag, index) => {
+                        {data.topTags.slice(0, 6).map((tag, _index) => {
                           const maxEngagement = Math.max(...data.topTags.map(t => t.avgEngagement))
                           const percentage = (tag.avgEngagement / maxEngagement) * 100
                           
@@ -248,7 +248,7 @@ export function TagAnalysisModal({
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
-                      {data.categoryTags.map((category, index) => (
+                      {data.categoryTags.map((category, _index) => (
                         <div key={category.category} className="space-y-2">
                           <div className="flex items-center justify-between">
                             <h4 className="font-medium">{category.category}</h4>

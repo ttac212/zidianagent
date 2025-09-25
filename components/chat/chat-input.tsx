@@ -10,7 +10,7 @@ import { Send, Loader2, Square, Lightbulb, AlertTriangle } from 'lucide-react'
 import type { ChatInputProps } from '@/types/chat'
 import { useAutoResizeTextarea } from '@/hooks/use-auto-resize-textarea'
 import { ModelSelectorAnimated } from './model-selector-animated'
-import { MESSAGE_LIMITS, getCharLimitStatus } from '@/lib/constants/message-limits'
+import { MESSAGE_LIMITS, getCharLimitStatus, truncateMessage } from '@/lib/constants/message-limits'
 
 // 推荐问题列表
 const SUGGESTED_QUESTIONS = [
@@ -69,7 +69,32 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
   const [isFocused, setIsFocused] = useState(false)
   // 占位符文本状态
   const [currentPlaceholder, setCurrentPlaceholder] = useState('')
-  
+  // 截断提示状态
+  const [showTruncationTip, setShowTruncationTip] = useState(false)
+  const [truncationInfo, setTruncationInfo] = useState<{ originalLength: number } | null>(null)
+  // 换行清洗提示状态
+  const [showCleanupTip, setShowCleanupTip] = useState(false)
+  const cleanupTimerRef = React.useRef<NodeJS.Timeout | null>(null)
+
+  // 轻量清洗换行符 - 保留创作者的段落感，但去除多余空行
+  const cleanupWhitespace = (content: string) => {
+    const original = content
+
+    // 1. 统一换行符：\r\n → \n
+    let cleaned = content.replace(/\r\n/g, '\n')
+
+    // 2. 压缩连续空行：3个以上换行 → 2个换行（保留段落间隔）
+    cleaned = cleaned.replace(/\n{3,}/g, '\n\n')
+
+    // 3. 去除行尾空白：行末的空格和制表符
+    cleaned = cleaned.replace(/[ \t]+\n/g, '\n')
+
+    // 检查是否进行了清理
+    const wasCleaned = original !== cleaned
+
+    return { content: cleaned, wasCleaned }
+  }
+
   // 字符计数相关状态
   const charCount = useMemo(() => input.length, [input])
   const limitStatus = useMemo(() => getCharLimitStatus(charCount), [charCount])
@@ -92,15 +117,28 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
     return placeholders[Math.floor(Math.random() * placeholders.length)]
   }, [isLoading])
   
+  // 自适应高度：使用优化后的 Hook，内置reset逻辑
+  const { textareaRef, adjustHeight } = useAutoResizeTextarea({
+    minHeight: 72,
+    maxHeight: 300,
+    value: input // 传入input值，hook内部自动处理重置逻辑
+  })
+
   // 初始化和更新占位符
   React.useEffect(() => {
     if (!currentPlaceholder) {
       setCurrentPlaceholder(getSmartPlaceholder)
     }
   }, [currentPlaceholder, getSmartPlaceholder])
-  
-  // 自适应高度：使用统一 Hook（min=72, max=300）
-  const { textareaRef, adjustHeight } = useAutoResizeTextarea({ minHeight: 72, maxHeight: 300 })
+
+  // 清理计时器
+  React.useEffect(() => {
+    return () => {
+      if (cleanupTimerRef.current) {
+        clearTimeout(cleanupTimerRef.current)
+      }
+    }
+  }, [])
   const setTextareaRef = (node: HTMLTextAreaElement | null) => {
     textareaRef.current = node
     // 透传给外部 forwardRef，保持聚焦与快捷键逻辑不变
@@ -112,11 +150,20 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // 修复中文输入法问题：如果正在输入中文（composing状态），跳过处理
+    if (e.nativeEvent.isComposing) {
+      return
+    }
+
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey) {
       e.preventDefault()
       if (input.trim() && !isLoading && !isOverLimit) {
         setShowEmptyInputTip(false) // 隐藏提示
-        onSubmit(e as any)
+        // 彻底统一发送路径：触发表单提交，不直接调用onSubmit
+        const form = (e.target as HTMLTextAreaElement).closest('form')
+        if (form) {
+          form.requestSubmit()
+        }
       } else if (!input.trim() && !isLoading) {
         // 输入为空时显示友好提示
         setShowEmptyInputTip(true)
@@ -130,15 +177,43 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
   
   // 处理输入变化，包含字符限制验证
   const handleInputChange = (value: string) => {
-    // 如果超过最大限制，阻止输入并显示警告
-    if (value.length > MESSAGE_LIMITS.MAX_LENGTH) {
-      // 振动效果提示用户（仅在支持的设备上）
-      if (typeof window !== 'undefined' && 'navigator' in window && navigator.vibrate) {
-        navigator.vibrate(100)
+    // 1. 轻量清洗换行符
+    const { content: cleanedValue, wasCleaned } = cleanupWhitespace(value)
+
+    // 显示清洗提示（如果有清理动作）
+    if (wasCleaned) {
+      setShowCleanupTip(true)
+      // 清除之前的计时器，避免重复创建
+      if (cleanupTimerRef.current) {
+        clearTimeout(cleanupTimerRef.current)
       }
-      return // 阻止超出限制的输入
+      cleanupTimerRef.current = setTimeout(() => {
+        setShowCleanupTip(false)
+        cleanupTimerRef.current = null
+      }, 3000) // 3秒后隐藏
     }
-    onInputChange(value)
+
+    // 2. 如果超过最大限制，使用截断逻辑而不是静默丢弃
+    if (cleanedValue.length > MESSAGE_LIMITS.MAX_LENGTH) {
+      const result = truncateMessage(cleanedValue)
+      if (result.truncated) {
+        // 显示截断提示
+        setShowTruncationTip(true)
+        setTruncationInfo({ originalLength: result.originalLength })
+        // 5秒后隐藏提示
+        setTimeout(() => {
+          setShowTruncationTip(false)
+          setTruncationInfo(null)
+        }, 5000)
+        // 使用截断后的内容
+        onInputChange(result.content)
+        adjustHeight()
+        return
+      }
+    }
+
+    // 3. 正常情况下的处理
+    onInputChange(cleanedValue)
     adjustHeight()
   }
   
@@ -166,7 +241,8 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
 
   // 处理推荐问题点击
   const handleSuggestedQuestion = (question: string) => {
-    onInputChange(question)
+    // 统一走handleInputChange，确保截断逻辑和高度调整生效
+    handleInputChange(question)
     setShowEmptyInputTip(false)
   }
 
@@ -206,7 +282,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                 variant="ghost"
                 size="sm"
                 className="h-6 px-2 text-xs"
-                onClick={() => onInputChange(`请帮我优化这段文本：\n\n"${selectedText}"\n\n`)}
+                onClick={() => handleInputChange(`请帮我优化这段文本：\n\n"${selectedText}"\n\n`)}
               >
                 匹配合适的角色来优化这段文本
               </Button>
@@ -214,7 +290,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                 variant="ghost"
                 size="sm"
                 className="h-6 px-2 text-xs"
-                onClick={() => onInputChange(`请帮我扩展这段内容：\n\n"${selectedText}"\n\n`)}
+                onClick={() => handleInputChange(`请帮我扩展这段内容：\n\n"${selectedText}"\n\n`)}
               >
                 扩展内容，保持风格不变
               </Button>
@@ -222,7 +298,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                 variant="ghost"
                 size="sm"
                 className="h-6 px-2 text-xs"
-                onClick={() => onInputChange(`请帮我总结这段文本：\n\n"${selectedText}"\n\n`)}
+                onClick={() => handleInputChange(`请帮我总结这段文本：\n\n"${selectedText}"\n\n`)}
               >
                 总结内容
               </Button>
@@ -273,7 +349,6 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                   minHeight: '72px',
                   maxHeight: '300px'
                 }}
-                disabled={isLoading}
                 data-chat-composer-input
               />
 
@@ -380,11 +455,41 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
           </div>
         )}
 
+        {/* 换行清洗提示 */}
+        {showCleanupTip && (
+          <div className="mt-3 p-3 rounded-xl border bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 transition-all duration-200 animate-in slide-in-from-top-2 fade-in-0">
+            <div className="flex items-center gap-2">
+              <Lightbulb className="w-4 h-4 text-blue-500" />
+              <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                已自动清理多余空行
+              </span>
+            </div>
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+              保留段落结构，去除冗余空白行和行尾空格
+            </p>
+          </div>
+        )}
+
+        {/* 截断提示 */}
+        {showTruncationTip && truncationInfo && (
+          <div className="mt-3 p-3 rounded-xl border bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800 transition-all duration-200 animate-in slide-in-from-top-2 fade-in-0">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-orange-500" />
+              <span className="text-sm font-medium text-orange-900 dark:text-orange-100">
+                内容已自动截断
+              </span>
+            </div>
+            <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+              原文本 {truncationInfo.originalLength.toLocaleString()} 字符已截断至 {MESSAGE_LIMITS.MAX_LENGTH.toLocaleString()} 字符，建议分段发送完整内容
+            </p>
+          </div>
+        )}
+
         {/* 字符限制警告 */}
         {isOverWarningThreshold && (
           <div className={`mt-3 p-3 rounded-xl border transition-all duration-200 animate-in slide-in-from-top-2 fade-in-0 ${
-            isOverLimit 
-              ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' 
+            isOverLimit
+              ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
               : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
           }`}>
             <div className="flex items-center gap-2">
@@ -392,12 +497,12 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                 isOverLimit ? 'text-red-500' : 'text-amber-500'
               }`} />
               <span className={`text-sm font-medium ${
-                isOverLimit 
-                  ? 'text-red-900 dark:text-red-100' 
+                isOverLimit
+                  ? 'text-red-900 dark:text-red-100'
                   : 'text-amber-900 dark:text-amber-100'
               }`}>
-                {isOverLimit 
-                  ? `已超出字符限制 ${Math.abs(remainingChars)} 个字符` 
+                {isOverLimit
+                  ? `已超出字符限制 ${Math.abs(remainingChars)} 个字符`
                   : `还可输入 ${remainingChars} 个字符`
                 }
               </span>

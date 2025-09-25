@@ -25,10 +25,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { 
+import {
   ArrowLeft,
-  Building2, 
-  MapPin, 
+  Building2,
   Calendar,
   Eye,
   Heart,
@@ -88,7 +87,7 @@ export default function MerchantDetailPage() {
         setMerchant(data.merchant)
         setContents(data.merchant.contents || [])
       }
-    } catch (_error) {
+    } catch {
       // TODO: 接入统一的错误上报
     } finally {
       setLoading(false)

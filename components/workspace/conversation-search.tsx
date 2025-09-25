@@ -25,7 +25,7 @@ import {
 
 interface ConversationSearchProps {
   searchQuery: string
-  onSearchChange: (query: string) => void
+  onSearchChange: (_query: string) => void
   onClearSearch: () => void
   isSearching?: boolean
   resultCount?: number
@@ -33,7 +33,7 @@ interface ConversationSearchProps {
     sortBy: string
     sortOrder: string
   }
-  onFiltersChange: (filters: any) => void
+  onFiltersChange: (_filters: any) => void
 }
 
 interface QuickFilter {
@@ -207,7 +207,7 @@ export const ConversationSearch: React.FC<ConversationSearchProps> = ({
 // 高级过滤面板组件
 interface AdvancedFiltersProps {
   filters: any
-  onFiltersChange: (filters: any) => void
+  onFiltersChange: (_filters: any) => void
   onClose: () => void
 }
 
