@@ -14,8 +14,8 @@ export const ChatHeader = React.memo<ChatHeaderProps>(({
   conversation,
   editingTitle,
   tempTitle,
-  isLoading,
-  onCreateConversation,
+  isLoading: _isLoading,
+  onCreateConversation: _onCreateConversation,
   onEditTitle,
   onTitleChange,
   onTitleSubmit,
@@ -94,11 +94,8 @@ export const ChatHeader = React.memo<ChatHeaderProps>(({
                     className="min-h-[32px] min-w-[32px] p-1 opacity-0 group-hover:opacity-70 hover:!opacity-100 transition-all duration-200 text-muted-foreground hover:text-destructive hover:bg-destructive/10 touch-manipulation"
                     onClick={(e) => {
                       e.stopPropagation()
-                      // 添加安全确认机制
-                      const confirmMessage = `确认删除对话「${conversation.title || '新对话'}」吗？\n\n此操作不可撤销，所有消息都将被永久删除。`
-                      if (window.confirm(confirmMessage)) {
-                        onDeleteConversation()
-                      }
+                      // 直接调用删除回调，由父组件处理确认对话框
+                      onDeleteConversation()
                     }}
                     title="删除对话"
                   >
@@ -115,3 +112,4 @@ export const ChatHeader = React.memo<ChatHeaderProps>(({
 })
 
 ChatHeader.displayName = 'ChatHeader'
+

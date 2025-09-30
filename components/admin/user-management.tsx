@@ -69,7 +69,7 @@ export function UserManagement() {
       ]
 
       setUsers(mockUsers)
-    } catch (error) {
+    } catch (_error) {
       toast.error("获取用户列表失败", {
         description: "请稍后重试"
       })
@@ -292,7 +292,7 @@ function CreateUserForm({ onSuccess }: { onSuccess: () => void }) {
         description: "用户已创建"
       })
       onSuccess()
-    } catch (error) {
+    } catch (_error) {
       toast.error("创建失败", {
         description: "请稍后重试"
       })

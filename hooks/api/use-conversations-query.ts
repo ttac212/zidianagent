@@ -3,7 +3,7 @@
  * 提供缓存、重试和状态管理功能的数据获取
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Conversation, ChatMessage } from '@/types/chat'
 
 // ==================== 查询Keys ====================
@@ -40,6 +40,13 @@ interface ApiConversation {
   messageCount?: number
   totalTokens?: number
   messages?: ApiMessage[]
+  lastMessage?: {
+    id: string
+    role: string
+    content: string
+    createdAt: string
+  } | null
+  metadata?: Record<string, unknown>
 }
 
 interface ConversationListResponse {
@@ -93,13 +100,12 @@ interface DeleteConversationResponse {
  * 转换API消息为前端消息格式
  */
 function transformApiMessage(msg: ApiMessage): ChatMessage {
-  // 过滤掉不支持的角色类型，只保留 user 和 assistant
+  // 保留原始角色类型，UI层决定如何显示
   const role = msg.role.toLowerCase()
-  const validRole = (role === 'user' || role === 'assistant') ? role : 'assistant'
 
-  return {
+  const transformedMessage: ChatMessage = {
     id: msg.id,
-    role: validRole as 'user' | 'assistant',
+    role: role as any, // 保留原始role，前端组件负责渲染处理
     content: msg.content,
     timestamp: new Date(msg.createdAt).getTime(),
     tokens: msg.totalTokens || 0,
@@ -107,27 +113,63 @@ function transformApiMessage(msg: ApiMessage): ChatMessage {
       ...(msg.metadata as any),
       // 将数据库的modelId字段映射到metadata.model，供前端显示组件使用
       ...(msg.modelId && { model: msg.modelId })
-    }
+    },
+    status: 'completed' // API消息默认为已完成状态
   }
+
+  return transformedMessage
+}
+
+/**
+ * 安全的日期转换函数 - 消除特殊情况
+ * @param dateValue 任意日期值
+ * @param fallback 失败时的回退值（默认为当前时间）
+ * @returns 有效的时间戳
+ */
+function safeParseTimestamp(dateValue: string | number | Date | undefined | null, fallback?: number): number {
+  if (!dateValue) {
+    return fallback ?? Date.now()
+  }
+
+  const timestamp = new Date(dateValue).getTime()
+
+  // NaN检查 - 统一处理所有无效日期
+  if (Number.isNaN(timestamp)) {
+    console.warn('⚠️ 无效的日期值:', dateValue, '使用fallback:', fallback ?? Date.now())
+    return fallback ?? Date.now()
+  }
+
+  return timestamp
 }
 
 /**
  * 转换API对话为前端对话格式
  */
 function transformApiConversation(conv: ApiConversation): Conversation {
-  return {
+  const transformedConversation: Conversation = {
     id: conv.id,
     title: conv.title,
     messages: conv.messages?.map(transformApiMessage) || [],
     model: conv.modelId,
-    createdAt: new Date(conv.createdAt).getTime(),
-    updatedAt: new Date(conv.updatedAt).getTime(),
+    createdAt: safeParseTimestamp(conv.createdAt),
+    updatedAt: safeParseTimestamp(conv.updatedAt),
     metadata: {
+      // 先展开数据库中的 metadata（包含用户自定义字段如 tags、pinned 等）
+      ...(conv.metadata && typeof conv.metadata === 'object' ? conv.metadata : {}),
+      // 然后用服务端的实时统计字段覆盖（确保统计数据是最新的）
       totalTokens: conv.totalTokens || 0,
       messageCount: conv.messageCount || 0,
-      lastActivity: new Date(conv.updatedAt).getTime()
+      lastActivity: safeParseTimestamp(conv.updatedAt),
+      lastMessage: conv.lastMessage ? {
+        id: conv.lastMessage.id,
+        role: conv.lastMessage.role as 'user' | 'assistant',
+        content: conv.lastMessage.content,
+        timestamp: safeParseTimestamp(conv.lastMessage.createdAt)
+      } : null
     }
   }
+
+  return transformedConversation
 }
 
 // ==================== API函数 ====================
@@ -150,6 +192,16 @@ export const conversationApi = {
     const response = await fetch('/api/conversations?' + searchParams)
 
     if (!response.ok) {
+      // 401未认证 - 重定向到登录页
+      if (response.status === 401) {
+        console.error('❌ 未认证，需要重新登录')
+        // 在客户端环境下重定向
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login?callbackUrl=' + encodeURIComponent(window.location.pathname)
+        }
+        throw new Error('未认证，请重新登录')
+      }
+
       throw new Error('获取对话列表失败: ' + response.status + ' ' + response.statusText)
     }
 
@@ -160,7 +212,9 @@ export const conversationApi = {
     }
 
     // 转换API响应为前端格式
-    return result.data.conversations.map(transformApiConversation)
+    const conversations = result.data.conversations.map(transformApiConversation)
+
+    return conversations
   },
 
   // 获取单个对话详情
@@ -225,7 +279,7 @@ export const conversationApi = {
     }
 
     const result: DeleteConversationResponse = await response.json()
-    
+
     if (!result.success) {
       throw new Error(result.message || '删除对话失败')
     }
@@ -236,6 +290,10 @@ export const conversationApi = {
     const payload: Record<string, unknown> = {}
     if (updates.title !== undefined) payload.title = updates.title
     if (updates.model !== undefined) payload.modelId = updates.model
+    if (updates.metadata !== undefined) payload.metadata = updates.metadata
+    if (updates.temperature !== undefined) payload.temperature = updates.temperature
+    if (updates.maxTokens !== undefined) payload.maxTokens = updates.maxTokens
+    if (updates.contextAware !== undefined) payload.contextAware = updates.contextAware
 
     if (Object.keys(payload).length === 0) {
       const latest = await conversationApi.fetchConversation(id)

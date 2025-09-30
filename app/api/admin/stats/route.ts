@@ -1,11 +1,19 @@
 import type { NextRequest } from "next/server"
 import { getToken } from "next-auth/jwt"
+import * as dt from '@/lib/utils/date-toolkit'
+import {
+  success,
+  forbidden,
+  unauthorized,
+  serverError
+} from '@/lib/api/http-response'
+
 
 export async function GET(request: NextRequest) {
   try {
     const token = await getToken({ req: request as any })
-    if (!token?.sub) return Response.json({ error: "未认证" }, { status: 401 })
-    if ((token as any).role !== "ADMIN") return Response.json({ error: "无权限" }, { status: 403 })
+    if (!token?.sub) return unauthorized('未认证')
+    if ((token as any).role !== "ADMIN") return forbidden('无权限')
 
     const { searchParams } = new URL(request.url)
     const timeRange = searchParams.get("timeRange") || "7d"
@@ -13,13 +21,10 @@ export async function GET(request: NextRequest) {
     // 模拟统计数据
     const stats = generateMockStats(timeRange)
 
-    return Response.json({
-      success: true,
-      data: stats,
-    })
+    return success(stats)
   } catch (error) {
-    void error // 明确表示error参数被故意未使用
-    return Response.json({ success: false, error: "获取统计数据失败" }, { status: 500 })
+    console.error("获取统计数据失败", error)
+    return serverError('获取统计数据失败')
   }
 }
 
@@ -38,7 +43,7 @@ function generateMockStats(timeRange: string) {
 
   // 使用趋势
   const usageTrend = Array.from({ length: days }, (_, i) => ({
-    date: new Date(Date.now() - (days - 1 - i) * 24 * 60 * 60 * 1000).toLocaleDateString("zh-CN", {
+    date: new Date(dt.timestamp() - (days - 1 - i) * 24 * 60 * 60 * 1000).toLocaleDateString("zh-CN", {
       month: "short",
       day: "numeric",
     }),

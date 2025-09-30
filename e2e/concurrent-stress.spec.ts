@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import * as dt from '@/lib/utils/date-toolkit'
 
 /**
  * 并发和压力测试
@@ -32,7 +33,7 @@ test.describe('并发压力测试', () => {
 
   // 并发登录性能测试
   test('并发登录性能测试', async ({ page, context }) => {
-    const startTime = Date.now()
+    const startTime = dt.timestamp()
     const userId = `user-${Math.random().toString(36).substr(2, 9)}`
     const metrics: PerformanceMetrics = {
       loginTime: 0,
@@ -47,7 +48,7 @@ test.describe('并发压力测试', () => {
       console.log(`🔄 [${userId}] 开始登录性能测试...`)
       
       // 登录流程计时
-      const loginStart = Date.now()
+      const loginStart = dt.timestamp()
       
       await page.goto('/workspace')
       await page.waitForLoadState('networkidle')
@@ -64,19 +65,19 @@ test.describe('并发压力测试', () => {
         // 等待登录完成
         try {
           await page.waitForURL('**/workspace', { timeout: 15000 })
-        } catch (error) {
+        } catch (_error) {
           await page.goto('/workspace')
           await page.waitForLoadState('networkidle')
         }
       }
       
-      const loginEnd = Date.now()
+      const loginEnd = dt.timestamp()
       metrics.loginTime = loginEnd - loginStart
       
       console.log(`✅ [${userId}] 登录完成，耗时: ${metrics.loginTime}ms`)
       
       // 收集页面性能指标
-      const performanceData = await page.evaluate(() => {
+      const performanceMetricsData = await page.evaluate(() => {
         const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming
         return {
           domContentLoaded: navigation.domContentLoadedEventEnd - navigation.domContentLoadedEventStart,
@@ -85,20 +86,20 @@ test.describe('并发压力测试', () => {
           domElements: document.querySelectorAll('*').length
         }
       })
-      
-      metrics.pageLoadTime.push(performanceData.domContentLoaded)
-      metrics.domElements = performanceData.domElements
+
+      metrics.pageLoadTime.push(performanceMetricsData.domContentLoaded)
+      metrics.domElements = performanceMetricsData.domElements
       
       // 基础界面交互测试（无消息发送）
       try {
         await page.waitForSelector('[data-testid="chat-container"], .chat-container, main', { timeout: 10000 })
         console.log(`✅ [${userId}] 界面加载完成`)
-      } catch (error) {
+      } catch (_error) {
         metrics.errors.push('界面加载超时')
         console.warn(`⚠️ [${userId}] 界面加载超时`)
       }
       
-      metrics.totalTestTime = Date.now() - startTime
+      metrics.totalTestTime = dt.timestamp() - startTime
       performanceData.push(metrics)
       
     } catch (error) {
@@ -120,14 +121,14 @@ test.describe('并发压力测试', () => {
       userId
     }
 
-    const testStart = Date.now()
+    const testStart = dt.timestamp()
 
     try {
       console.log(`🚀 [${userId}] 开始页面加载性能压力测试...`)
 
       // 多次页面加载测试
       for (let i = 0; i < PAGE_LOAD_TESTS; i++) {
-        const loadStart = Date.now()
+        const loadStart = dt.timestamp()
         
         try {
           // 页面导航测试
@@ -150,7 +151,7 @@ test.describe('并发压力测试', () => {
           // 等待关键元素加载
           await page.waitForSelector('[data-testid="chat-container"], .chat-container, main', { timeout: 8000 })
           
-          const loadEnd = Date.now()
+          const loadEnd = dt.timestamp()
           const loadTime = loadEnd - loadStart
           metrics.pageLoadTime.push(loadTime)
           
@@ -172,7 +173,7 @@ test.describe('并发压力测试', () => {
             metrics.memoryUsage = pageMetrics.memoryUsage
           }
           
-        } catch (error) {
+        } catch (_error) {
           metrics.errors.push(`页面加载 ${i + 1} 失败`)
           console.warn(`⚠️ [${userId}] 页面加载 ${i + 1} 失败`)
         }
@@ -183,7 +184,7 @@ test.describe('并发压力测试', () => {
         }
       }
       
-      metrics.totalTestTime = Date.now() - testStart
+      metrics.totalTestTime = dt.timestamp() - testStart
       
       // 输出性能统计
       const avgLoadTime = metrics.pageLoadTime.length > 0 
@@ -223,12 +224,12 @@ test.describe('并发压力测试', () => {
     console.log(`⏱️ [${userId}] 开始长时间系统稳定性测试...`)
 
     let successCount = 0
-    const startTime = Date.now()
+    const startTime = dt.timestamp()
     const performanceMetrics: number[] = []
 
     // 连续页面导航和交互测试系统稳定性
     for (let i = 0; i < NAVIGATION_TESTS; i++) {
-      const operationStart = Date.now()
+      const operationStart = dt.timestamp()
       
       try {
         // 页面导航测试
@@ -261,7 +262,7 @@ test.describe('并发压力测试', () => {
         
         if (isInteractive) {
           successCount++
-          const operationTime = Date.now() - operationStart
+          const operationTime = dt.timestamp() - operationStart
           performanceMetrics.push(operationTime)
           
           if (i % 5 === 0) {
@@ -271,12 +272,12 @@ test.describe('并发压力测试', () => {
         
         await page.waitForTimeout(QUICK_INTERVAL)
         
-      } catch (error) {
+      } catch (_error) {
         console.warn(`⚠️ [${userId}] 操作 ${i + 1} 处理异常`)
       }
     }
 
-    const totalTime = Date.now() - startTime
+    const totalTime = dt.timestamp() - startTime
     const successRate = (successCount / NAVIGATION_TESTS) * 100
     const avgResponseTime = performanceMetrics.length > 0 
       ? performanceMetrics.reduce((a, b) => a + b, 0) / performanceMetrics.length 
@@ -328,7 +329,7 @@ test.afterAll(async () => {
     
     // 输出详细性能数据到文件
     const reportData = {
-      timestamp: new Date().toISOString(),
+      timestamp: dt.toISO(),
       testType: '基础性能测试（无消息发送）',
       summary: {
         totalUsers,

@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server"
 import { selectApiKey } from "@/lib/ai/key-manager"
+import * as dt from '@/lib/utils/date-toolkit'
+
 
 // 直接测试AI服务连接
 export async function GET(_request: NextRequest) {
@@ -26,7 +28,7 @@ export async function GET(_request: NextRequest) {
       max_tokens: 100
     }
 
-    const startTime = Date.now()
+    const startTime = dt.timestamp()
     
     // Windows环境下的Node.js fetch问题修复
     const fetchOptions: RequestInit = {
@@ -46,7 +48,7 @@ export async function GET(_request: NextRequest) {
     
     const response = await fetch(endpoint, fetchOptions)
 
-    const duration = Date.now() - startTime
+    const duration = dt.timestamp() - startTime
     // Response status and duration included in API response
 
     if (!response.ok) {

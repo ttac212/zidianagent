@@ -3,11 +3,19 @@
  * GET /api/merchants/[id]/analytics - 获取商家分析数据
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 import { prisma } from '@/lib/prisma'
 import { parseAndCleanTags } from '@/lib/utils/tag-parser'
 import { createErrorResponse, generateRequestId } from '@/lib/api/error-handler'
+import * as dt from '@/lib/utils/date-toolkit'
+import {
+  success,
+  validationError,
+  notFound,
+  unauthorized
+} from '@/lib/api/http-response'
+
 
 // GET /api/merchants/[id]/analytics - 获取商家分析数据
 export async function GET(
@@ -15,15 +23,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const token = await getToken({ req: request as any })
-  if (!token?.sub) return NextResponse.json({ error: '未认证' }, { status: 401 })
+  if (!token?.sub) return unauthorized('未认证')
   try {
     const { id } = await params
     
     if (!id) {
-      return NextResponse.json(
-        { error: '商家ID不能为空' },
-        { status: 400 }
-      )
+      return validationError('商家ID不能为空')
     }
 
     // 获取商家基本信息
@@ -40,10 +45,7 @@ export async function GET(
     })
 
     if (!merchant) {
-      return NextResponse.json(
-        { error: '商家不存在' },
-        { status: 404 }
-      )
+      return notFound('商家不存在')
     }
 
     // 计算互动统计
@@ -138,7 +140,7 @@ export async function GET(
         date,
         ...stats
       }))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .sort((a, b) => dt.compare(a.date, b.date))
 
     const analytics = {
       merchant: {
@@ -161,7 +163,7 @@ export async function GET(
       tagStats
     }
 
-    return NextResponse.json(analytics)
+    return success(analytics)
     
   } catch (error) {
     return createErrorResponse(error as Error, generateRequestId())

@@ -34,14 +34,14 @@ const healthReport = {
 function log(message, color = 'reset') {
   const colorCode = colors[color] ?? colors.reset ?? ''
   const resetCode = colors.reset ?? ''
-  console.log(`${colorCode}${message}${resetCode}`)
+  console.info(`${colorCode}${message}${resetCode}`)
 }
 
 function runCommand(command, silent = false) {
   try {
     const result = execSync(command, { encoding: 'utf8', stdio: silent ? 'pipe' : 'inherit' });
     return result.trim();
-  } catch (error) {
+  } catch (_error) {
     return null;
   }
 }
@@ -201,7 +201,7 @@ async function checkDependencies() {
           fix: '定期更新依赖，避免技术债务累积'
         });
       }
-    } catch (e) {
+    } catch (_e) {
       // JSON解析失败，忽略
     }
   }
@@ -221,7 +221,7 @@ async function checkDependencies() {
           });
         }
       }
-    } catch (e) {
+    } catch (_e) {
       // JSON解析失败，忽略
     }
   }
@@ -281,7 +281,7 @@ function findFiles(dir, extensions, exclude = []) {
           files.push(fullPath);
         }
       });
-    } catch (e) {
+    } catch (_e) {
       // 忽略无法访问的目录
     }
   }
@@ -343,7 +343,7 @@ function getDirectorySize(dir) {
           size += stat.size;
         }
       });
-    } catch (e) {
+    } catch (_e) {
       // 忽略
     }
   }
@@ -372,11 +372,11 @@ function generateReport() {
   } else {
     healthReport.suggestions.push('项目健康度良好，继续保持');
   }
-  
+
   // 显示报告
-  );
+  log(`=`.repeat(60), 'blue');
   log(`   项目健康度报告 - ${new Date().toLocaleDateString()}`, 'bold');
-  );
+  log(`=`.repeat(60), 'blue');
   
   // 显示总分
   const scoreColor = healthReport.score >= 80 ? 'green' : healthReport.score >= 60 ? 'yellow' : 'red';
@@ -432,9 +432,9 @@ function generateReport() {
   }
   fs.writeFileSync(reportPath, JSON.stringify(healthReport, null, 2));
   log(`\n报告已保存至: ${reportPath}`, 'green');
-  
-  );
-  
+
+  log(`=`.repeat(60), 'blue');
+
   // 返回退出码
   return healthReport.score >= 60 ? 0 : 1;
 }
@@ -459,7 +459,7 @@ async function main() {
     }
     
     process.exit(exitCode);
-  } catch (error) {
+  } catch (_error) {
     log(`\n❌ 健康检查失败: ${error.message}`, 'red');
     process.exit(1);
   }

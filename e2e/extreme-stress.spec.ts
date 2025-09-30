@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import * as dt from '@/lib/utils/date-toolkit'
 
 /**
  * 300并发极限压力测试
@@ -65,7 +66,7 @@ test.describe('300并发极限压力测试', () => {
         avgCpuTime: 0
       },
       errors: [],
-      startTime: Date.now(),
+      startTime: dt.timestamp(),
       endTime: 0
     }
 
@@ -76,9 +77,9 @@ test.describe('300并发极限压力测试', () => {
       const testDuration = 30000 // 30秒静态资源测试
 
       // 高频静态资源访问
-      const endTime = Date.now() + testDuration
-      while (Date.now() < endTime) {
-        const startTime = Date.now()
+      const endTime = dt.timestamp() + testDuration
+      while (dt.timestamp() < endTime) {
+        const startTime = dt.timestamp()
         
         try {
           // 访问静态页面和资源
@@ -87,7 +88,7 @@ test.describe('300并发极限压力测试', () => {
             timeout: 3000 
           })
           
-          const responseTime = Date.now() - startTime
+          const responseTime = dt.timestamp() - startTime
           responseTimes.push(responseTime)
           metrics.operations.successful++
           
@@ -104,7 +105,7 @@ test.describe('300并发极限压力测试', () => {
           metrics.errors.push({
             type: 'static_access_error',
             message: error instanceof Error ? error.message : 'Unknown error',
-            timestamp: Date.now()
+            timestamp: dt.timestamp()
           })
         }
         
@@ -119,7 +120,7 @@ test.describe('300并发极限压力测试', () => {
         ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length 
         : 0
       
-      metrics.endTime = Date.now()
+      metrics.endTime = dt.timestamp()
       
       // 收集内存信息
       try {
@@ -128,7 +129,7 @@ test.describe('300并发极限压力测试', () => {
           return memory ? memory.usedJSHeapSize : 0
         })
         metrics.resourceUsage.peakMemory = memoryInfo
-      } catch (error) {
+      } catch (_error) {
         // 忽略内存检查错误
       }
 
@@ -171,7 +172,7 @@ test.describe('300并发极限压力测试', () => {
         avgCpuTime: 0
       },
       errors: [],
-      startTime: Date.now(),
+      startTime: dt.timestamp(),
       endTime: 0
     }
 
@@ -182,14 +183,14 @@ test.describe('300并发极限压力测试', () => {
       const testDuration = 45000 // 45秒API压力测试
 
       // 高频API调用
-      const endTime = Date.now() + testDuration
-      while (Date.now() < endTime) {
-        const startTime = Date.now()
+      const endTime = dt.timestamp() + testDuration
+      while (dt.timestamp() < endTime) {
+        const startTime = dt.timestamp()
         
         try {
           // 直接使用fetch调用API，避免页面加载开销
           const response = await page.evaluate(async () => {
-            const startTime = Date.now()
+            const startTime = dt.timestamp()
             try {
               const res = await fetch('/api/health', {
                 method: 'GET',
@@ -200,13 +201,13 @@ test.describe('300并发极限压力测试', () => {
               return {
                 ok: res.ok,
                 status: res.status,
-                responseTime: Date.now() - startTime
+                responseTime: dt.timestamp() - startTime
               }
             } catch (error) {
               return {
                 ok: false,
                 status: 0,
-                responseTime: Date.now() - startTime,
+                responseTime: dt.timestamp() - startTime,
                 error: error instanceof Error ? error.message : 'Unknown error'
               }
             }
@@ -222,7 +223,7 @@ test.describe('300并发极限压力测试', () => {
             metrics.errors.push({
               type: 'health_api_error',
               message: `HTTP ${response.status}`,
-              timestamp: Date.now()
+              timestamp: dt.timestamp()
             })
           }
           
@@ -239,7 +240,7 @@ test.describe('300并发极限压力测试', () => {
           metrics.errors.push({
             type: 'api_call_error',
             message: error instanceof Error ? error.message : 'Unknown error',
-            timestamp: Date.now()
+            timestamp: dt.timestamp()
           })
         }
         
@@ -254,7 +255,7 @@ test.describe('300并发极限压力测试', () => {
         ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length 
         : 0
       
-      metrics.endTime = Date.now()
+      metrics.endTime = dt.timestamp()
 
       console.log(`🔥 [${userId}] 健康检查API测试完成:`)
       console.log(`   - 总请求: ${metrics.operations.total}`)
@@ -297,7 +298,7 @@ test.describe('300并发极限压力测试', () => {
         avgCpuTime: 0
       },
       errors: [],
-      startTime: Date.now(),
+      startTime: dt.timestamp(),
       endTime: 0
     }
 
@@ -309,9 +310,9 @@ test.describe('300并发极限压力测试', () => {
       const operations = ['static', 'health', 'navigation'] // 混合操作类型
 
       // 混合高频操作
-      const endTime = Date.now() + testDuration
-      while (Date.now() < endTime) {
-        const startTime = Date.now()
+      const endTime = dt.timestamp() + testDuration
+      while (dt.timestamp() < endTime) {
+        const startTime = dt.timestamp()
         const operation = operations[metrics.operations.total % operations.length]
         
         try {
@@ -324,18 +325,18 @@ test.describe('300并发极限压力测试', () => {
                 waitUntil: 'domcontentloaded',
                 timeout: 2000 
               })
-              responseTime = Date.now() - startTime
+              responseTime = dt.timestamp() - startTime
               break
               
             case 'health':
               // API健康检查
               const healthResponse = await page.evaluate(async () => {
-                const start = Date.now()
+                const start = dt.timestamp()
                 try {
                   const res = await fetch('/api/health')
-                  return { ok: res.ok, time: Date.now() - start }
+                  return { ok: res.ok, time: dt.timestamp() - start }
                 } catch {
-                  return { ok: false, time: Date.now() - start }
+                  return { ok: false, time: dt.timestamp() - start }
                 }
               })
               responseTime = healthResponse.time
@@ -348,7 +349,7 @@ test.describe('300并发极限压力测试', () => {
                 waitUntil: 'domcontentloaded',
                 timeout: 2000 
               })
-              responseTime = Date.now() - startTime
+              responseTime = dt.timestamp() - startTime
               break
           }
           
@@ -363,19 +364,19 @@ test.describe('300并发极限压力测试', () => {
             console.log(`🔄 [${userId}] 混合测试进度: ${metrics.operations.successful}/${metrics.operations.total}`)
           }
           
-        } catch (error) {
+        } catch (_error) {
           metrics.operations.failed++
           metrics.errors.push({
             type: `${operation}_error`,
-            message: error instanceof Error ? error.message : 'Unknown error',
-            timestamp: Date.now()
+            message: _error instanceof Error ? _error.message : 'Unknown error',
+            timestamp: dt.timestamp()
           })
         }
         
         metrics.operations.total++
         
         // 动态间隔（越到后期间隔越短）
-        const progressRatio = (Date.now() - metrics.startTime) / testDuration
+        const progressRatio = (dt.timestamp() - metrics.startTime) / testDuration
         const interval = Math.max(30, REQUEST_INTERVAL * (1 - progressRatio))
         await page.waitForTimeout(interval)
       }
@@ -385,7 +386,7 @@ test.describe('300并发极限压力测试', () => {
         ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length 
         : 0
       
-      metrics.endTime = Date.now()
+      metrics.endTime = dt.timestamp()
 
       console.log(`⚡ [${userId}] 混合负载测试完成:`)
       console.log(`   - 总操作: ${metrics.operations.total}`)
@@ -462,7 +463,7 @@ test.afterAll(async () => {
     
     // 生成压力测试报告
     const report = {
-      timestamp: new Date().toISOString(),
+      timestamp: dt.toISO(),
       testType: '300并发极限压力测试',
       concurrentUsers: globalStressMetrics.length,
       summary: {

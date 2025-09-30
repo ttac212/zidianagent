@@ -5,6 +5,8 @@
 
 import { NextRequest } from 'next/server'
 import { createHash } from 'crypto'
+import { lifecycle } from '@/lib/lifecycle-manager'
+import * as dt from '@/lib/utils/date-toolkit'
 
 // 速率限制存储接口
 /* eslint-disable no-unused-vars */
@@ -52,7 +54,7 @@ export class MemoryRateLimitStore implements RateLimitStore {
   private blockedStore = new Map<string, number>()
   
   async increment(key: string, window: number): Promise<{ count: number; ttl: number }> {
-    const now = Date.now()
+    const now = dt.timestamp()
     const expiresAt = now + window
     
     const existing = this.store.get(key)
@@ -69,7 +71,7 @@ export class MemoryRateLimitStore implements RateLimitStore {
   }
   
   async get(key: string): Promise<number> {
-    const now = Date.now()
+    const now = dt.timestamp()
     const existing = this.store.get(key)
     
     if (!existing || existing.expiresAt < now) {
@@ -80,7 +82,7 @@ export class MemoryRateLimitStore implements RateLimitStore {
   }
   
   async block(key: string, duration: number): Promise<void> {
-    const blockedUntil = Date.now() + duration
+    const blockedUntil = dt.timestamp() + duration
     this.blockedStore.set(key, blockedUntil)
   }
   
@@ -89,7 +91,7 @@ export class MemoryRateLimitStore implements RateLimitStore {
     
     if (!blockedUntil) return null
     
-    const now = Date.now()
+    const now = dt.timestamp()
     if (blockedUntil < now) {
       this.blockedStore.delete(key)
       return null
@@ -105,7 +107,7 @@ export class MemoryRateLimitStore implements RateLimitStore {
   
   // 清理过期条目（定期调用）
   cleanup(): void {
-    const now = Date.now()
+    const now = dt.timestamp()
     
     // 清理过期的计数
     for (const [key, value] of this.store.entries()) {
@@ -156,7 +158,7 @@ export class RedisRateLimitStore implements RateLimitStore {
   
   async block(_key: string, _duration: number): Promise<void> {
     // const blockKey = `${key}:blocked`
-    // await this.redis.set(blockKey, Date.now() + duration, 'PX', duration)
+    // await this.redis.set(blockKey, dt.timestamp() + duration, 'PX', duration)
   }
   
   async isBlocked(_key: string): Promise<number | null> {
@@ -171,28 +173,77 @@ export class RedisRateLimitStore implements RateLimitStore {
   }
 }
 
-// Upstash Redis存储实现示例
+// Upstash Redis存储实现（生产级）
 export class UpstashRateLimitStore implements RateLimitStore {
-  // private upstash: UpstashRedis
-  
-  // constructor(config: { url: string; token: string }) {
-  //   this.upstash = new UpstashRedis(config)
-  // }
-  
-  // 实现类似Redis版本...
-  
-  async increment(_key: string, window: number): Promise<{ count: number; ttl: number }> {
-    // 使用Upstash REST API
-    return { count: 1, ttl: window }
+  private baseUrl: string
+  private token: string
+
+  constructor(config: { url: string; token: string }) {
+    this.baseUrl = config.url
+    this.token = config.token
   }
-  
-  async get(_key: string): Promise<number> {
-    return 0
+
+  private async request(command: (string | number)[][]): Promise<any> {
+    const response = await fetch(`${this.baseUrl}/multi-exec`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(command)
+    })
+
+    if (!response.ok) {
+      throw new Error(`Upstash request failed: ${response.statusText}`)
+    }
+
+    return response.json()
   }
-  
-  async block(_key: string, _duration: number): Promise<void> {}
-  async isBlocked(_key: string): Promise<number | null> { return null }
-  async reset(_key: string): Promise<void> {}
+
+  async increment(key: string, window: number): Promise<{ count: number; ttl: number }> {
+    const windowSeconds = Math.ceil(window / 1000)
+
+    // 使用MULTI/EXEC事务确保原子性
+    const commands = [
+      ['INCR', key],
+      ['EXPIRE', key, windowSeconds],
+      ['TTL', key]
+    ]
+
+    const results = await this.request(commands)
+    const count = results.result[0]
+    const ttl = results.result[2]
+
+    return {
+      count: count || 1,
+      ttl: ttl > 0 ? ttl * 1000 : window
+    }
+  }
+
+  async get(key: string): Promise<number> {
+    const result = await this.request([['GET', key]])
+    return result.result ? parseInt(result.result, 10) : 0
+  }
+
+  async block(key: string, duration: number): Promise<void> {
+    const blockKey = `${key}:blocked`
+    const blockedUntil = dt.timestamp() + duration
+    const durationSeconds = Math.ceil(duration / 1000)
+
+    await this.request([['SET', blockKey, blockedUntil, 'EX', durationSeconds]])
+  }
+
+  async isBlocked(key: string): Promise<number | null> {
+    const blockKey = `${key}:blocked`
+    const result = await this.request([['GET', blockKey]])
+
+    return result.result ? parseInt(result.result, 10) : null
+  }
+
+  async reset(key: string): Promise<void> {
+    const blockKey = `${key}:blocked`
+    await this.request([['DEL', key, blockKey]])
+  }
 }
 
 // 速率限制配置
@@ -218,6 +269,9 @@ export class DistributedRateLimiter {
         this.cleanupTimer = setInterval(() => {
           (this.store as MemoryRateLimitStore).cleanup()
         }, 60 * 1000) // 每分钟清理一次
+
+        // 注册生命周期清理
+        lifecycle.register(() => this.destroy(), 'distributed-rate-limiter')
       }
     }
   }
@@ -267,7 +321,7 @@ export class DistributedRateLimiter {
     // 检查是否被阻止
     const blockedUntil = await this.store.isBlocked(key)
     if (blockedUntil) {
-      const now = Date.now()
+      const now = dt.timestamp()
       return {
         allowed: false,
         remaining: 0,
@@ -278,7 +332,7 @@ export class DistributedRateLimiter {
     
     // 增加计数
     const { count, ttl } = await this.store.increment(key, config.window)
-    const now = Date.now()
+    const now = dt.timestamp()
     const resetTime = now + ttl
     
     // 检查是否超过限制
@@ -333,39 +387,71 @@ export class DistributedRateLimiter {
   }
 }
 
+/**
+ * 重置rate limiter实例（主要用于测试）
+ */
+export function resetRateLimiter(): void {
+  if (globalRateLimiter) {
+    globalRateLimiter.destroy()
+    globalRateLimiter = null
+  }
+}
+
 // 创建全局实例（避免在Serverless环境中重复创建）
 let globalRateLimiter: DistributedRateLimiter | null = null
 
 /**
  * 获取速率限制器实例
+ * @param options - 可选配置
  */
-export function getRateLimiter(): DistributedRateLimiter {
-  if (!globalRateLimiter) {
-    // 根据环境选择存储
-    let store: RateLimitStore
-    
-    if (process.env.REDIS_URL) {
-      // 如果配置了Redis，使用Redis存储
-      console.log('[RateLimiter] Using Redis store')
-      // store = new RedisRateLimitStore(redis)
-      store = new MemoryRateLimitStore() // 暂时使用内存存储
-    } else if (process.env.UPSTASH_REDIS_REST_URL) {
-      // 如果配置了Upstash，使用Upstash存储
-      console.log('[RateLimiter] Using Upstash store')
-      // store = new UpstashRateLimitStore({
-      //   url: process.env.UPSTASH_REDIS_REST_URL,
-      //   token: process.env.UPSTASH_REDIS_REST_TOKEN!
-      // })
-      store = new MemoryRateLimitStore() // 暂时使用内存存储
-    } else {
-      // 默认使用内存存储（开发环境）
-      console.log('[RateLimiter] Using memory store (not recommended for production)')
-      store = new MemoryRateLimitStore()
+export function getRateLimiter(options?: { skipProductionCheck?: boolean }): DistributedRateLimiter {
+  // 每次调用都重新检查生产环境安全性（除非明确跳过）
+  if (!options?.skipProductionCheck && process.env.NODE_ENV === 'production') {
+    // 生产环境必须配置分布式存储
+    if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+      throw new Error(
+        'PRODUCTION SECURITY ERROR: Rate limiting requires distributed storage. ' +
+        'Configure UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN environment variables.'
+      )
     }
-    
-    globalRateLimiter = new DistributedRateLimiter(store)
   }
-  
+
+  if (!globalRateLimiter) {
+    let store: RateLimitStore
+
+    // 生产级存储优先级：Upstash > Redis > Memory
+    if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+      store = new UpstashRateLimitStore({
+        url: process.env.UPSTASH_REDIS_REST_URL,
+        token: process.env.UPSTASH_REDIS_REST_TOKEN
+      })
+      console.info('[RateLimiter] Using Upstash Redis store (distributed)')
+    }
+    // 可以在这里添加其他Redis实现
+    // else if (process.env.REDIS_URL) {
+    //   store = new RedisRateLimitStore(process.env.REDIS_URL)
+    //   console.info('[RateLimiter] Using Redis store (distributed)')
+    // }
+    else {
+      store = new MemoryRateLimitStore()
+      if (process.env.NODE_ENV === 'production') {
+        console.warn('[RateLimiter] WARNING: Using in-memory store in production. Configure Upstash for distributed rate limiting.')
+      } else {
+        console.warn('[RateLimiter] Using in-memory store (development only)')
+      }
+    }
+
+    globalRateLimiter = new DistributedRateLimiter(store)
+
+    // 注册一次性清理，防止多次注册同一回调
+    lifecycle.register(() => {
+      if (globalRateLimiter) {
+        globalRateLimiter.destroy()
+        globalRateLimiter = null
+      }
+    }, 'rate-limiter-singleton')
+  }
+
   return globalRateLimiter
 }
 

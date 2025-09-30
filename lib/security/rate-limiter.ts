@@ -39,9 +39,7 @@ export type RateLimitType = keyof typeof RATE_LIMIT_CONFIG
 
 
 // 使用分布式速率限制器替代内存存储
-const rateLimiter = getRateLimiter()
-
-// 注意：在Serverless环境中不使用定时器
+// 注意：改为懒加载避免模块级初始化
 
 
 
@@ -54,7 +52,10 @@ export async function checkRateLimit(
   userId?: string
 ): Promise<{ allowed: boolean; remaining: number; resetTime: number; error?: ApiError }> {
   const config = RATE_LIMIT_CONFIG[type]
-  
+
+  // 懒加载：每次调用时获取rateLimiter实例
+  const rateLimiter = getRateLimiter()
+
   // 使用分布式速率限制器
   const result = await rateLimiter.check(
     request,
@@ -98,7 +99,7 @@ export async function checkRateLimit(
 export function withRateLimit<T extends any[], R>(
   handler: (..._args: T) => Promise<R>,
   type: RateLimitType,
-  getUserId?: (_request: NextRequest) => Promise<string | undefined>
+  getUserId?: (request: NextRequest) => Promise<string | undefined>
 ) {
   return async (request: NextRequest, ...restArgs: any[]): Promise<R> => {
     // 获取用户ID（如果提供了获取函数）
@@ -184,11 +185,14 @@ export async function clearRateLimit(identifier: string, type: RateLimitType): P
   const dummyRequest = new Request('http://localhost', {
     headers: new Headers()
   })
-  
+
+  // 懒加载：获取rateLimiter实例
+  const rateLimiter = getRateLimiter({ skipProductionCheck: true })
+
   try {
     await rateLimiter.reset(dummyRequest as any, type, identifier.startsWith('user:') ? identifier.replace('user:', '') : undefined)
     return true
-  } catch (error) {
+  } catch (_error) {
     // Failed to clear rate limit
     return false
   }

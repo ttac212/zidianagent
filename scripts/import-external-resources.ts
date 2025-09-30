@@ -54,7 +54,7 @@ async function main() {
       'External API'
     )
 
-    } catch (error) {
+    } catch (_error) {
     } finally {
     await prisma.$disconnect()
   }

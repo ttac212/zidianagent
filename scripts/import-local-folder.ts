@@ -3,7 +3,7 @@
  * 使用方法：pnpm tsx scripts/import-local-folder.ts
  */
 
-import { LocalFolderImporter, importLocalFolder, previewLocalFolder } from '../lib/import/local-folder-importer'
+import { LocalFolderImporter } from '../lib/import/local-folder-importer'
 import { PrismaClient } from '@prisma/client'
 import path from 'path'
 
@@ -73,7 +73,7 @@ async function main() {
       // 正式导入模式
       const result = await importer.importAll()
       
-      console.log(`导入完成! 成功: ${result.successCount}, 失败: ${result.errorCount}, 成功率: ${result.successCount > 0 ? ((result.successCount / (result.successCount + result.errorCount)) * 100).toFixed(1) : 0}%)`)
+      console.info(`导入完成! 成功: ${result.successCount}, 失败: ${result.errorCount}, 成功率: ${result.successCount > 0 ? ((result.successCount / (result.successCount + result.errorCount)) * 100).toFixed(1) : 0}%)`)
       
       if (result.categoryMapping.size > 0) {
         for (const [folder, categoryId] of result.categoryMapping) {
@@ -81,7 +81,7 @@ async function main() {
           // const category = await prisma.documentCategory.findUnique({
           //   where: { id: categoryId }
           // })
-          console.log(`  文件夹 "${folder}" 映射到分类: ID=${categoryId}`)
+          console.info(`  文件夹 "${folder}" 映射到分类: ID=${categoryId}`)
         }
       }
       
@@ -89,9 +89,9 @@ async function main() {
       if (result.errorCount > 0) {
         result.results.forEach((fileResult, index) => {
           if (!fileResult.success && fileResult.errors.length > 0) {
-            console.log(`  文件 ${index + 1} 导入失败:`)
+            console.info(`  文件 ${index + 1} 导入失败:`)
             fileResult.errors.forEach((error: any) => {
-              console.log(`    ${typeof error === 'string' ? error : error.message || JSON.stringify(error)}`)
+              console.info(`    ${typeof error === 'string' ? error : error.message || JSON.stringify(error)}`)
             })
           }
         })

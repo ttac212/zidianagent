@@ -1,11 +1,8 @@
+import * as dt from '@/lib/utils/date-toolkit'
+
 "use client"
 
-// Lightweight Metrics SDK for Web Vitals + custom marks/measures
-// - Sends via sendBeacon when available, otherwise fetch(keepalive)
-// - Safely no-op on SSR
-
-import type { Metric } from 'web-vitals'
-import { onLCP, onCLS, onINP, onTTFB, onFCP } from 'web-vitals'
+// 简化的Metrics工具 - 移除web-vitals依赖
 
 export type MetricPayload = {
   name: string
@@ -17,7 +14,7 @@ export type MetricPayload = {
 
 export type MetricsInitOptions = {
   endpoint?: string
-  sampleRate?: number // 0..1
+  sampleRate?: number
   app?: string
   version?: string
   tags?: Record<string, string>
@@ -32,103 +29,51 @@ const STATE: {
   inited: false,
   endpoint: '/api/metrics',
   sampleRate: 1,
-  baseTags: {},
-}
-
-function now() {
-  return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()
-}
-
-function shouldSample() {
-  return Math.random() < STATE.sampleRate
+  baseTags: {}
 }
 
 export function initMetrics(opts: MetricsInitOptions = {}) {
-  if (STATE.inited) return
-  STATE.endpoint = opts.endpoint || STATE.endpoint
-  STATE.sampleRate = typeof opts.sampleRate === 'number' ? Math.max(0, Math.min(1, opts.sampleRate)) : STATE.sampleRate
+  if (STATE.inited || typeof window === 'undefined') return
+
+  STATE.endpoint = opts.endpoint || '/api/metrics'
+  STATE.sampleRate = opts.sampleRate ?? 1
   STATE.baseTags = {
-    app: opts.app || 'zhidian-ai-platform',
-    version: opts.version || (process.env.NEXT_PUBLIC_APP_VERSION || 'dev'),
-    ...opts.tags,
+    ...(opts.tags || {}),
+    app: opts.app || 'web',
+    version: opts.version || 'unknown'
   }
+
   STATE.inited = true
 }
 
-export function setUser(userId?: string) {
-  if (!userId) return
-  STATE.baseTags.userId = userId
-}
+export function sendMetric(payload: MetricPayload) {
+  if (!STATE.inited || typeof window === 'undefined') return
+  if (Math.random() > STATE.sampleRate) return
 
-export function send(payload: MetricPayload) {
-  if (typeof window === 'undefined') return
-  if (!STATE.inited) initMetrics()
-  if (!shouldSample()) return
-  const body = JSON.stringify({ ...payload, ts: payload.ts || Date.now(), tags: { ...STATE.baseTags, ...payload.tags } })
-  try {
-    if (navigator?.sendBeacon) {
-      const blob = new Blob([body], { type: 'application/json' })
-      navigator.sendBeacon(STATE.endpoint, blob)
-      return
-    }
-  } catch {}
-  try {
-    fetch(STATE.endpoint, { method: 'POST', body, headers: { 'Content-Type': 'application/json' }, keepalive: true })
-  } catch {}
-}
-
-export function mark(name: string, tags?: Record<string, string>) {
-  if (typeof performance !== 'undefined' && performance.mark) {
-    try { performance.mark(name) } catch {}
+  const data = {
+    ...payload,
+    ts: payload.ts || dt.timestamp(),
+    tags: { ...STATE.baseTags, ...payload.tags }
   }
-  send({ name: 'mark', value: 0, detail: { mark: name }, tags })
-}
 
-export function measure(name: string, startMark: string, endMark: string, extra?: { tags?: Record<string,string>, detail?: any }) {
-  let duration: number | undefined
-  try {
-    if (performance.getEntriesByName && performance.measure) {
-      // Clear existing measure if any
-      try { performance.clearMeasures(name) } catch {}
-      performance.measure(name, startMark, endMark)
-      const entries = performance.getEntriesByName(name)
-      duration = entries?.[entries.length - 1]?.duration
-    }
-  } catch {}
-  send({ name, value: duration, detail: { startMark, endMark, ...(extra?.detail || {}) }, tags: extra?.tags })
-}
+  // 尝试使用sendBeacon，失败时降级到fetch
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' })
+  const sent = navigator.sendBeacon?.(STATE.endpoint, blob)
 
-export function setupWebVitals() {
-  // Safety: only attach once per page
-  if ((window as any).__webVitalsSetup) return
-  ;(window as any).__webVitalsSetup = true
-  const sendMetric = (metric: Metric) => {
-    send({ name: metric.name, value: metric.value, detail: { id: metric.id, rating: (metric as any).rating } })
+  if (!sent) {
+    fetch(STATE.endpoint, {
+      method: 'POST',
+      body: JSON.stringify(data),
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true
+    }).catch(() => {})
   }
-  onLCP(sendMetric)
-  onCLS(sendMetric)
-  onINP(sendMetric)
-  onTTFB(sendMetric)
-  onFCP(sendMetric)
 }
 
-// Helpers for common flows
-export function startEndTracker(baseName: string, tags?: Record<string,string>) {
-  const start = () => mark(`${baseName}_shown`, tags)
-  const end = (extra?: { tags?: Record<string,string> }) => {
-    mark(`${baseName}_hidden`, { ...tags, ...extra?.tags })
-    measure(`${baseName}_visible_dur`, `${baseName}_shown`, `${baseName}_hidden`, { tags: { ...tags, ...extra?.tags } })
-  }
-  return { start, end }
+export function mark(name: string, detail?: any) {
+  sendMetric({ name, detail })
 }
 
-export const Metrics = {
-  init: initMetrics,
-  setUser,
-  send,
-  mark,
-  measure,
-  setupWebVitals,
-  startEndTracker,
+export function measure(name: string, value: number, detail?: any) {
+  sendMetric({ name, value, detail })
 }
-

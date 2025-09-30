@@ -7,11 +7,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 import { prisma } from '@/lib/prisma'
 import { createErrorResponse, generateRequestId } from '@/lib/api/error-handler'
+import {
+  unauthorized
+} from '@/lib/api/http-response'
+
 
 // GET /api/merchants/categories - 获取商家分类列表
 export async function GET(request: NextRequest) {
   const token = await getToken({ req: request as any })
-  if (!token?.sub) return NextResponse.json({ error: '未认证' }, { status: 401 })
+  if (!token?.sub) return unauthorized('未认证')
   try {
     const categories = await prisma.merchantCategory.findMany({
       include: {

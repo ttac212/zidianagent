@@ -1,3 +1,5 @@
+import * as dt from '@/lib/utils/date-toolkit'
+
 /**
  * 模型统计辅助工具函数
  * 用于提取模型提供商信息和统计相关功能
@@ -58,7 +60,7 @@ export function getModelDisplayName(modelId: string): string {
  * 创建统一的今日日期对象（UTC归零）
  */
 export function getTodayDate(): Date {
-  const today = new Date()
+  const today = dt.now()
   today.setUTCHours(0, 0, 0, 0)
   return today
 }

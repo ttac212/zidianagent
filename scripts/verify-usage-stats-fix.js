@@ -6,7 +6,7 @@ const { PrismaClient } = require('@prisma/client')
 const prisma = new PrismaClient()
 
 async function verifyUsageStatsFix() {
-  console.log('🔍 验证UsageStats唯一约束修复...')
+  console.info('🔍 验证UsageStats唯一约束修复...')
 
   try {
     // 1. 查看表结构
@@ -15,8 +15,8 @@ async function verifyUsageStatsFix() {
       WHERE type='table' AND name='usage_stats';
     `
 
-    console.log('\n📊 UsageStats表结构:')
-    console.log(schema[0]?.sql || '表不存在')
+    console.info('\n📊 UsageStats表结构:')
+    console.info(schema[0]?.sql || '表不存在')
 
     // 2. 检查现有数据中的modelId值
     const modelIdStats = await prisma.$queryRaw`
@@ -26,12 +26,12 @@ async function verifyUsageStatsFix() {
       ORDER BY count DESC;
     `
 
-    console.log('\n📈 现有modelId分布:')
+    console.info('\n📈 现有modelId分布:')
     if (modelIdStats.length === 0) {
-      console.log('  (暂无数据)')
+      console.info('  (暂无数据)')
     } else {
       modelIdStats.forEach(stat => {
-        console.log(`  - "${stat.modelId || 'NULL'}": ${stat.count} 条记录`)
+        console.info(`  - "${stat.modelId || 'NULL'}": ${stat.count} 条记录`)
       })
     }
 
@@ -42,7 +42,7 @@ async function verifyUsageStatsFix() {
     })
 
     if (!existingUser) {
-      console.log('\n⚠️  没有用户数据，跳过唯一约束测试')
+      console.info('\n⚠️  没有用户数据，跳过唯一约束测试')
       return
     }
 
@@ -60,7 +60,7 @@ async function verifyUsageStatsFix() {
           apiCalls: 1
         }
       })
-      console.log('\n✅ 第一次插入成功')
+      console.info('\n✅ 第一次插入成功')
 
       // 第二次插入相同数据（应该失败）
       await prisma.usageStats.create({
@@ -71,7 +71,7 @@ async function verifyUsageStatsFix() {
           apiCalls: 2
         }
       })
-      console.log('\n✅ 不同modelId插入成功（正常）')
+      console.info('\n✅ 不同modelId插入成功（正常）')
 
       // 第三次插入完全相同的数据（应该失败）
       const duplicateData = {
@@ -82,17 +82,17 @@ async function verifyUsageStatsFix() {
       }
 
       await prisma.usageStats.create({ data: duplicateData })
-      console.log('\n✅ 第一次_total插入成功')
+      console.info('\n✅ 第一次_total插入成功')
 
       await prisma.usageStats.create({ data: duplicateData })
-      console.log('\n❌ 重复插入成功了！唯一约束没生效！')
+      console.info('\n❌ 重复插入成功了！唯一约束没生效！')
 
     } catch (error) {
       if (error.code === 'P2002') {
-        console.log('\n✅ 唯一约束正常工作 - 阻止了重复插入')
-        console.log('   约束字段:', error.meta?.target || '未知')
+        console.info('\n✅ 唯一约束正常工作 - 阻止了重复插入')
+        console.info('   约束字段:', error.meta?.target || '未知')
       } else {
-        console.log('\n❌ 意外错误:', error.message)
+        console.info('\n❌ 意外错误:', error.message)
       }
     }
 
@@ -104,7 +104,7 @@ async function verifyUsageStatsFix() {
         modelId: { startsWith: 'test-model-' }
       }
     })
-    console.log('✅ 测试数据已清理')
+    console.info('✅ 测试数据已清理')
 
   } catch (error) {
     console.error('❌ 验证失败:', error)

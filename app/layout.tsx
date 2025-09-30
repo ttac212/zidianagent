@@ -5,8 +5,6 @@ import type { Metadata } from "next"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { ErrorBoundary } from "@/components/ui/error-boundary"
-import { PerformanceMonitor } from "@/components/performance/performance-monitor"
-import { Preloader } from "@/components/performance/preloader"
 import { SessionProvider } from "@/components/providers/session-provider"
 import { QueryProvider } from "@/lib/providers/query-provider"
 import { Toaster as SonnerToaster } from "@/components/ui/sonner"
@@ -26,8 +24,6 @@ export const metadata: Metadata = {
   generator: "ZDZD",
 }
 
-// 移除API预加载，只预加载静态资源
-const criticalResources: string[] = []
 
 export default function RootLayout({
   children,
@@ -52,7 +48,6 @@ html {
           <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
             <SessionProvider>
               <QueryProvider>
-                <Preloader resources={criticalResources} />
                 {children}
                 <SonnerToaster
                   position="top-center"
@@ -62,7 +57,6 @@ html {
                   visibleToasts={3}
                   theme="system"
                 />
-                {process.env.NODE_ENV === "development" && <PerformanceMonitor />}
               </QueryProvider>
             </SessionProvider>
           </ThemeProvider>

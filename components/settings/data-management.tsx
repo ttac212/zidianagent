@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useStorage } from "@/components/providers/storage-provider"
 import { Download, Upload, Trash2, AlertTriangle } from "lucide-react"
 import { toast } from "@/lib/toast/toast"
+import * as dt from '@/lib/utils/date-toolkit'
 
 export function DataManagement() {
   const [importData, setImportData] = useState("")
@@ -20,7 +21,7 @@ export function DataManagement() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `zhidian-backup-${new Date().toISOString().split("T")[0]}.json`
+      a.download = `zhidian-backup-${dt.toISO().split("T")[0]}.json`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)

@@ -1,10 +1,16 @@
-import { NextRequest, NextResponse } from "next/server"
-
+import { NextRequest } from "next/server"
 import { getToken } from "next-auth/jwt"
 import { prisma } from "@/lib/prisma"
-import { 
-  getModelDisplayName, 
-  getModelProvider, 
+import * as dt from '@/lib/utils/date-toolkit'
+import {
+  success,
+  forbidden,
+  unauthorized,
+  serverError
+} from '@/lib/api/http-response'
+import {
+  getModelDisplayName,
+  getModelProvider,
   calculateUsagePercentage,
   formatStatsNumber
 } from "@/lib/ai/model-stats-helper"
@@ -17,7 +23,7 @@ export async function GET(
     // 验证用户身份
     const token = await getToken({ req: request as any })
     if (!token?.sub) {
-      return NextResponse.json({ error: "未认证" }, { status: 401 })
+      return unauthorized("未认证")
     }
 
     const { id: userId } = await params  
@@ -25,13 +31,13 @@ export async function GET(
 
     // 验证权限：用户只能查看自己的统计
     if (userId !== requesterId) {
-      return NextResponse.json({ error: "无权限" }, { status: 403 })
+      return forbidden("无权限")
     }
 
     // 获取查询参数
     const url = new URL(request.url)
     const days = parseInt(url.searchParams.get('days') || '30')
-    const startDate = new Date()
+    const startDate = dt.now()
     startDate.setDate(startDate.getDate() - days)
     startDate.setUTCHours(0, 0, 0, 0)
 
@@ -129,7 +135,7 @@ export async function GET(
     const dailyStats = Object.entries(dailyStatsMap).map(([date, models]) => ({
       date,
       models
-    })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    })).sort((a, b) => dt.compare(a.date, b.date))
 
     // 构造响应数据
     const response = {
@@ -167,16 +173,9 @@ export async function GET(
       }
     }
 
-    return NextResponse.json(response)
+    return success(response.data)
 
   } catch (error) {
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: "获取模型统计失败", 
-        details: process.env.NODE_ENV === 'development' ? String(error) : undefined 
-      }, 
-      { status: 500 }
-    )
+    return serverError("获取模型统计失败", process.env.NODE_ENV === 'development' ? String(error) : undefined)
   }
 }

@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Users, Key, MessageSquare, FileText, Activity, RefreshCw } from "lucide-react"
+import * as dt from '@/lib/utils/date-toolkit'
 
 interface SystemStats {
   totalUsers: number
@@ -35,9 +36,9 @@ export function AdminOverview() {
         totalConversations: 8934,
         totalDocuments: 2156,
         systemStatus: "healthy",
-        lastUpdated: new Date().toLocaleString("zh-CN"),
+        lastUpdated: dt.now().toLocaleString("zh-CN"),
       })
-    } catch (error) {
+    } catch (_error) {
       } finally {
       setLoading(false)
     }

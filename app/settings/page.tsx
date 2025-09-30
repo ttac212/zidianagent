@@ -29,8 +29,7 @@ import {
 } from "lucide-react"
 import { StatsCardsGridSkeleton, UsageDetailCardSkeleton } from "@/components/ui/stats-card-skeleton"
 import { ModelUsageCards } from "@/components/stats/model-usage-cards"
-import { ConnectionStatus } from "@/components/ui/connection-status"
-import { ConnectionRecovery } from "@/components/ui/connection-recovery"
+import * as dt from '@/lib/utils/date-toolkit'
 
 interface UsageData {
   date: string
@@ -95,16 +94,13 @@ export default function SettingsPage() {
   // 用量真实数据
   const [usageData, setUsageData] = useState<UsageData[]>([])
   const [loadingUsage, setLoadingUsage] = useState(false)
-  const [usageError, setUsageError] = useState<string | null>(null)
+  const [_usageError, setUsageError] = useState<string | null>(null)
 
   // 模型统计数据
   const [modelStats, setModelStats] = useState<ModelStatsResponse['data'] | null>(null)
   const [loadingModelStats, setLoadingModelStats] = useState(false)
   const [modelStatsError, setModelStatsError] = useState<string | null>(null)
 
-  // 连接监控状态
-  const [showConnectionRecovery, setShowConnectionRecovery] = useState(false)
-  const [connectionError, setConnectionError] = useState<string | null>(null)
 
   const handleUpdateEmail = () => {
     toast.success("邮箱更新成功")
@@ -121,29 +117,6 @@ export default function SettingsPage() {
     setConfirmPassword("")
   }
 
-  // 连接状态变化处理
-  const handleConnectionStatusChange = (connected: boolean) => {
-    if (!connected) {
-      setConnectionError("连接已断开，可能是服务器重启或网络问题")
-      setShowConnectionRecovery(true)
-    } else {
-      setConnectionError(null)
-      setShowConnectionRecovery(false)
-    }
-  }
-
-  // 连接恢复成功处理
-  const handleConnectionRecovery = () => {
-    setShowConnectionRecovery(false)
-    setConnectionError(null)
-    toast.success("连接已恢复，正在重新加载数据...")
-    
-    // 重新获取数据
-    if (status === 'authenticated') {
-      fetchUsage()
-      fetchModelStats()
-    }
-  }
 
   // 获取当前用户ID：优先 useSession，兜底 /api/auth/me
   const fetchCurrentUserId = async (): Promise<string | null> => {
@@ -194,7 +167,7 @@ export default function SettingsPage() {
           tokens: data.tokens,
           requests: data.requests,
         }))
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        .sort((a, b) => dt.compare(a.date, b.date))
       
       // 调试信息：记录重复数据情况
       const duplicateCount = Array.from(dateMap.values()).filter(d => d.count > 1).length
@@ -238,10 +211,13 @@ export default function SettingsPage() {
     }
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (status !== 'authenticated') return
     fetchUsage()
     fetchModelStats()
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, (session as any)?.user?.id])
 
@@ -261,14 +237,6 @@ export default function SettingsPage() {
                 <h1 className="text-2xl font-semibold text-foreground mb-2">设置</h1>
                 <p className="text-muted-foreground">管理您的账户、偏好设置和API配置</p>
               </div>
-              
-              {/* 连接状态指示器 */}
-              <ConnectionStatus
-                size="md"
-                showDetails={true}
-                onStatusChange={handleConnectionStatusChange}
-                className="ml-4"
-              />
             </div>
           </div>
 
@@ -556,16 +524,6 @@ export default function SettingsPage() {
           </Tabs>
         </div>
       </main>
-      
-      {/* 连接恢复组件 */}
-      <ConnectionRecovery
-        show={showConnectionRecovery}
-        errorType="server"
-        errorMessage={connectionError || undefined}
-        onRecovery={handleConnectionRecovery}
-        onClose={() => setShowConnectionRecovery(false)}
-        showDetailedStatus={true}
-      />
     </div>
   )
 }

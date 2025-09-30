@@ -30,23 +30,23 @@ async function checkTagsFormat() {
     })
 
     contents.forEach((content, index) => {
-      console.log(`\n=== 内容 ${index + 1}: ${content.title.slice(0, 30)}...`)
+      console.info(`\n=== 内容 ${index + 1}: ${content.title.slice(0, 30)}...`)
       // 尝试不同的解析方法
       // 方法1: 直接JSON.parse
       try {
         const parsed1 = JSON.parse(content.tags || '[]')
-        console.log(`  JSON.parse成功: ${JSON.stringify(parsed1)}`)
+        console.info(`  JSON.parse成功: ${JSON.stringify(parsed1)}`)
       } catch (error) {
-        console.log(`  JSON.parse失败: ${(error as Error).message}`)
+        console.info(`  JSON.parse失败: ${(error as Error).message}`)
       }
       
       // 方法2: 清理单引号后解析
       try {
         const cleaned = (content.tags || '[]').replace(/'/g, '"')
         const parsed2 = JSON.parse(cleaned)
-        console.log(`  清理后解析成功: ${JSON.stringify(parsed2)}`)
+        console.info(`  清理后解析成功: ${JSON.stringify(parsed2)}`)
       } catch (error) {
-        console.log(`  清理后解析失败: ${(error as Error).message}`)
+        console.info(`  清理后解析失败: ${(error as Error).message}`)
       }
     })
 

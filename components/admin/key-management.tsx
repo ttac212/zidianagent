@@ -67,7 +67,7 @@ export function KeyManagement() {
       ]
 
       setKeys(mockKeys)
-    } catch (error) {
+    } catch (_error) {
       toast.error("获取密钥列表失败", {
         description: "请稍后重试"
       })
@@ -280,7 +280,7 @@ function CreateKeyForm({ onSuccess }: { onSuccess: () => void }) {
         description: "API密钥已生成"
       })
       onSuccess()
-    } catch (error) {
+    } catch (_error) {
       toast.error("创建失败", {
         description: "请稍后重试"
       })

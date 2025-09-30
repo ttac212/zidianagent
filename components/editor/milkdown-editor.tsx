@@ -20,6 +20,8 @@ export function MilkdownEditor({ content = "", onChange, onSave, placeholder = "
   const [isSaving, setIsSaving] = useState(false)
   const [hasContent, setHasContent] = useState(false)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     setHasContent(editorContent.trim().length > 0)
   }, [editorContent])

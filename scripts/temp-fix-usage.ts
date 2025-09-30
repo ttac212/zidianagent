@@ -4,6 +4,7 @@
  */
 
 import { prisma } from '../lib/prisma'
+import * as dt from '@/lib/utils/date-toolkit'
 
 // Token估算函数
 function estimateTokens(text: string): number {
@@ -54,7 +55,7 @@ async function tempFixUsage() {
     
     for (const user of users) {
       // 计算本月使用量
-      const thisMonth = new Date()
+      const thisMonth = dt.now()
       thisMonth.setDate(1)
       thisMonth.setHours(0, 0, 0, 0)
       
@@ -101,7 +102,7 @@ async function tempFixUsage() {
       }
     
     // 3. 重建UsageStats记录
-    const today = new Date()
+    const today = dt.now()
     today.setUTCHours(0, 0, 0, 0)
     
     for (const user of users) {
@@ -150,7 +151,7 @@ async function tempFixUsage() {
             promptTokens: Math.ceil(totalTokens * 0.3),
             completionTokens: Math.ceil(totalTokens * 0.7),
             messagesCreated: todayMessages.length,
-            updatedAt: new Date()
+            updatedAt: dt.now()
           },
           create: {
             userId: user.id,
@@ -182,7 +183,7 @@ async function tempFixUsage() {
           update: {
             promptTokens: Math.ceil(tokens * 0.3),
             completionTokens: Math.ceil(tokens * 0.7),
-            updatedAt: new Date()
+            updatedAt: dt.now()
           },
           create: {
             userId: user.id,
@@ -199,7 +200,7 @@ async function tempFixUsage() {
         }
     }
     
-    } catch (error) {
+    } catch (_error) {
     } finally {
     await prisma.$disconnect()
   }

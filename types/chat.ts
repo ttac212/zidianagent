@@ -3,14 +3,18 @@
  * 用于 SmartChatCenter 组件及其子组件
  */
 
+// 消息状态类型
+export type MessageStatus = 'pending' | 'streaming' | 'completed' | 'error'
+
 // 基础消息类型
 export interface ChatMessage {
   id: string
-  role: 'user' | 'assistant'
+  role: 'user' | 'assistant' | 'system' | 'function' | 'tool' | string // 支持未来扩展
   content: string
   timestamp: number
   tokens?: number
   metadata?: MessageMetadata
+  status: MessageStatus // 修复：消息状态为必需字段，默认为 'completed'
 }
 
 // 消息元数据
@@ -29,6 +33,9 @@ export interface Conversation {
   model: string
   createdAt: number
   updatedAt: number
+  temperature?: number
+  maxTokens?: number
+  contextAware?: boolean
   metadata?: ConversationMetadata
 }
 
@@ -38,6 +45,12 @@ export interface ConversationMetadata {
   messageCount?: number
   lastActivity?: number
   tags?: string[]
+  lastMessage?: {
+    id: string
+    role: 'user' | 'assistant'
+    content: string
+    timestamp: number
+  } | null
 }
 
 // 聊天设置
@@ -47,6 +60,7 @@ export interface ChatSettings {
   contextAware: boolean
   maxTokens?: number
   systemPrompt?: string
+  creativeMode?: boolean  // 创作模式：启用长文本优化，使用90%的模型上下文容量
 }
 
 // 聊天状态
@@ -58,17 +72,17 @@ export interface ChatState {
   input: string
   isLoading: boolean
   error: string | null
-  
+
   // 设置相关
   settings: ChatSettings
-  
+
   // UI 状态
   editingTitle: boolean
   tempTitle: string
-  
+
   // 生成流程阶段
   responsePhase: ResponsePhase
-  previewContent: string
+  // 移除 previewContent，状态直接存储在 message.status 中
 }
 
 // 聊天操作类型
@@ -84,14 +98,21 @@ export type ChatAction =
   | { type: 'SET_EDITING_TITLE'; payload: boolean }
   | { type: 'SET_TEMP_TITLE'; payload: string }
   | { type: 'SET_RESPONSE_PHASE'; payload: ResponsePhase }
-  | { type: 'SET_PREVIEW_CONTENT'; payload: string }
   | { type: 'RESET_STATE' }
-  // 事件协议相关的新 actions
+  // 新的统一流式更新 action，替代原来的多个 action
+  | {
+      type: 'UPDATE_MESSAGE_STREAM';
+      payload: {
+        messageId: string;
+        content?: string;
+        delta?: string;
+        status: MessageStatus;
+        metadata?: Partial<MessageMetadata>
+      }
+    }
+  // 保留向后兼容的 action（逐步废弃）
   | { type: 'SEND_USER_MESSAGE'; payload: ChatMessage }
-  | { type: 'SET_PENDING_ASSISTANT'; payload: { id: string; pendingAssistantId: string } }
-  | { type: 'APPEND_ASSISTANT_DELTA'; payload: { pendingAssistantId: string; delta: string } }
-  | { type: 'FINALIZE_ASSISTANT_MESSAGE'; payload: { pendingAssistantId: string; finalMessage: ChatMessage } }
-  | { type: 'RESET_STREAM'; payload?: { pendingAssistantId?: string } }
+  | { type: 'REMOVE_MESSAGE'; payload: { messageId: string } }
 
 // 组件 Props 类型
 export interface SmartChatCenterProps {
@@ -101,7 +122,7 @@ export interface SmartChatCenterProps {
   selectedText?: string
   editorContextEnabled?: boolean
   editorContent?: string
-  onUpdateConversation: (id: string, updates: Partial<Conversation>) => void
+  onUpdateConversation: (id: string, updates: Partial<Conversation>) => Promise<void>
   onCreateConversation: (model?: string) => Promise<Conversation | null>
   onDeleteConversation: (id: string) => void
   onSelectConversation: (id: string) => void
@@ -125,10 +146,9 @@ export interface ChatMessagesProps {
   messages: ChatMessage[]
   isLoading: boolean
   error: string | null
+  onCopyMessage?: (messageId: string) => void
   onRetryMessage?: (messageId: string) => void
-  // 新增：支持打字预览状态
-  responsePhase?: ResponsePhase
-  previewContent?: string
+  // 移除 responsePhase 和 previewContent，状态直接在消息中
 }
 
 export interface ChatInputProps {
@@ -144,6 +164,7 @@ export interface ChatInputProps {
 
 export interface MessageItemProps {
   message: ChatMessage
+  onCopy?: (messageId: string) => void
   onRetry?: () => void
 }
 
@@ -236,7 +257,7 @@ export interface UseChatStateReturn {
 }
 
 export interface UseChatActionsReturn {
-  sendMessage: (content: string) => Promise<void>
+  sendMessage: (content: string, dynamicConversationId?: string) => Promise<void>
   stopGeneration: () => void
   copyMessage: (content: string) => void
   retryMessage: (messageId: string) => Promise<void>
@@ -298,5 +319,4 @@ export const DEFAULT_CHAT_STATE: ChatState = {
   editingTitle: false,
   tempTitle: '',
   responsePhase: 'idle',
-  previewContent: '',
 }

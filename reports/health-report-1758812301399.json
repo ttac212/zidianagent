@@ -1,0 +1,159 @@
+{
+  "timestamp": "2025-09-25T14:58:14.759Z",
+  "checks": {
+    "security": {
+      "passed": true,
+      "issues": [],
+      "score": 100
+    },
+    "codeQuality": {
+      "passed": false,
+      "issues": [
+        {
+          "severity": "medium",
+          "message": "发现 32 个待处理标记(TODO/FIXME/HACK)",
+          "fix": "定期清理技术债务"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: app\\merchants\\[id]\\page.tsx (615行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: app\\settings\\enhanced-page.tsx (601行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: app\\settings\\page.tsx (574行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: app\\workspace\\page.tsx (565行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: components\\chat\\chat-input.tsx (539行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: components\\ui\\sidebar.tsx (731行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: e2e\\extreme-stress.spec.ts (516行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: scripts\\diagnose-usage-stats.ts (545行)",
+          "fix": "考虑拆分为更小的模块"
+        }
+      ],
+      "score": 10
+    },
+    "performance": {
+      "passed": false,
+      "issues": [
+        {
+          "severity": "medium",
+          "message": "构建产物过大: 322.69MB",
+          "fix": "优化打包策略，实施代码分割"
+        },
+        {
+          "severity": "low",
+          "message": "发现 1 个未优化的大图片",
+          "fix": "使用图片压缩工具或Next.js Image组件"
+        }
+      ],
+      "score": 70
+    },
+    "dependencies": {
+      "passed": true,
+      "issues": [],
+      "score": 100
+    },
+    "testing": {
+      "passed": false,
+      "issues": [
+        {
+          "severity": "high",
+          "message": "测试覆盖率低: 25.9%的文件有测试",
+          "fix": "增加单元测试和集成测试"
+        }
+      ],
+      "score": 25.925925925925924
+    }
+  },
+  "score": 61,
+  "issues": [
+    {
+      "severity": "medium",
+      "message": "发现 32 个待处理标记(TODO/FIXME/HACK)",
+      "fix": "定期清理技术债务"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: app\\merchants\\[id]\\page.tsx (615行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: app\\settings\\enhanced-page.tsx (601行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: app\\settings\\page.tsx (574行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: app\\workspace\\page.tsx (565行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: components\\chat\\chat-input.tsx (539行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: components\\ui\\sidebar.tsx (731行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: e2e\\extreme-stress.spec.ts (516行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: scripts\\diagnose-usage-stats.ts (545行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "medium",
+      "message": "构建产物过大: 322.69MB",
+      "fix": "优化打包策略，实施代码分割"
+    },
+    {
+      "severity": "low",
+      "message": "发现 1 个未优化的大图片",
+      "fix": "使用图片压缩工具或Next.js Image组件"
+    },
+    {
+      "severity": "high",
+      "message": "测试覆盖率低: 25.9%的文件有测试",
+      "fix": "增加单元测试和集成测试"
+    }
+  ],
+  "suggestions": [
+    "项目健康度中等，建议制定改进计划"
+  ]
+}

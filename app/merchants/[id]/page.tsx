@@ -52,10 +52,12 @@ import {
   CONTENT_TYPE_LABELS 
 } from '@/types/merchant'
 import { TagAnalysisModal } from '@/components/merchants/tag-analysis-modal'
+import * as dt from '@/lib/utils/date-toolkit'
 
 export default function MerchantDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const merchantId = Array.isArray(params.id) ? params.id[0] : params.id
   const [merchant, setMerchant] = useState<MerchantWithDetails | null>(null)
   const [contents, setContents] = useState<MerchantContent[]>([])
   const [loading, setLoading] = useState(true)
@@ -72,96 +74,101 @@ export default function MerchantDetailPage() {
   const [exportLoading, setExportLoading] = useState(false)
 
   // 获取商家详情
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchMerchant = useCallback(async () => {
-    const merchantId = params.id
-    if (!merchantId) {
-      return
-    }
+    if (!merchantId) return
 
     try {
       setLoading(true)
       const response = await fetch(`/api/merchants/${merchantId}`)
-      const data = await response.json()
-
-      if (response.ok) {
-        setMerchant(data.merchant)
-        setContents(data.merchant.contents || [])
+      if (!response.ok) {
+        console.error('加载商户详情失败', await response.text())
+        return
       }
-    } catch {
-      // TODO: 接入统一的错误上报
+
+      const data = await response.json()
+      setMerchant(data.merchant)
+      setContents(data.merchant.contents || [])
+    } catch (error) {
+      console.error('加载商户详情异常', error)
     } finally {
       setLoading(false)
     }
-  }, [params.id])
+  }, [merchantId])
+
+  // 计算互动评分
+  const getEngagementScore = useCallback((content: MerchantContent) => {
+    return content.diggCount + content.commentCount * 2 + content.collectCount * 3 + content.shareCount * 4
+  }, [])
 
   // 获取商家内容
-  const fetchContents = async () => {
+  const fetchContents = useCallback(async () => {
+    const targetId = merchant?.id ?? merchantId
+    if (!targetId) return
+
     try {
       setContentLoading(true)
       const params = new URLSearchParams()
-      
-      // 处理特殊的排序字段
+
+      // 保持与 API 兼容的排序字段
       let apiSortBy = contentFilters.sortBy
       if (contentFilters.sortBy === 'engagement' || contentFilters.sortBy === 'shareCount') {
-        // 对于互动评分和分享数，我们需要在前端排序
-        apiSortBy = 'publishedAt' // 先从API获取所有数据
+        apiSortBy = 'publishedAt'
       }
-      
+
       Object.entries(contentFilters).forEach(([key, value]) => {
         if (value && value !== '' && key !== 'sortBy') {
           if (key === 'sortBy' && (contentFilters.sortBy === 'engagement' || contentFilters.sortBy === 'shareCount')) {
-            // 不传递特殊排序到API
             return
           }
           params.append(key, String(value))
         }
       })
-      
-      // 添加排序参数
+
       params.append('sortBy', apiSortBy)
       params.append('sortOrder', contentFilters.sortOrder)
 
-      const response = await fetch(`/api/merchants/${merchant?.id}/contents?${params}`)
+      const response = await fetch(`/api/merchants/${targetId}/contents?${params.toString()}`)
+      if (!response.ok) {
+        console.error('加载商户内容失败', await response.text())
+        return
+      }
+
       const data = await response.json()
-      
-      if (response.ok) {
-        let sortedContents = data.contents
-        
-        // 前端排序处理
-        if (contentFilters.sortBy === 'engagement') {
-          sortedContents = [...data.contents].sort((a, b) => {
-            const scoreA = getEngagementScore(a)
-            const scoreB = getEngagementScore(b)
-            return contentFilters.sortOrder === 'desc' ? scoreB - scoreA : scoreA - scoreB
-          })
-        } else if (contentFilters.sortBy === 'shareCount') {
-          sortedContents = [...data.contents].sort((a, b) => {
-            return contentFilters.sortOrder === 'desc' 
-              ? b.shareCount - a.shareCount 
-              : a.shareCount - b.shareCount
-          })
-        }
-        
-        setContents(sortedContents)
-      } else {
-        }
+      let sortedContents = data.contents || []
+
+      if (contentFilters.sortBy === 'engagement') {
+        sortedContents = [...sortedContents].sort((a, b) => {
+          const scoreA = getEngagementScore(a)
+          const scoreB = getEngagementScore(b)
+          return contentFilters.sortOrder === 'desc' ? scoreB - scoreA : scoreA - scoreB
+        })
+      } else if (contentFilters.sortBy === 'shareCount') {
+        sortedContents = [...sortedContents].sort((a, b) => {
+          return contentFilters.sortOrder === 'desc'
+            ? b.shareCount - a.shareCount
+            : a.shareCount - b.shareCount
+        })
+      }
+
+      setContents(sortedContents)
     } catch (error) {
-      } finally {
+      console.error('加载商户内容异常', error)
+    } finally {
       setContentLoading(false)
     }
-  }
+  }, [contentFilters, merchant?.id, merchantId, getEngagementScore])
 
   useEffect(() => {
-    if (params.id) {
-      fetchMerchant()
-    }
-  }, [params.id])
+    fetchMerchant()
+  }, [fetchMerchant])
 
   useEffect(() => {
     if (merchant) {
       fetchContents()
     }
-  }, [contentFilters, merchant])
+  }, [fetchContents, merchant])
 
   // 格式化数字
   const formatNumber = (num: number) => {
@@ -175,11 +182,6 @@ export default function MerchantDetailPage() {
   const formatDuration = (duration: string | null) => {
     if (!duration) return '未知'
     return duration.replace(/^00:/, '')  // 移除开头的00:
-  }
-
-  // 计算互动评分
-  const getEngagementScore = (content: MerchantContent) => {
-    return content.diggCount + content.commentCount * 2 + content.collectCount * 3 + content.shareCount * 4
   }
 
   // 导出数据
@@ -198,7 +200,7 @@ export default function MerchantDetailPage() {
         
         // 从响应头获取文件名
         const contentDisposition = response.headers.get('content-disposition')
-        let filename = `${merchant.name}_${type}_${new Date().toISOString().split('T')[0]}.csv`
+        let filename = `${merchant.name}_${type}_${dt.toISO().split('T')[0]}.csv`
         
         if (contentDisposition) {
           const matches = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
@@ -214,7 +216,7 @@ export default function MerchantDetailPage() {
         document.body.removeChild(a)
       } else {
         }
-    } catch (error) {
+    } catch (_error) {
       } finally {
       setExportLoading(false)
     }
@@ -601,5 +603,13 @@ export default function MerchantDetailPage() {
     </div>
   )
 }
+
+
+
+
+
+
+
+
 
 

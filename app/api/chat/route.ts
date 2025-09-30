@@ -10,6 +10,16 @@ import { selectApiKey } from "@/lib/ai/key-manager"
 import { createSSETransformStream } from "@/lib/utils/sse-parser"
 import { checkRateLimit } from "@/lib/security/rate-limiter"
 import { trimForChatAPI } from "@/lib/chat/context-trimmer"
+import { isAllowed } from "@/lib/ai/models"
+import { QuotaManager, QuotaExceededError } from "@/lib/security/quota-manager"
+import { getModelContextConfig } from "@/lib/constants/message-limits"
+import {
+  error,
+  validationError,
+  forbidden,
+  unauthorized
+} from '@/lib/api/http-response'
+
 
 const API_BASE = process.env.LLM_API_BASE || "https://api.302.ai/v1"
 
@@ -17,7 +27,7 @@ export async function POST(request: NextRequest) {
   // 1. 认证
   const token = await getToken({ req: request as any })
   if (!token?.sub) {
-    return Response.json({ error: "未认证" }, { status: 401 })
+    return unauthorized('未认证')
   }
 
   const userId = String(token.sub)
@@ -25,21 +35,70 @@ export async function POST(request: NextRequest) {
   // 2. 速率限制检查（修复形同虚设问题）
   const rateLimitResult = await checkRateLimit(request, 'CHAT', userId)
   if (!rateLimitResult.allowed) {
-    return Response.json(
-      { error: rateLimitResult.error?.message || '请求过于频繁' },
+    return error(
+      rateLimitResult.error?.message || '请求过于频繁',
       { status: 429 }
     )
   }
 
+  // 3. 原子性配额检查和预留（修复R2：真正的原子操作）
   const body = await request.json()
-  const { conversationId, messages, model = "claude-3-5-haiku-20241022", temperature = 0.7 } = body
+  const {
+    conversationId,
+    messages,
+    model = "claude-3-5-haiku-20241022",
+    temperature = 0.7,
+    creativeMode = false  // 创作模式：启用长文本优化
+  } = body
 
-  // 服务端统一裁剪（防止客户端绕过限制）
-  const trimResult = trimForChatAPI(messages)
+  // SECURITY: 强制模型白名单验证
+  if (!isAllowed(model)) {
+    return validationError(
+      `Model '${model}' is not allowed. Check MODEL_ALLOWLIST configuration.`
+    )
+  }
+
+  // 服务端统一裁剪（防止客户端绕过限制）- 基于实际模型上限
+  const trimResult = trimForChatAPI(messages, model, creativeMode)
   const finalMessages = trimResult.messages
 
+  // 估算本次请求需要的token数量（保守估计）
+  const estimatedTokens = Math.max(trimResult.estimatedTokens * 1.5, 1000) // 预留50%缓冲
+
+  // 原子性预留配额 - 真正的数据库事务
+  const quotaResult = await QuotaManager.reserveTokens(userId, estimatedTokens)
+  if (!quotaResult.success) {
+    return error(
+      quotaResult.message || '配额不足',
+      {
+        status: 429,
+        details: {
+          currentUsage: quotaResult.currentUsage,
+          limit: quotaResult.limit
+        }
+      }
+    )
+  }
+
   if (trimResult.trimmed) {
-    console.log(`[API] Server-side trim: ${trimResult.dropCount} messages dropped, tokens: ${trimResult.estimatedTokens}`)
+    console.info(`[API] Server-side trim: ${trimResult.dropCount} messages dropped, tokens: ${trimResult.estimatedTokens}`)
+
+    // SECURITY: 如果裁剪太多，返回友好错误而不是继续处理
+    if (trimResult.dropCount > messages.length * 0.5) {
+      // 释放预留的配额
+      await QuotaManager.releaseTokens(userId, estimatedTokens)
+      return error(
+        `对话过长，已超出模型${model}的上下文限制。请考虑分段对话或总结之前的内容。`,
+        {
+          status: 400,
+          details: {
+            modelLimit: true,
+            droppedMessages: trimResult.dropCount,
+            totalMessages: messages.length
+          }
+        }
+      )
+    }
   }
 
   // 检查最新用户消息是否被裁剪掉（防止空上下文发送到模型）
@@ -48,9 +107,12 @@ export async function POST(request: NextRequest) {
 
   if (originalLastMessage?.role === 'user' &&
       (!trimmedLastMessage || trimmedLastMessage.id !== originalLastMessage.id)) {
-    return Response.json({
-      error: '输入内容过长，超出了单次对话的token限制。请尝试缩短消息内容或分段发送。'
-    }, { status: 400 })
+    // 释放预留的配额
+    await QuotaManager.releaseTokens(userId, estimatedTokens)
+    return error(
+      '输入内容过长，超出了单次对话的token限制。请尝试缩短消息内容或分段发送。',
+      { status: 400 }
+    )
   }
 
   // 3. 验证对话归属权（修复越权漏洞）
@@ -60,41 +122,36 @@ export async function POST(request: NextRequest) {
     })
 
     if (!conversation) {
-      return Response.json({ error: "无权访问此对话" }, { status: 403 })
+      // 释放预留的配额
+      await QuotaManager.releaseTokens(userId, estimatedTokens)
+      return forbidden('无权访问此对话')
     }
   }
 
-  // 4. 保存用户消息（权限已验证）- 事务原子性修复
+  // 4. 保存用户消息（权限已验证）- 使用真正的QuotaManager
   if (conversationId && messages.length > 0) {
     const userMessage = messages[messages.length - 1]
     if (userMessage.role === 'user') {
       try {
-        await prisma.$transaction(async (tx) => {
-          // 原子操作：消息创建 + 对话统计更新
-          await tx.message.create({
-            data: {
-              conversationId,
-              userId,
-              role: 'USER',
-              content: userMessage.content,
-              modelId: model,
-              promptTokens: 0,  // 用户消息不计算prompt tokens
-              completionTokens: 0
-            }
-          })
+        // 使用QuotaManager保存用户消息（不计费）
+        const success = await QuotaManager.commitTokens(
+          userId,
+          { promptTokens: 0, completionTokens: 0 }, // 用户消息不计费
+          0, // 用户消息无预留消耗
+          {
+            conversationId,
+            role: 'USER',
+            content: userMessage.content,
+            modelId: model
+          }
+        )
 
-          // 同步更新对话统计字段
-          await tx.conversation.update({
-            where: { id: conversationId },
-            data: {
-              lastMessageAt: new Date(),
-              messageCount: { increment: 1 }
-              // totalTokens 不增加，用户消息不计费
-            }
-          })
-        })
+        if (!success) {
+          console.error('[Chat] Failed to save user message')
+          // 继续执行，不阻断用户体验
+        }
       } catch (dbError) {
-        console.error('[Chat] Failed to save user message in transaction:', dbError)
+        console.error('[Chat] Failed to save user message:', dbError)
         // 继续执行，不阻断用户体验
       }
     }
@@ -104,22 +161,63 @@ export async function POST(request: NextRequest) {
   const { apiKey, provider } = selectApiKey(model)
 
   if (!apiKey) {
+    // 释放预留的配额
+    await QuotaManager.releaseTokens(userId, estimatedTokens)
     return Response.json({
       error: `缺少${provider}模型的API Key，请在.env.local中配置对应的Key`
     }, { status: 500 })
   }
 
-  // 6. 调用 AI
+  // 6. 调用 AI - 添加max_tokens参数支持Extended Thinking模式和创作模式
+  const modelConfig = getModelContextConfig(model, creativeMode)
+  const maxTokens = modelConfig.outputMaxTokens || 8000
+
+  // Prompt Caching支持（仅Claude模型）
+  const isClaudeModel = model.includes('claude')
+  const headers: Record<string, string> = {
+    "Authorization": `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+  }
+
+  // 启用Prompt Caching（Claude模型且上下文较长时）
+  if (isClaudeModel && finalMessages.length > 5) {
+    headers["anthropic-beta"] = "prompt-caching-2024-07-31"
+  }
+
+  // 构建请求体
+  const requestBody: Record<string, any> = {
+    model,
+    messages: finalMessages,
+    temperature,
+    max_tokens: maxTokens,
+    stream: true
+  }
+
+  // Prompt Caching：标记可缓存的消息
+  if (isClaudeModel && finalMessages.length > 10) {
+    // 对于长对话，缓存前面的消息历史
+    requestBody.messages = finalMessages.map((msg, index) => {
+      // 缓存前N-5条消息（保留最近5条为动态内容）
+      const shouldCache = index < finalMessages.length - 5
+      if (shouldCache) {
+        return {
+          ...msg,
+          cache_control: { type: "ephemeral" }
+        }
+      }
+      return msg
+    })
+  }
+
   const aiResponse = await fetch(`${API_BASE}/chat/completions`, {
     method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ model, messages: finalMessages, temperature, stream: true })
+    headers,
+    body: JSON.stringify(requestBody)
   })
 
   if (!aiResponse.ok) {
+    // 释放预留的配额
+    await QuotaManager.releaseTokens(userId, estimatedTokens)
     return Response.json({ error: `AI错误: ${aiResponse.status}` }, { status: aiResponse.status })
   }
 
@@ -127,41 +225,44 @@ export async function POST(request: NextRequest) {
   const sseTransform = createSSETransformStream(
     undefined, // onContent - 不需要实时处理
     async (fullContent, usage) => {
-      // onComplete - 流结束后保存完整消息 - 事务原子性修复
+      // onComplete - 流结束后保存完整消息，使用真正的QuotaManager
       if (conversationId && fullContent) {
         try {
           const promptTokens = usage?.prompt_tokens || 0
           const completionTokens = usage?.completion_tokens || 0
-          const totalTokensUsed = promptTokens + completionTokens
 
-          await prisma.$transaction(async (tx) => {
-            // 原子操作：助手消息创建 + 对话统计更新
-            await tx.message.create({
-              data: {
-                conversationId,
-                userId,
-                role: 'ASSISTANT',
-                content: fullContent,
-                modelId: model,
-                promptTokens,
-                completionTokens
-              }
-            })
+          // 使用QuotaManager提交实际使用的tokens
+          const success = await QuotaManager.commitTokens(
+            userId,
+            { promptTokens, completionTokens },
+            estimatedTokens, // 传入预留的token数量
+            {
+              conversationId,
+              role: 'ASSISTANT',
+              content: fullContent,
+              modelId: model
+            }
+          )
 
-            // 同步更新对话统计字段
-            await tx.conversation.update({
-              where: { id: conversationId },
-              data: {
-                lastMessageAt: new Date(),
-                messageCount: { increment: 1 },
-                totalTokens: { increment: totalTokensUsed }  // 助手回复计入token消耗
-              }
-            })
-          })
+          if (!success) {
+            console.error('[Chat] Failed to save assistant message')
+            // 释放预留配额，避免配额卡死
+            await QuotaManager.releaseTokens(userId, estimatedTokens)
+          }
         } catch (dbError) {
-          console.error('[Chat] Failed to save assistant message in transaction:', dbError)
-          // 数据库错误不中断流，但记录错误
+          console.error('[Chat] Failed to save assistant message:', dbError)
+
+          if (dbError instanceof QuotaExceededError) {
+            console.error(`[Chat] Quota exceeded during commit: ${dbError.message}`)
+            // 配额超限时，系统已经确保不会扣减配额，无需释放
+          } else {
+            // 其他错误时释放预留配额
+            await QuotaManager.releaseTokens(userId, estimatedTokens)
+          }
         }
+      } else {
+        // 如果没有内容或对话ID，释放预留配额
+        await QuotaManager.releaseTokens(userId, estimatedTokens)
       }
     }
   )

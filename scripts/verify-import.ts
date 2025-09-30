@@ -71,7 +71,7 @@ async function main() {
     })
     
     topMerchants.forEach((merchant, index) => {
-      console.log(`  ${index + 1}. ${merchant.name} - ${merchant.totalContentCount} 条内容`)
+      console.info(`  ${index + 1}. ${merchant.name} - ${merchant.totalContentCount} 条内容`)
     })
     // 验证数据完整性
     } catch (error) {

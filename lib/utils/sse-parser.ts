@@ -22,6 +22,69 @@ export interface SSEParseResult {
 }
 
 /**
+ * 归一化不同AI Provider的响应格式
+ * Linus原则：所有特殊情况都在这里处理，主流程保持简单
+ *
+ * 支持格式：
+ * 1. OpenAI: { choices: [{ delta: { content }, finish_reason }] }
+ * 2. Claude/302.AI扁平格式: { content, error, usage }
+ * 3. 纯文本: 字符串直接作为content
+ */
+function normalizePayload(raw: unknown): SSEMessage | null {
+  if (!raw) return null
+
+  const message: SSEMessage = {}
+
+  // 处理纯字符串
+  if (typeof raw === 'string') {
+    message.content = raw
+    return message
+  }
+
+  // 类型守卫
+  const obj = raw as Record<string, any>
+
+  // 优先处理扁平格式（最简单的情况）
+  if ('content' in obj) {
+    message.content = obj.content
+  }
+
+  if ('error' in obj) {
+    message.error = typeof obj.error === 'string'
+      ? obj.error
+      : obj.error?.message || JSON.stringify(obj.error)
+  }
+
+  if ('usage' in obj && typeof obj.usage === 'object') {
+    message.usage = obj.usage
+  }
+
+  if ('finished' in obj) {
+    message.finished = obj.finished
+  }
+
+  // OpenAI格式兼容（仅在没有扁平content时检查）
+  if (!message.content && obj.choices?.[0]) {
+    const choice = obj.choices[0]
+
+    if (choice.delta?.content) {
+      message.content = choice.delta.content
+    }
+
+    if (choice.message?.content) {
+      message.content = choice.message.content
+    }
+
+    if (choice.finish_reason) {
+      message.finished = true
+    }
+  }
+
+  // 返回null表示没有有效数据
+  return Object.keys(message).length > 0 ? message : null
+}
+
+/**
  * 解析SSE数据块
  * 处理跨chunk的不完整行，返回解析的消息和剩余缓冲区
  */
@@ -54,33 +117,12 @@ export function parseSSEChunk(chunk: string, buffer: string = ''): SSEParseResul
 
     try {
       const parsed = JSON.parse(data)
-      const message: SSEMessage = {}
+      const message = normalizePayload(parsed)
 
-      // 提取内容
-      if (parsed.choices?.[0]?.delta?.content) {
-        message.content = parsed.choices[0].delta.content
-      }
-
-      // 提取token使用信息
-      if (parsed.usage) {
-        message.usage = parsed.usage
-      }
-
-      // 检查是否结束
-      if (parsed.choices?.[0]?.finish_reason) {
-        message.finished = true
-      }
-
-      // 提取错误信息
-      if (parsed.error) {
-        message.error = parsed.error.message || parsed.error
-      }
-
-      // 只有当消息有内容时才添加
-      if (Object.keys(message).length > 0) {
+      if (message) {
         messages.push(message)
       }
-    } catch (e) {
+    } catch (_e) {
       // 解析错误，忽略这行
     }
   }

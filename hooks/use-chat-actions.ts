@@ -3,12 +3,13 @@
  * 实现 started/chunk/done/error 事件流
  */
 
-import { useCallback, useRef } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { toast } from '@/lib/toast/toast'
 import type { ChatMessage, ChatEvent } from '@/types/chat'
 import { useQueryClient } from '@tanstack/react-query'
 import { processSSEStream } from '@/lib/utils/sse-parser'
 import { trimForChatAPI } from '@/lib/chat/context-trimmer'
+import * as dt from '@/lib/utils/date-toolkit'
 
 export function useChatActions({
   conversationId,
@@ -22,43 +23,53 @@ export function useChatActions({
   model?: string
 }) {
   const abortRef = useRef<AbortController | null>(null)
+  const [isStreaming, setIsStreaming] = useState(false)
   const queryClient = useQueryClient()
 
-  const sendMessage = useCallback(async (content: string) => {
+  const sendMessage = useCallback(async (content: string, dynamicConversationId?: string) => {
     if (!content.trim()) return
 
+    // 使用动态提供的conversationId，否则使用props中的
+    const activeConversationId = dynamicConversationId ?? conversationId
+
     // 生成唯一 ID
-    const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2)}`
-    const pendingAssistantId = `pending_${Date.now()}_${Math.random().toString(36).slice(2)}`
+    const requestId = `req_${dt.timestamp()}_${Math.random().toString(36).slice(2)}`
+    const pendingAssistantId = `pending_${dt.timestamp()}_${Math.random().toString(36).slice(2)}`
 
     // 创建用户消息
     const userMessage: ChatMessage = {
-      id: `msg_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      id: `msg_${dt.timestamp()}_${Math.random().toString(36).slice(2)}`,
       role: 'user',
       content,
-      timestamp: Date.now()
+      timestamp: dt.timestamp(),
+      status: 'completed' // 用户消息立即完成
     }
 
-    // 中止上一个请求
-    abortRef.current?.abort()
-    abortRef.current = new AbortController()
+    // 原子化中止上一个请求并创建新的控制器 - 修复竞态条件
+    const currentController = new AbortController()
+    const previousController = abortRef.current
+    abortRef.current = currentController // 先设置新控制器再中止旧的
+    previousController?.abort() // 中止之前的请求
+
+    // 设置流状态
+    setIsStreaming(true)
 
     try {
       // 发送 started 事件
       onEvent?.({
         type: 'started',
         requestId,
-        conversationId,
+        conversationId: activeConversationId,
         userMessage,
         pendingAssistantId
       })
 
-      // 使用统一裁剪器准备上下文消息（修复上下文无界问题）
+      // 使用统一裁剪器准备上下文消息（修复上下文无界问题）- 基于实际模型上限
       const fullContext = [...messages, userMessage]
-      const trimResult = trimForChatAPI(fullContext)
+      const trimResult = trimForChatAPI(fullContext, model)
 
       if (trimResult.trimmed) {
-        console.log(`[Chat] Context trimmed: ${trimResult.dropCount} messages dropped, estimated tokens: ${trimResult.estimatedTokens}`)
+        console.info(`[Chat] Context trimmed: ${trimResult.dropCount} messages dropped, estimated tokens: ${trimResult.estimatedTokens}`)
       }
 
       // 检查最新用户消息是否被裁剪掉（修复回复错对象问题）
@@ -71,11 +82,11 @@ export function useChatActions({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          conversationId,
+          conversationId: activeConversationId,
           messages: trimResult.messages,
           model
         }),
-        signal: abortRef.current.signal
+        signal: currentController.signal
       })
 
       if (!response.ok) {
@@ -111,26 +122,33 @@ export function useChatActions({
         id: pendingAssistantId,
         role: 'assistant',
         content: fullContent,
-        timestamp: Date.now(),
-        metadata: { model }
+        timestamp: dt.timestamp(),
+        metadata: { model },
+        status: 'completed' // 助手消息流式完成后设为completed
       }
 
       // 发送 done 事件
       onEvent?.({
         type: 'done',
         requestId,
-        conversationId,
+        conversationId: activeConversationId,
         assistantMessage,
-        finishedAt: Date.now()
+        finishedAt: dt.timestamp()
       })
 
+      // 复位流状态和abort控制器（仅在是当前请求时清理）
+      setIsStreaming(false)
+      if (abortRef.current === currentController) {
+        abortRef.current = null
+      }
+
       // 触发缓存失效 - 使用正确的 query keys
-      if (conversationId) {
+      if (activeConversationId) {
         const { conversationKeys } = await import('@/hooks/api/use-conversations-query')
 
         // 刷新对话详情
         await queryClient.invalidateQueries({
-          queryKey: conversationKeys.detail(conversationId)
+          queryKey: conversationKeys.detail(activeConversationId)
         })
 
         // 刷新对话列表（更新最后消息/时间戳）
@@ -144,8 +162,20 @@ export function useChatActions({
         })
       }
 
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
+    } catch (error) {
+      // 复位流状态
+      setIsStreaming(false)
+
+      // 检查是否是当前请求被中止（避免清理新请求的控制器）
+      if (abortRef.current === currentController) {
+        abortRef.current = null
+      }
+
+      // 类型安全的错误处理
+      const isAbortError = error instanceof Error && error.name === 'AbortError'
+      const errorMessage = error instanceof Error ? error.message : '发送消息失败'
+
+      if (isAbortError) {
         // 中止时发送 error 事件进行清理
         onEvent?.({
           type: 'error',
@@ -156,8 +186,6 @@ export function useChatActions({
         })
         return
       }
-
-      const errorMessage = error.message || '发送消息失败'
 
       // 发送 error 事件，包含 pendingAssistantId 用于匹配占位消息
       onEvent?.({
@@ -173,12 +201,16 @@ export function useChatActions({
   }, [conversationId, onEvent, messages, model, queryClient])
 
   const stopGeneration = useCallback(() => {
-    abortRef.current?.abort()
+    // 原子化停止生成 - 避免竞态条件
+    const currentController = abortRef.current
+    abortRef.current = null // 先清空引用再中止
+    currentController?.abort()
+    setIsStreaming(false)
   }, [])
 
   return {
     sendMessage,
     stopGeneration,
-    isStreaming: !!abortRef.current
+    isStreaming
   }
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+
 // 重定向到统一的度量API
 export async function POST(request: NextRequest) {
   try {

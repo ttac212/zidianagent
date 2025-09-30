@@ -2,12 +2,12 @@
  * 商家分析报告详情 API - 功能开发中
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import {
+  error
+} from '@/lib/api/http-response'
 
-const UNDER_DEVELOPMENT = NextResponse.json(
-  { error: '商家分析功能正在开发中' },
-  { status: 501 }
-)
+
+const UNDER_DEVELOPMENT = error('商家分析功能正在开发中', { status: 501 })
 
 export async function GET() { return UNDER_DEVELOPMENT }
 export async function PUT() { return UNDER_DEVELOPMENT }

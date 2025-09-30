@@ -4,7 +4,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Header } from '@/components/header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -50,31 +50,32 @@ export default function MerchantsPage() {
   const [total, setTotal] = useState(0)
 
   // 获取商家列表
-  const fetchMerchants = async () => {
+  const fetchMerchants = useCallback(async () => {
     try {
       setLoading(true)
       const params = new URLSearchParams()
-      
+
       Object.entries(filters).forEach(([key, value]) => {
         if (value && value !== '') {
           params.append(key, String(value))
         }
       })
 
-      const response = await fetch(`/api/merchants?${params}`)
+      const response = await fetch(`/api/merchants?${params.toString()}`)
+      if (!response.ok) {
+        console.error('获取商户列表失败', await response.text())
+        return
+      }
+
       const data = await response.json()
-      
-      if (response.ok) {
-        setMerchants(data.merchants)
-        setTotal(data.total)
-      } else {
-        }
-    } catch {
-      } finally {
+      setMerchants(data.merchants)
+      setTotal(data.total)
+    } catch (error) {
+      console.error('获取商户列表异常', error)
+    } finally {
       setLoading(false)
     }
-  }
-
+  }, [filters])
   // 获取分类和统计数据
   const fetchData = async () => {
     try {
@@ -102,7 +103,7 @@ export default function MerchantsPage() {
 
   useEffect(() => {
     fetchMerchants()
-  }, [filters])
+  }, [fetchMerchants])
 
   // 处理搜索
   const handleSearch = (value: string) => {
@@ -372,3 +373,6 @@ export default function MerchantsPage() {
     </div>
   )
 }
+
+
+

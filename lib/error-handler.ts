@@ -1,3 +1,5 @@
+import * as dt from '@/lib/utils/date-toolkit'
+
 "use client"
 
 export class AppError extends Error {
@@ -88,7 +90,7 @@ export function logError(error: Error, context?: string) {
     message: error.message,
     stack: error.stack,
     context,
-    timestamp: new Date().toISOString(),
+    timestamp: dt.toISO(),
     userAgent: typeof window !== "undefined" ? window.navigator.userAgent : "server",
     url: typeof window !== "undefined" ? window.location.href : "server",
   }
@@ -97,5 +99,8 @@ export function logError(error: Error, context?: string) {
   if (process.env.NODE_ENV === "production") {
     // 发送到错误监控服务
     // sendToErrorService(errorInfo)
+  } else {
+    // 开发环境中输出详细错误信息
+    console.error('Error logged:', errorInfo)
   }
 }

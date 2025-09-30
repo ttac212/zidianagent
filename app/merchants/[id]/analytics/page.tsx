@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -71,29 +71,31 @@ export default function MerchantAnalyticsPage() {
   const router = useRouter()
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
+  const merchantId = Array.isArray(params.id) ? params.id[0] : params.id
 
   // 获取分析数据
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = useCallback(async () => {
+    if (!merchantId) return
     try {
       setLoading(true)
-      const response = await fetch(`/api/merchants/${params.id}/analytics`)
+      const response = await fetch(`/api/merchants/${merchantId}/analytics`)
+      if (!response.ok) {
+        console.error('获取商户分析失败', await response.text())
+        return
+      }
+
       const data = await response.json()
-      
-      if (response.ok) {
-        setAnalytics(data)
-      } else {
-        }
-    } catch {
-      } finally {
+      setAnalytics(data)
+    } catch (error) {
+      console.error('获取商户分析异常', error)
+    } finally {
       setLoading(false)
     }
-  }
+  }, [merchantId])
 
   useEffect(() => {
-    if (params.id) {
-      fetchAnalytics()
-    }
-  }, [params.id])
+    fetchAnalytics()
+  }, [fetchAnalytics])
 
   // 格式化数字
   const formatNumber = (num: number) => {
@@ -403,3 +405,4 @@ export default function MerchantAnalyticsPage() {
     </div>
   )
 }
+

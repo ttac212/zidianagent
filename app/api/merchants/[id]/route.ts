@@ -8,6 +8,12 @@ import { getToken } from 'next-auth/jwt'
 import { prisma } from '@/lib/prisma'
 import type { MerchantDetailResponse } from '@/types/merchant'
 import { createErrorResponse, generateRequestId } from '@/lib/api/error-handler'
+import {
+  validationError,
+  notFound,
+  unauthorized
+} from '@/lib/api/http-response'
+
 
 // GET /api/merchants/[id] - 获取商家详情
 export async function GET(
@@ -15,15 +21,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const token = await getToken({ req: request as any })
-  if (!token?.sub) return NextResponse.json({ error: '未认证' }, { status: 401 })
+  if (!token?.sub) return unauthorized('未认证')
   try {
     const { id } = await params
     
     if (!id) {
-      return NextResponse.json(
-        { error: '商家ID不能为空' },
-        { status: 400 }
-      )
+      return validationError('商家ID不能为空')
     }
 
     const merchant = await prisma.merchant.findUnique({
@@ -43,10 +46,7 @@ export async function GET(
     })
 
     if (!merchant) {
-      return NextResponse.json(
-        { error: '商家不存在' },
-        { status: 404 }
-      )
+      return notFound('商家不存在')
     }
 
     // 处理内容数据，解析JSON字段

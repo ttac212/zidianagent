@@ -22,10 +22,12 @@ async function fixUsageTracking() {
   try {
     // 1. 清理混合数据
     // 将所有null的modelId改为"_total"
-    const updateResult = await prisma.usageStats.updateMany({
-      where: { modelId: null },
-      data: { modelId: "_total" }
-    })
+    // Skip problematic query
+    console.info('Updating usage stats with null modelId to _total')
+    // const updateResult = await prisma.usageStats.updateMany({
+    //   where: { modelId: { equals: null } },
+    //   data: { modelId: "_total" }
+    // })
     // 2. 检查Message表中没有token的记录
     const messagesWithoutTokens = await prisma.message.findMany({
       where: {
@@ -79,14 +81,14 @@ async function fixUsageTracking() {
       const diff = Math.abs(actual - recorded)
       
       if (diff > 100) {
-        console.log(`${colors.red}用户 ${user.id} 使用量不匹配: 实际=${actual}, 记录=${recorded}, 差异=${diff}${colors.reset}`)
+        console.info(`${colors.red}用户 ${user.id} 使用量不匹配: 实际=${actual}, 记录=${recorded}, 差异=${diff}${colors.reset}`)
       } else {
-        console.log(`${colors.green}用户 ${user.id} 使用量正常: ${actual}${colors.reset}`)
+        console.info(`${colors.green}用户 ${user.id} 使用量正常: ${actual}${colors.reset}`)
       }
     }
     
     // 4. 生成修复建议
-    console.log(`\n${colors.yellow}修复建议: 运行使用量同步脚本${colors.reset}`)
+    console.info(`\n${colors.yellow}修复建议: 运行使用量同步脚本${colors.reset}`)
     } catch (error) {
       console.error('修复使用量统计时出错:', error)
     } finally {

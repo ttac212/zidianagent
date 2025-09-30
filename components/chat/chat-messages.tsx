@@ -7,7 +7,6 @@ import React, { useMemo, forwardRef } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 
 import { MessageItem } from './message-item'
-import { TypingIndicator } from './typing-indicator'
 import type { ChatMessagesProps } from '@/types/chat'
 
 
@@ -93,11 +92,11 @@ export const ChatMessages = forwardRef<HTMLDivElement, ChatMessagesProps>(({
   messages,
   isLoading,
   error,
-  onRetryMessage,
-  responsePhase = 'idle',
-  previewContent = ''
+  onRetryMessage
 }, ref) => {
   // 优化：使用 useMemo 缓存渲染的消息列表
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const renderedMessages = useMemo(() => {
     return messages.map((message) => (
       <MessageItem
@@ -166,13 +165,6 @@ export const ChatMessages = forwardRef<HTMLDivElement, ChatMessagesProps>(({
             </div>
           </div>
         )}
-
-        {/* 生成过程指示器 - 根据阶段调整提示 */}
-        <TypingIndicator
-          isVisible={isLoading}
-          phase={responsePhase}
-          previewContent={previewContent}
-        />
 
         {/* 底部间距，确保最后一条消息不被输入框遮挡 */}
         <div className="h-4" />

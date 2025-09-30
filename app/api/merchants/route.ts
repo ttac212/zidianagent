@@ -9,11 +9,17 @@ import { getToken } from 'next-auth/jwt'
 import { prisma } from '@/lib/prisma'
 import type { MerchantFilters, MerchantListResponse } from '@/types/merchant'
 import { createErrorResponse, generateRequestId } from '@/lib/api/error-handler'
+import * as dt from '@/lib/utils/date-toolkit'
+import {
+  validationError,
+  unauthorized
+} from '@/lib/api/http-response'
+
 
 // GET /api/merchants - 获取商家列表
 export async function GET(request: NextRequest) {
   const token = await getToken({ req: request as any })
-  if (!token?.sub) return NextResponse.json({ error: '未认证' }, { status: 401 })
+  if (!token?.sub) return unauthorized('未认证')
   try {
     const { searchParams } = new URL(request.url)
     
@@ -134,27 +140,24 @@ export async function GET(request: NextRequest) {
 // POST /api/merchants - 创建新商家（预留管理功能）
 export async function POST(request: NextRequest) {
   const token = await getToken({ req: request as any })
-  if (!token?.sub) return NextResponse.json({ error: '未认证' }, { status: 401 })
+  if (!token?.sub) return unauthorized('未认证')
   try {
     // 这里可以添加身份验证和权限检查
     // const session = await getServerSession(authOptions)
     // if (!session || session.user.role !== 'ADMIN') {
-    //   return NextResponse.json({ error: '权限不足' }, { status: 403 })
+    //   return forbidden('权限不足')
     // }
 
     const body = await request.json()
     const { name, description, categoryId, location, address, businessType, contactInfo } = body
 
     if (!name) {
-      return NextResponse.json(
-        { error: '商家名称不能为空' },
-        { status: 400 }
-      )
+      return validationError('商家名称不能为空')
     }
 
     const merchant = await prisma.merchant.create({
       data: {
-        uid: `manual_${Date.now()}`, // 手动创建的商家使用特殊前缀
+        uid: `manual_${dt.timestamp()}`, // 手动创建的商家使用特殊前缀
         name,
         description,
         categoryId,

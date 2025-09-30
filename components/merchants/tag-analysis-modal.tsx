@@ -4,7 +4,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -58,7 +58,7 @@ export function TagAnalysisModal({
   const [loading, setLoading] = useState(false)
 
   // 获取标签分析数据
-  const fetchTagAnalysis = async () => {
+  const fetchTagAnalysis = useCallback(async () => {
     try {
       setLoading(true)
       const response = await fetch(`/api/merchants/${merchantId}/tags`)
@@ -73,7 +73,7 @@ export function TagAnalysisModal({
       } finally {
       setLoading(false)
     }
-  }
+  }, [merchantId])
 
   // 格式化数字
   const formatNumber = (num: number) => {
@@ -87,7 +87,7 @@ export function TagAnalysisModal({
     if (open && merchantId) {
       fetchTagAnalysis()
     }
-  }, [open, merchantId])
+  }, [fetchTagAnalysis, open, merchantId])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

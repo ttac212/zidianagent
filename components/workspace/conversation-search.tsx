@@ -33,7 +33,7 @@ interface ConversationSearchProps {
     sortBy: string
     sortOrder: string
   }
-  onFiltersChange: (_filters: any) => void
+  onFiltersChange: (filters: any) => void
 }
 
 interface QuickFilter {
@@ -50,8 +50,8 @@ export const ConversationSearch: React.FC<ConversationSearchProps> = ({
   onClearSearch,
   isSearching = false,
   resultCount,
-  filters,
-  onFiltersChange
+  filters: _filters,
+  onFiltersChange: _onFiltersChange
 }) => {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
 
@@ -156,8 +156,8 @@ export const ConversationSearch: React.FC<ConversationSearchProps> = ({
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">排序:</span>
           <Select
-            value={filters.sortBy}
-            onValueChange={(value) => onFiltersChange({ ...filters, sortBy: value })}
+            value={_filters.sortBy}
+            onValueChange={(value) => _onFiltersChange({ ..._filters, sortBy: value })}
           >
             <SelectTrigger className="w-32 h-8 text-xs">
               <SelectValue />
@@ -173,13 +173,13 @@ export const ConversationSearch: React.FC<ConversationSearchProps> = ({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => onFiltersChange({ 
-              ...filters, 
-              sortOrder: filters.sortOrder === 'desc' ? 'asc' : 'desc' 
+            onClick={() => _onFiltersChange({
+              ..._filters,
+              sortOrder: _filters.sortOrder === 'desc' ? 'asc' : 'desc'
             })}
             className="h-8 px-2 text-xs"
           >
-            {filters.sortOrder === 'desc' ? '↓' : '↑'}
+            {_filters.sortOrder === 'desc' ? '↓' : '↑'}
           </Button>
         </div>
 
@@ -193,8 +193,8 @@ export const ConversationSearch: React.FC<ConversationSearchProps> = ({
           </PopoverTrigger>
           <PopoverContent className="w-80 p-4">
             <AdvancedFilters
-              filters={filters}
-              onFiltersChange={onFiltersChange}
+              _filters={_filters}
+              _onFiltersChange={_onFiltersChange}
               onClose={() => setShowAdvancedFilters(false)}
             />
           </PopoverContent>
@@ -206,14 +206,14 @@ export const ConversationSearch: React.FC<ConversationSearchProps> = ({
 
 // 高级过滤面板组件
 interface AdvancedFiltersProps {
-  filters: any
-  onFiltersChange: (_filters: any) => void
+  _filters: any
+  _onFiltersChange: (filters: any) => void
   onClose: () => void
 }
 
 const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
-  filters,
-  onFiltersChange,
+  _filters,
+  _onFiltersChange,
   onClose
 }) => {
   return (

@@ -1,0 +1,31 @@
+{
+  "timestamp": "2025-09-28T02:46:15.744Z",
+  "principle": "Linus Torvalds: 好品味意味着把特殊情况变回常规情况",
+  "stats": {
+    "total": 39,
+    "migrated": 8,
+    "skipped": 31,
+    "failed": 0,
+    "needsManualReview": 6,
+    "patterns": {
+      "status-401": 5,
+      "status-403": 1,
+      "status-400": 4,
+      "status-404": 4,
+      "status-501": 1
+    }
+  },
+  "filesNeedingReview": [
+    "app\\api\\auth\\verify-invite-code\\route.ts",
+    "app\\api\\auth\\me\\route.ts",
+    "app\\api\\users\\[id]\\model-stats\\route.ts",
+    "app\\api\\merchants\\[id]\\tags\\route.ts",
+    "app\\api\\merchants\\[id]\\contents\\route.ts",
+    "app\\api\\merchants\\[id]\\analytics\\route.ts"
+  ],
+  "recommendations": [
+    "审查标记的文件，特别是流式响应和特殊格式",
+    "运行测试确保API功能正常",
+    "更新API文档反映新的响应格式"
+  ]
+}

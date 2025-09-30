@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
@@ -67,7 +67,7 @@ export function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [timeRange, setTimeRange] = useState("7d")
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
       setLoading(true)
       const response = await fetch(`/api/admin/stats?timeRange=${timeRange}`)
@@ -76,7 +76,7 @@ export function AdminDashboard() {
       if (result.success) {
         setStats(result.data)
       }
-    } catch (error) {
+    } catch (_error) {
       setStats({
         overview: {
           totalUsers: 0,
@@ -99,11 +99,11 @@ export function AdminDashboard() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [timeRange])
 
   useEffect(() => {
     fetchStats()
-  }, [timeRange])
+  }, [fetchStats])
 
   const formatNumber = (num: number): string => {
     if (num >= 1000000) {

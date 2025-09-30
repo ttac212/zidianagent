@@ -74,7 +74,7 @@ class EnvConfig {
       try {
         const url = new URL(nextAuthUrl);
         const port = url.port || (url.protocol === 'https:' ? '443' : '80');
-        } catch (error) {
+        } catch (_error) {
         issues.push(`❌ NEXTAUTH_URL 格式无效: ${nextAuthUrl}`);
       }
     } else {

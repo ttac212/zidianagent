@@ -1,7 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 import { checkRateLimit } from '@/lib/security/rate-limiter'
 import { createErrorResponse } from '@/lib/api/error-handler'
+import {
+  success,
+  unauthorized,
+  serverError
+} from '@/lib/api/http-response'
 
 /**
  * 用户认证状态端点
@@ -17,17 +22,14 @@ export async function GET(request: NextRequest) {
     const token = await getToken({ req: request as any })
     
     if (!token) {
-      return NextResponse.json({
-        authenticated: false,
-        message: '未认证或会话已过期'
-      }, { status: 401 })
+      return unauthorized('未认证或会话已过期')
     }
 
     const isProduction = process.env.NODE_ENV === 'production'
 
     if (isProduction) {
       // 生产环境：仅返回基本认证状态，不暴露敏感token信息
-      return NextResponse.json({
+      return success({
         authenticated: true,
         user: {
           id: (token as any).id,
@@ -39,7 +41,7 @@ export async function GET(request: NextRequest) {
       })
     } else {
       // 开发环境：返回详细token信息用于调试
-      return NextResponse.json({
+      return success({
         authenticated: true,
         token: {
           sub: token.sub,
@@ -60,10 +62,11 @@ export async function GET(request: NextRequest) {
       })
     }
   } catch (error) {
-    void error
-    return NextResponse.json({
-      authenticated: false,
-      error: '获取会话信息失败'
-    }, { status: 500 })
+   console.error("处理请求失败", error)
+    // error handled
+    return serverError('获取会话信息失败', {
+      authenticated: false
+    })
   }
 }
+

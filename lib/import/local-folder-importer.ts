@@ -3,7 +3,7 @@
  * 注意：Document 和 DocumentCategory 模型尚未在数据库中实现
  */
 
-import { ImportConfig, ImportResult } from './external-resource-importer'
+import { ImportResult } from './external-resource-importer'
 
 export interface LocalImportConfig {
   userId: string

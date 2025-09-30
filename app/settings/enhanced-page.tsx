@@ -5,7 +5,7 @@
 
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -31,16 +31,11 @@ import {
   EyeOff,
   LogOut,
   ChartColumn,
-  RefreshCw,
-  Wifi,
-  WifiOff,
+  RefreshCw
 } from "lucide-react"
 import { StatsCardsGridSkeleton, UsageDetailCardSkeleton } from "@/components/ui/stats-card-skeleton"
 import { ModelUsageCards } from "@/components/stats/model-usage-cards"
-import { ConnectionRecovery } from "@/components/ui/connection-recovery"
-import { useNetworkStatus } from "@/hooks/use-network-status"
-import { useVisibilityAwareData } from "@/hooks/use-page-visibility"
-import { smartApi } from "@/lib/utils/smart-fetch"
+import * as dt from '@/lib/utils/date-toolkit'
 
 interface UsageData {
   date: string
@@ -86,10 +81,9 @@ interface ModelStatsResponse {
 }
 
 export default function EnhancedSettingsPage() {
-  const { data: session, status } = useSession()
+  const { data: session, status: _status } = useSession()
   const [activeTab, setActiveTab] = useState("usage")
   const [showPassword, setShowPassword] = useState(false)
-  const [showConnectionRecovery, setShowConnectionRecovery] = useState(false)
 
   // 账户设置状态
   const [email, setEmail] = useState("user@example.com")
@@ -103,46 +97,42 @@ export default function EnhancedSettingsPage() {
   const [autoSave, setAutoSave] = useState(true)
   const [notifications, setNotifications] = useState(true)
 
-  // 网络状态监控
-  const { isConnected, connectivity, rtt, checkNetworkStatus } = useNetworkStatus({
-    enableNotifications: true,
-    healthCheckInterval: 30000
-  })
-
   // 获取当前用户ID
-  const fetchCurrentUserId = async (): Promise<string | null> => {
+  const fetchCurrentUserId = useCallback(async (): Promise<string | null> => {
     const idFromSession = (session as any)?.user?.id
     return (idFromSession as string) || null
-  }
+  }, [session])
 
-  // 使用可见性感知的数据获取 - 使用量数据
-  const {
-    data: usageData,
-    loading: loadingUsage,
-    error: usageError,
-    fetchData: refetchUsage
-  } = useVisibilityAwareData<UsageData[]>(
-    async () => {
+  // 简化的数据获取 - 不需要286行的页面可见性hook
+  const [usageData, setUsageData] = useState<UsageData[] | null>(null)
+  const [loadingUsage, setLoadingUsage] = useState(true)
+  const [usageError, setUsageError] = useState<Error | null>(null)
+
+  const fetchUsageData = useCallback(async () => {
+    try {
+      setLoadingUsage(true)
+      setUsageError(null)
       const userId = await fetchCurrentUserId()
       if (!userId) {
         throw new Error("未登录或无法获取用户信息")
       }
 
-      const response = await smartApi.getJson<any>(`/api/users/${userId}`, {
-        retry: { maxRetries: 3, initialDelay: 1000 },
-        waitForRecovery: true,
-        timeout: 15000
-      })
-      
-      const stats = (response?.data?.usageStats || []) as Array<{ date: string; totalTokens: number; apiCalls: number }>
-      
+      const response = await fetch(`/api/users/${userId}`)
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch user data')
+      }
+
+      const userData = await response.json()
+      const stats = (userData?.usageStats || []) as Array<{ date: string; totalTokens: number; apiCalls: number }>
+
       // 数据去重和合并逻辑
       const dateMap = new Map<string, { tokens: number; requests: number; count: number }>()
-      
+
       stats.forEach((item) => {
         const dateKey = new Date(item.date).toISOString().split("T")[0]
         const existing = dateMap.get(dateKey)
-        
+
         if (existing) {
           existing.tokens += item.totalTokens || 0
           existing.requests += item.apiCalls || 0
@@ -155,67 +145,86 @@ export default function EnhancedSettingsPage() {
           })
         }
       })
-      
+
       const mapped: UsageData[] = Array.from(dateMap.entries())
         .map(([date, data]) => ({
           date,
           tokens: data.tokens,
           requests: data.requests,
         }))
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      
-      return mapped
-    },
-    {
-      fetchOnMount: true,
-      forceRefreshOnLongAbsence: true,
-      longAbsenceThreshold: 5 * 60 * 1000 // 5分钟
-    }
-  )
+        .sort((a, b) => dt.compare(a.date, b.date))
 
-  // 使用可见性感知的数据获取 - 模型统计数据
-  const {
-    data: modelStats,
-    loading: loadingModelStats,
-    error: modelStatsError,
-    fetchData: refetchModelStats
-  } = useVisibilityAwareData<ModelStatsResponse['data']>(
-    async () => {
+      setUsageData(mapped)
+      return mapped
+    } catch (error) {
+      setUsageError(error instanceof Error ? error : new Error('Unknown error'))
+      setUsageData([])
+    } finally {
+      setLoadingUsage(false)
+    }
+  }, [fetchCurrentUserId])
+
+  const refetchUsage = fetchUsageData
+
+  useEffect(() => {
+    fetchUsageData()
+  }, [fetchUsageData])
+
+  // 模型统计数据
+  const [modelStats, setModelStats] = useState<ModelStatsResponse['data'] | null>(null)
+  const [loadingModelStats, setLoadingModelStats] = useState(true)
+  const [modelStatsError, setModelStatsError] = useState<Error | null>(null)
+
+  const fetchModelStats = useCallback(async () => {
+    try {
+      setLoadingModelStats(true)
+      setModelStatsError(null)
       const userId = await fetchCurrentUserId()
       if (!userId) {
         throw new Error("未登录或无法获取用户信息")
       }
-      
-      const response = await smartApi.getJson<ModelStatsResponse>(`/api/users/${userId}/model-stats?days=30`, {
-        retry: { maxRetries: 3, initialDelay: 1000 },
-        waitForRecovery: true,
-        timeout: 15000
-      })
-      
-      if (!response.success) {
+
+      const response = await fetch(`/api/users/${userId}/model-stats?days=30`)
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch model stats')
+      }
+
+      const result = await response.json()
+
+      if (!result.success) {
         throw new Error("API返回失败状态")
       }
-      
-      return response.data
-    },
-    {
-      fetchOnMount: true,
-      forceRefreshOnLongAbsence: true,
-      longAbsenceThreshold: 5 * 60 * 1000
-    }
-  )
 
-  // 监听网络状态变化
-  useEffect(() => {
-    if (!isConnected && (usageError || modelStatsError)) {
-      setShowConnectionRecovery(true)
-    } else if (isConnected && showConnectionRecovery) {
-      setShowConnectionRecovery(false)
-      // 网络恢复后自动重新获取数据
-      refetchUsage()
-      refetchModelStats()
+      setModelStats(result.data)
+      return result.data
+    } catch (error) {
+      setModelStatsError(error instanceof Error ? error : new Error('Unknown error'))
+      setModelStats(null)
+    } finally {
+      setLoadingModelStats(false)
     }
-  }, [isConnected, usageError, modelStatsError, showConnectionRecovery, refetchUsage, refetchModelStats])
+  }, [fetchCurrentUserId])
+
+  const refetchModelStats = fetchModelStats
+
+  useEffect(() => {
+    fetchModelStats()
+  }, [fetchModelStats])
+
+  // 错误重试逻辑
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (usageError || modelStatsError) {
+      // 30秒后自动重试
+      const timer = setTimeout(() => {
+        refetchUsage()
+        refetchModelStats()
+      }, 30000)
+      return () => clearTimeout(timer)
+    }
+  }, [usageError, modelStatsError, refetchUsage, refetchModelStats])
 
   // 手动刷新所有数据
   const handleRefreshAll = async () => {
@@ -228,7 +237,7 @@ export default function EnhancedSettingsPage() {
       ])
       
       toast.success("数据刷新成功", { id: "refresh-all" })
-    } catch (error) {
+    } catch (_error) {
       toast.error("数据刷新失败", { id: "refresh-all" })
     }
   }
@@ -250,30 +259,13 @@ export default function EnhancedSettingsPage() {
   }
 
   // 计算统计数据
-  const totalTokens = usageData?.reduce((sum, data) => sum + data.tokens, 0) || 0
-  const totalRequests = usageData?.reduce((sum, data) => sum + data.requests, 0) || 0
+  const totalTokens = usageData?.reduce((sum: number, data: UsageData) => sum + data.tokens, 0) || 0
+  const totalRequests = usageData?.reduce((sum: number, data: UsageData) => sum + data.requests, 0) || 0
   const avgTokensPerRequest = totalRequests > 0 ? Math.round(totalTokens / totalRequests) : 0
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
-
-      {/* 网络状态指示器 */}
-      {connectivity !== 'good' && (
-        <div className="fixed top-20 left-4 z-[45] flex items-center gap-2 px-3 py-2 bg-yellow-500 text-white text-sm rounded-full shadow-lg">
-          {connectivity === 'offline' ? (
-            <>
-              <WifiOff className="w-4 h-4" />
-              {isConnected ? '服务器离线' : '网络离线'}
-            </>
-          ) : (
-            <>
-              <Wifi className="w-4 h-4" />
-              连接较慢 {rtt && `(${Math.round(rtt)}ms)`}
-            </>
-          )}
-        </div>
-      )}
 
       <main className="container mx-auto py-8 px-4">
         <div className="max-w-4xl mx-auto">
@@ -398,7 +390,7 @@ export default function EnhancedSettingsPage() {
                       {!usageData || usageData.length === 0 ? (
                         <p className="text-sm text-muted-foreground">暂无数据</p>
                       ) : (
-                        usageData.map((data, index) => (
+                        usageData.map((data: UsageData, index: number) => (
                           <div key={`usage-${data.date}-${index}`} className="space-y-2">
                             <div className="flex items-center justify-between text-sm">
                               <span>{data.date}</span>
@@ -407,7 +399,7 @@ export default function EnhancedSettingsPage() {
                                 <span className="text-muted-foreground">{data.requests} 请求</span>
                               </div>
                             </div>
-                            <Progress value={(data.tokens / Math.max(1, ...usageData.map((d) => d.tokens))) * 100} />
+                            <Progress value={(data.tokens / Math.max(1, ...usageData.map((d: UsageData) => d.tokens))) * 100} />
                           </div>
                         ))
                       )}
@@ -580,20 +572,6 @@ export default function EnhancedSettingsPage() {
         </div>
       </main>
 
-      {/* 连接恢复界面 */}
-      <ConnectionRecovery
-        show={showConnectionRecovery}
-        errorType={!isConnected ? 'network' : 'server'}
-        onRecovery={() => {
-          setShowConnectionRecovery(false)
-          handleRefreshAll()
-        }}
-        onClose={() => setShowConnectionRecovery(false)}
-        customRecoveryAction={async () => {
-          const networkStatus = await checkNetworkStatus()
-          return networkStatus.isOnline && networkStatus.serverHealthy
-        }}
-      />
     </div>
   )
 }

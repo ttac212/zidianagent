@@ -16,6 +16,8 @@ export function useRequireAuth(options?: { redirectOnUnauthed?: boolean; redirec
   const redirectOnUnauthed = options?.redirectOnUnauthed ?? false
   const redirectTo = options?.redirectTo ?? "/login"
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (status === "unauthenticated" && redirectOnUnauthed) {
       router.replace(redirectTo)

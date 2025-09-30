@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getToken } from 'next-auth/jwt'
 import { createErrorResponse, generateRequestId, requireAuth } from '@/lib/api/error-handler'
+import {
+  success,
+  error,
+  validationError
+} from '@/lib/api/http-response'
+
 
 // 获取用户列表（受保护 - 需要ADMIN权限）
 export async function GET(request: NextRequest) {
@@ -90,10 +96,7 @@ export async function POST(request: NextRequest) {
     
     // 验证必填字段
     if (!email) {
-      return NextResponse.json(
-        { error: '邮箱是必填项' },
-        { status: 400 }
-      )
+      return validationError('邮箱是必填项')
     }
     
     // 检查邮箱是否已存在
@@ -102,10 +105,7 @@ export async function POST(request: NextRequest) {
     })
     
     if (existingUser) {
-      return NextResponse.json(
-        { error: '邮箱已存在' },
-        { status: 409 }
-      )
+      return error('邮箱已存在', { status: 409 })
     }
     
     // 检查用户名是否已存在（如果提供了）
@@ -115,10 +115,7 @@ export async function POST(request: NextRequest) {
       })
       
       if (existingUsername) {
-        return NextResponse.json(
-          { error: '用户名已存在' },
-          { status: 409 }
-        )
+        return error('用户名已存在', { status: 409 })
       }
     }
     
@@ -145,11 +142,7 @@ export async function POST(request: NextRequest) {
       }
     })
     
-    return NextResponse.json({
-      success: true,
-      data: user,
-      message: '用户创建成功'
-    }, { status: 201 })
+    return success(user)
   } catch (error) {
     return createErrorResponse(error as Error, generateRequestId())
   }

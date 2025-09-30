@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server"
 import { selectApiKey, getKeyHealthStatus } from "@/lib/ai/key-manager"
+import * as dt from '@/lib/utils/date-toolkit'
+
 
 // 开发环境调试API - 检查环境变量加载状态
 export async function GET(_request: NextRequest) {
@@ -33,7 +35,7 @@ export async function GET(_request: NextRequest) {
     const healthStatus = getKeyHealthStatus()
 
     const debugInfo = {
-      timestamp: new Date().toISOString(),
+      timestamp: dt.toISO(),
       environment: envCheck,
       keySelection,
       keySelectionError,

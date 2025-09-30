@@ -12,10 +12,7 @@ interface ModelTestConfig {
   displayName: string
 }
 
-// 从环境变量加载配置
-import dotenv from 'dotenv'
-dotenv.config({ path: '.env.local' })
-dotenv.config({ path: '.env' })
+// 环境变量在 Next.js 中会自动加载
 
 
 const MODEL_CONFIGS: ModelTestConfig[] = [
@@ -204,7 +201,7 @@ describe('API模型验证测试', () => {
         expect(testPayload.messages).toHaveLength(1)
         expect(testPayload.temperature).toBe(0.7)
         
-        } catch (error) {
+        } catch (_error) {
         }
     })
   })

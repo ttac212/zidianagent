@@ -1,0 +1,14 @@
+{
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0 --port 3007 --turbo",
+    "test:ui-behavior": "node scripts/test-dynamic-ui.js",
+    "test:ui-regression": "playwright test --grep 'dynamic.*ui'",
+    "dev:with-ui-checks": "concurrently \"pnpm dev\" \"pnpm test:ui-behavior --watch\""
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "pnpm test:ui-behavior && pnpm lint",
+      "pre-push": "pnpm test:ui-regression"
+    }
+  }
+}

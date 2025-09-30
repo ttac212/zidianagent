@@ -16,7 +16,7 @@ export function parseTagsSafely(tagString: string | null | undefined): string[] 
   try {
     // 尝试直接JSON解析
     return JSON.parse(tagString)
-  } catch (error) {
+  } catch (_error) {
     try {
       // 方法2: 将Python风格的数组转换为JSON格式
       let cleaned = tagString.trim()
@@ -39,7 +39,7 @@ export function parseTagsSafely(tagString: string | null | undefined): string[] 
       }
       
       return []
-    } catch (secondError) {
+    } catch (_secondError) {
       return []
     }
   }

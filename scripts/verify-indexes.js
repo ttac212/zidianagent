@@ -6,7 +6,7 @@ const { PrismaClient } = require('@prisma/client')
 const prisma = new PrismaClient()
 
 async function verifyIndexes() {
-  console.log('🔍 验证数据库索引...')
+  console.info('🔍 验证数据库索引...')
 
   try {
     // 查看conversations表的索引
@@ -16,13 +16,13 @@ async function verifyIndexes() {
       ORDER BY name;
     `
 
-    console.log('\n📊 Conversations表的索引:')
+    console.info('\n📊 Conversations表的索引:')
     indexes.forEach(index => {
-      console.log(`  - ${index.name}: ${index.sql || 'PRIMARY KEY'}`)
+      console.info(`  - ${index.name}: ${index.sql || 'PRIMARY KEY'}`)
     })
 
     // 测试查询计划
-    console.log('\n🔍 查询执行计划测试:')
+    console.info('\n🔍 查询执行计划测试:')
 
     // 测试1: 按userId和lastMessageAt排序的查询
     const plan1 = await prisma.$queryRaw`
@@ -33,9 +33,9 @@ async function verifyIndexes() {
       LIMIT 20;
     `
 
-    console.log('\n📈 查询1 (userId + lastMessageAt排序):')
+    console.info('\n📈 查询1 (userId + lastMessageAt排序):')
     plan1.forEach(step => {
-      console.log(`  ${step.detail}`)
+      console.info(`  ${step.detail}`)
     })
 
     // 测试2: 只按userId查询
@@ -45,9 +45,9 @@ async function verifyIndexes() {
       WHERE userId = 'test-user';
     `
 
-    console.log('\n📈 查询2 (仅userId):')
+    console.info('\n📈 查询2 (仅userId):')
     plan2.forEach(step => {
-      console.log(`  ${step.detail}`)
+      console.info(`  ${step.detail}`)
     })
 
     // 检查是否使用了正确的索引
@@ -56,9 +56,9 @@ async function verifyIndexes() {
     )
 
     if (hasCorrectIndex) {
-      console.log('\n✅ 复合索引 [userId, lastMessageAt] 已正确创建')
+      console.info('\n✅ 复合索引 [userId, lastMessageAt] 已正确创建')
     } else {
-      console.log('\n❌ 复合索引 [userId, lastMessageAt] 缺失！')
+      console.info('\n❌ 复合索引 [userId, lastMessageAt] 缺失！')
     }
 
   } catch (error) {

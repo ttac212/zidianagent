@@ -1,4 +1,5 @@
 import { FullConfig } from '@playwright/test'
+import * as dt from '@/lib/utils/date-toolkit'
 
 /**
  * 全局设置，在所有测试运行前执行
@@ -12,7 +13,7 @@ async function globalSetup(config: FullConfig) {
   process.env.TEST_EMAIL = 'hi@2308.com'
   
   // 记录测试开始时间用于性能分析
-  process.env.TEST_START_TIME = Date.now().toString()
+  process.env.TEST_START_TIME = dt.timestamp().toString()
   
   console.log('⚡ 并发测试环境已配置')
   console.log('📊 性能监控已启动')

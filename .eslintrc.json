@@ -2,15 +2,24 @@
   "extends": [
     "next/core-web-vitals"
   ],
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["@typescript-eslint"],
   "rules": {
-    "@next/next/no-img-element": "error",
-    "@next/next/no-html-link-for-pages": "error", 
-    "react-hooks/exhaustive-deps": "warn",
-    "no-unused-vars": ["warn", { 
+    "@typescript-eslint/no-unused-vars": ["warn", {
       "argsIgnorePattern": "^_",
-      "varsIgnorePattern": "^_"
+      "varsIgnorePattern": "^_",
+      "caughtErrorsIgnorePattern": "^_"
     }],
-    "no-console": "warn"
+    "no-unused-vars": "off",
+    "no-console": ["warn", {
+      "allow": ["warn", "error", "info"]
+    }]
   },
-  "ignorePatterns": ["node_modules/", ".next/", "dist/", "*.d.ts"]
+  "ignorePatterns": [
+    "node_modules/",
+    ".next/",
+    "dist/",
+    "*.d.ts",
+    "scripts/*.js"
+  ]
 }

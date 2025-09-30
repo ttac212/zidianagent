@@ -20,7 +20,7 @@ try {
   if (fs.existsSync('.next')) {
     fs.rmSync('.next', { recursive: true, force: true })
     }
-} catch (error) {
+} catch (_error) {
   }
 
 // 2. 创建.env.development.local优化配置

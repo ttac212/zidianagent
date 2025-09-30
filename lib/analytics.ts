@@ -1,6 +1,7 @@
 "use client"
 
 import React from "react"
+import * as dt from '@/lib/utils/date-toolkit'
 
 // 数据分析和记录工具类
 export interface UserEvent {
@@ -28,7 +29,7 @@ class Analytics {
   trackEvent(event: Omit<UserEvent, "timestamp">) {
     const fullEvent: UserEvent = {
       ...event,
-      timestamp: new Date(),
+      timestamp: dt.now(),
     }
 
     this.events.push(fullEvent)
@@ -41,7 +42,7 @@ class Analytics {
   recordMetric(metric: Omit<SystemMetric, "timestamp">) {
     const fullMetric: SystemMetric = {
       ...metric,
-      timestamp: new Date(),
+      timestamp: dt.now(),
     }
 
     this.metrics.push(fullMetric)
@@ -60,7 +61,7 @@ class Analytics {
         },
         body: JSON.stringify(event),
       })
-    } catch (error) {
+    } catch (_error) {
       }
   }
 
@@ -74,13 +75,13 @@ class Analytics {
         },
         body: JSON.stringify(metric),
       })
-    } catch (error) {
+    } catch (_error) {
       }
   }
 
   // 生成会话ID
   generateSessionId(): string {
-    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    return `session_${dt.timestamp()}_${Math.random().toString(36).substr(2, 9)}`
   }
 
   // 获取用户代理信息

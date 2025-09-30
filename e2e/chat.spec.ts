@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import * as dt from '@/lib/utils/date-toolkit'
 
 /**
  * 聊天功能 E2E 测试
@@ -62,9 +63,9 @@ test.describe('聊天功能', () => {
       if (page.url().includes('/login')) {
         console.log('仍在登录页面，等待重定向...')
         try {
-          await page.waitForURL(url => !url.includes('/login'), { timeout: 8000 })
+          await page.waitForURL(url => !url.pathname.includes('/login'), { timeout: 8000 })
           console.log('重定向成功，新URL:', page.url())
-        } catch (error) {
+        } catch (_error) {
           console.log('重定向超时，尝试手动跳转到工作区')
           await page.goto('/workspace')
           await page.waitForLoadState('networkidle')
@@ -293,10 +294,10 @@ test.describe('对话管理', () => {
 
 test.describe('性能测试', () => {
   test('页面加载时间', async ({ page }) => {
-    const startTime = Date.now()
+    const startTime = dt.timestamp()
     await page.goto('/workspace')
     await page.waitForLoadState('domcontentloaded')
-    const loadTime = Date.now() - startTime
+    const loadTime = dt.timestamp() - startTime
     
     // 页面应在3秒内加载完成
     expect(loadTime).toBeLessThan(3000)
@@ -308,14 +309,14 @@ test.describe('性能测试', () => {
     const input = page.locator('textarea').first()
     await input.fill('test')
     
-    const startTime = Date.now()
+    const startTime = dt.timestamp()
     await page.keyboard.press('Enter')
     
     // 等待加载状态出现
     const loadingIndicator = page.locator('[data-testid="loading"], .animate-pulse, .animate-spin').first()
     await expect(loadingIndicator).toBeVisible({ timeout: 1000 })
     
-    const responseTime = Date.now() - startTime
+    const responseTime = dt.timestamp() - startTime
     
     // 响应应在500ms内开始
     expect(responseTime).toBeLessThan(500)

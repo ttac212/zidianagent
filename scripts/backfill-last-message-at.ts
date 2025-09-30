@@ -9,17 +9,17 @@ const prisma = new PrismaClient()
 
 async function backfillLastMessageAt() {
   try {
-    console.log('🚀 开始回填 lastMessageAt 字段...')
+    console.info('🚀 开始回填 lastMessageAt 字段...')
 
     // 1. 先统计需要回填的数据量
     const totalCount = await prisma.conversation.count({
       where: { lastMessageAt: null }
     })
 
-    console.log(`📊 找到 ${totalCount} 个需要回填的对话`)
+    console.info(`📊 找到 ${totalCount} 个需要回填的对话`)
 
     if (totalCount === 0) {
-      console.log('🎉 所有对话的 lastMessageAt 已填充完毕！')
+      console.info('🎉 所有对话的 lastMessageAt 已填充完毕！')
       return
     }
 
@@ -30,7 +30,7 @@ async function backfillLastMessageAt() {
 
     // 2. 分页批量处理，避免内存溢出
     while (skip < totalCount) {
-      console.log(`🔄 处理批次 ${Math.floor(skip / BATCH_SIZE) + 1}/${Math.ceil(totalCount / BATCH_SIZE)} (${skip + 1}-${Math.min(skip + BATCH_SIZE, totalCount)})`)
+      console.info(`🔄 处理批次 ${Math.floor(skip / BATCH_SIZE) + 1}/${Math.ceil(totalCount / BATCH_SIZE)} (${skip + 1}-${Math.min(skip + BATCH_SIZE, totalCount)})`)
 
       // 批量获取对话ID（不包含消息数据）
       const conversationBatch = await prisma.conversation.findMany({
@@ -89,22 +89,22 @@ async function backfillLastMessageAt() {
       })
 
       skip += BATCH_SIZE
-      console.log(`✅ 批次完成，已处理 ${Math.min(skip, totalCount)}/${totalCount} 个对话`)
+      console.info(`✅ 批次完成，已处理 ${Math.min(skip, totalCount)}/${totalCount} 个对话`)
     }
 
-    console.log(`✅ 回填完成！`)
-    console.log(`   - 成功更新: ${updatedCount} 个对话`)
-    console.log(`   - 跳过失败: ${skippedCount} 个对话`)
+    console.info(`✅ 回填完成！`)
+    console.info(`   - 成功更新: ${updatedCount} 个对话`)
+    console.info(`   - 跳过失败: ${skippedCount} 个对话`)
 
     // 3. 验证结果
     const nullCount = await prisma.conversation.count({
       where: { lastMessageAt: null }
     })
 
-    console.log(`📊 验证结果: ${nullCount} 个对话的 lastMessageAt 仍为空`)
+    console.info(`📊 验证结果: ${nullCount} 个对话的 lastMessageAt 仍为空`)
 
     if (nullCount === 0) {
-      console.log('🎉 所有对话的 lastMessageAt 字段已成功回填！')
+      console.info('🎉 所有对话的 lastMessageAt 字段已成功回填！')
     }
 
   } catch (error) {

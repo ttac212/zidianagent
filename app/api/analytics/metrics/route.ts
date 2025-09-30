@@ -1,4 +1,5 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse, NextRequest } from "next/server"
+
 
 // 重定向到统一的度量API
 export async function POST(request: NextRequest) {
@@ -21,7 +22,8 @@ export async function POST(request: NextRequest) {
     const data = await response.json()
     return NextResponse.json(data, { status: response.status })
   } catch (error) {
-    void error
+   console.error("处理请求失败", error)
+    // error handled
     return NextResponse.json({ success: false, error: "记录指标失败" }, { status: 500 })
   }
 }
@@ -42,3 +44,4 @@ export async function GET(request: NextRequest) {
   // 重定向到新API
   return NextResponse.redirect(url, 301)
 }
+

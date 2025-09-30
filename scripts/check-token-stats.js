@@ -6,7 +6,7 @@ const { PrismaClient } = require('@prisma/client')
 const prisma = new PrismaClient()
 
 async function checkTokenStats() {
-  console.log('🔍 检查对话token统计准确性...')
+  console.info('🔍 检查对话token统计准确性...')
 
   try {
     // 1. 找出totalTokens为0但有消息的对话
@@ -31,15 +31,15 @@ async function checkTokenStats() {
       take: 10
     })
 
-    console.log(`\n📊 发现 ${conversationsWithMessages.length} 个对话的totalTokens为0但有消息`)
+    console.info(`\n📊 发现 ${conversationsWithMessages.length} 个对话的totalTokens为0但有消息`)
 
     if (conversationsWithMessages.length > 0) {
-      console.log('\n🔍 样本分析:')
+      console.info('\n🔍 样本分析:')
       for (const conv of conversationsWithMessages.slice(0, 5)) {
         const actualTokens = conv.messages.reduce((sum, msg) =>
           sum + (msg.promptTokens || 0) + (msg.completionTokens || 0), 0
         )
-        console.log(`  - 对话 ${conv.id}: ${conv.messages.length}条消息, 实际tokens: ${actualTokens}, 记录: ${conv.totalTokens}`)
+        console.info(`  - 对话 ${conv.id}: ${conv.messages.length}条消息, 实际tokens: ${actualTokens}, 记录: ${conv.totalTokens}`)
       }
     }
 
@@ -75,14 +75,14 @@ async function checkTokenStats() {
       }
     }
 
-    console.log(`\n📈 统计结果:`)
-    console.log(`  - 需要修复totalTokens的对话: ${totalBrokenConversations} 个`)
-    console.log(`  - messageCount不匹配的对话: ${countMismatches} 个（样本）`)
+    console.info(`\n📈 统计结果:`)
+    console.info(`  - 需要修复totalTokens的对话: ${totalBrokenConversations} 个`)
+    console.info(`  - messageCount不匹配的对话: ${countMismatches} 个（样本）`)
 
     if (totalBrokenConversations > 0) {
-      console.log('\n💡 建议运行: npx tsx scripts/backfill-last-message-at.ts')
+      console.info('\n💡 建议运行: npx tsx scripts/backfill-last-message-at.ts')
     } else {
-      console.log('\n✅ 所有统计数据都准确！')
+      console.info('\n✅ 所有统计数据都准确！')
     }
 
   } catch (error) {

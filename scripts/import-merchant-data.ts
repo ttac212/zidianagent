@@ -15,6 +15,7 @@ import fs from 'fs'
 import path from 'path'
 import { parse as csvParse } from 'csv-parse'
 import { MerchantStatus, BusinessType, ContentType } from '@prisma/client'
+import * as dt from '@/lib/utils/date-toolkit'
 
 const prisma = new PrismaClient()
 
@@ -220,7 +221,7 @@ async function initializeCategories() {
           sortOrder: Object.keys(CATEGORY_MAPPING).indexOf(key),
         },
       })
-    } catch (error) {
+    } catch (_error) {
       }
   }
 }
@@ -324,8 +325,8 @@ async function importMerchantData(filePath: string) {
         const validCreateTime = createTime && !isNaN(createTime.getTime()) ? createTime : null
 
         const collectedTimeStr = row['collection_time']
-        const collectedTime = collectedTimeStr ? new Date(collectedTimeStr) : new Date()
-        const validCollectedTime = !isNaN(collectedTime.getTime()) ? collectedTime : new Date()
+        const collectedTime = collectedTimeStr ? new Date(collectedTimeStr) : dt.now()
+        const validCollectedTime = !isNaN(collectedTime.getTime()) ? collectedTime : dt.now()
 
         // 安全解析数字，避免NaN
         const safeParseInt = (value: string | undefined): number => {
@@ -407,7 +408,7 @@ async function main() {
       }
     }
     
-    console.log(`导入完成！共处理 ${results.length} 个商家，${results.reduce((sum, r) => sum + r.contentCount, 0)} 条内容`)
+    console.info(`导入完成！共处理 ${results.length} 个商家，${results.reduce((sum, r) => sum + r.contentCount, 0)} 条内容`)
     
     // 统计信息
     const categories = await prisma.merchantCategory.findMany({
@@ -421,7 +422,7 @@ async function main() {
     categories.forEach(category => {
       })
     
-  } catch (error) {
+  } catch (_error) {
     } finally {
     await prisma.$disconnect()
   }

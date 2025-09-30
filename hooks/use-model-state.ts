@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { ALLOWED_MODELS, DEFAULT_MODEL } from '@/lib/ai/models'
+import * as dt from '@/lib/utils/date-toolkit'
 
 interface ModelState {
   selectedModel: string
@@ -21,7 +22,7 @@ interface UseModelStateReturn {
   syncWithStorage: () => void
 }
 
-const STORAGE_KEY = 'lastSelectedModelId'
+const STORAGE_KEY = 'zhidian_lastSelectedModelId'
 
 /**
  * 统一模型状态管理Hook
@@ -56,7 +57,7 @@ export function useModelState(initialModel?: string): UseModelStateReturn {
           ...prev,
           selectedModel: newModel,
           isInitialized: true,
-          lastSyncTime: Date.now()
+          lastSyncTime: dt.timestamp()
         }))
         currentModelRef.current = newModel
         } else if (initialModel && validateModel(initialModel)) {
@@ -65,7 +66,7 @@ export function useModelState(initialModel?: string): UseModelStateReturn {
           ...prev,
           selectedModel: newModel,
           isInitialized: true,
-          lastSyncTime: Date.now()
+          lastSyncTime: dt.timestamp()
         }))
         currentModelRef.current = newModel
         if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
@@ -79,14 +80,14 @@ export function useModelState(initialModel?: string): UseModelStateReturn {
           ...prev,
           selectedModel: defaultModel,
           isInitialized: true,
-          lastSyncTime: Date.now()
+          lastSyncTime: dt.timestamp()
         }))
         currentModelRef.current = defaultModel
         if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
           window.localStorage.setItem(STORAGE_KEY, defaultModel)
         }
         }
-    } catch (error) {
+    } catch (_error) {
       // 降级到默认模型
       const allowedIds = ALLOWED_MODELS.map(m => m.id)
       const fallbackModel = allowedIds.length > 0 ? allowedIds[0] : DEFAULT_MODEL
@@ -94,7 +95,7 @@ export function useModelState(initialModel?: string): UseModelStateReturn {
         ...prev,
         selectedModel: fallbackModel,
         isInitialized: true,
-        lastSyncTime: Date.now()
+        lastSyncTime: dt.timestamp()
       }))
       currentModelRef.current = fallbackModel
     }
@@ -109,7 +110,7 @@ export function useModelState(initialModel?: string): UseModelStateReturn {
     setState(prev => ({
       ...prev,
       selectedModel: modelId,
-      lastSyncTime: Date.now()
+      lastSyncTime: dt.timestamp()
     }))
     currentModelRef.current = modelId
     
@@ -117,7 +118,7 @@ export function useModelState(initialModel?: string): UseModelStateReturn {
     if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
       try {
         window.localStorage.setItem(STORAGE_KEY, modelId)
-      } catch (error) {
+      } catch (_error) {
     // 错误处理
   }
     }
@@ -130,6 +131,8 @@ export function useModelState(initialModel?: string): UseModelStateReturn {
   }, [])
   
   // 初始化时同步状态
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!state.isInitialized) {
       syncWithStorage()
@@ -147,7 +150,7 @@ export function useModelState(initialModel?: string): UseModelStateReturn {
           setState(prev => ({
             ...prev,
             selectedModel: newModel,
-            lastSyncTime: Date.now()
+            lastSyncTime: dt.timestamp()
           }))
           currentModelRef.current = newModel
         }

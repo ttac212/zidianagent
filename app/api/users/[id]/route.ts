@@ -1,7 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from "next/server"
 import { prisma } from '@/lib/prisma'
 import { getToken } from 'next-auth/jwt'
 import { createErrorResponse, generateRequestId, requireAuth } from '@/lib/api/error-handler'
+import * as dt from '@/lib/utils/date-toolkit'
+import {
+  success,
+  error,
+  notFound,
+  serverError
+} from '@/lib/api/http-response'
+
 
 // 获取单个用户详情（受保护 - 需要ADMIN权限）
 export async function GET(
@@ -55,16 +63,10 @@ export async function GET(
     })
     
     if (!user) {
-      return NextResponse.json(
-        { error: '用户不存在' },
-        { status: 404 }
-      )
+      return notFound('用户不存在')
     }
     
-    return NextResponse.json({
-      success: true,
-      data: user
-    })
+    return success(user)
   } catch (error) {
     return createErrorResponse(error as Error, generateRequestId())
   }
@@ -99,10 +101,7 @@ export async function PATCH(
     })
     
     if (!existingUser) {
-      return NextResponse.json(
-        { error: '用户不存在' },
-        { status: 404 }
-      )
+      return notFound('用户不存在')
     }
     
     // 检查用户名冲突
@@ -115,10 +114,7 @@ export async function PATCH(
       })
       
       if (usernameExists) {
-        return NextResponse.json(
-          { error: '用户名已存在' },
-          { status: 409 }
-        )
+        return error('用户名已存在', { status: 409 })
       }
     }
     
@@ -132,7 +128,7 @@ export async function PATCH(
         status,
         monthlyTokenLimit,
         currentMonthUsage,
-        updatedAt: new Date(),
+        updatedAt: dt.now(),
       },
       select: {
         id: true,
@@ -149,17 +145,10 @@ export async function PATCH(
       }
     })
     
-    return NextResponse.json({
-      success: true,
-      data: updatedUser,
-      message: '用户更新成功'
-    })
+    return success(updatedUser)
   } catch (error) {
     void error
-    return NextResponse.json(
-      { error: '更新用户失败' },
-      { status: 500 }
-    )
+    return serverError('更新用户失败')
   }
 }
 
@@ -183,10 +172,7 @@ export async function DELETE(
     })
     
     if (!existingUser) {
-      return NextResponse.json(
-        { error: '用户不存在' },
-        { status: 404 }
-      )
+      return notFound('用户不存在')
     }
     
     // 软删除：更新状态为 DELETED
@@ -194,19 +180,13 @@ export async function DELETE(
       where: { id },
       data: {
         status: 'DELETED',
-        updatedAt: new Date(),
+        updatedAt: dt.now(),
       }
     })
     
-    return NextResponse.json({
-      success: true,
-      message: '用户删除成功'
-    })
+    return success({ message: '用户删除成功' })
   } catch (error) {
     void error
-    return NextResponse.json(
-      { error: '删除用户失败' },
-      { status: 500 }
-    )
+    return serverError('删除用户失败')
   }
 }

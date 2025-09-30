@@ -6,8 +6,10 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Menu, X } from "lucide-react"
-import { Navigation, type NavigationProps } from "@/components/navigation"
+import { Navigation } from "@/components/navigation"
 import type { NavItem } from "@/config/navigation"
+
+type NavigationComponentProps = React.ComponentProps<typeof Navigation>
 
 interface MobileDrawerProps {
   children?: React.ReactNode
@@ -18,7 +20,7 @@ interface MobileDrawerProps {
 export function MobileDrawer({ children, navItems, secondaryNavItems }: MobileDrawerProps) {
   const [open, setOpen] = useState(false)
 
-  const handleItemClick: NavigationProps["onItemClick"] = () => setOpen(false)
+  const handleItemClick: NavigationComponentProps["onItemClick"] = () => setOpen(false)
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>

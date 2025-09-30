@@ -4,6 +4,7 @@
  */
 
 import type { Conversation, ChatMessage } from '@/types/chat'
+import * as dt from '@/lib/utils/date-toolkit'
 
 // 派生的对话数据类型，包含UI需要的额外字段
 export interface DerivedConversation extends Conversation {
@@ -24,7 +25,7 @@ export interface ConversationSection {
  * @returns 相对时间字符串，如 "3小时前"、"昨天"、"3天前"
  */
 export function formatRelativeTime(date: Date): string {
-  const now = new Date()
+  const now = dt.now()
   const diffMs = now.getTime() - date.getTime()
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
@@ -63,12 +64,7 @@ export function formatRelativeTime(date: Date): string {
   })
 }
 
-/**
- * 生成对话标题
- * @param conversation 对话对象
- * @param messages 消息列表（可选，用于从消息内容推导标题）
- * @returns 派生的对话标题
- */
+// 旧的标题派生函数 - 现在由服务器端处理，保留作为后备
 export function deriveConversationTitle(
   conversation: Conversation,
   messages?: ChatMessage[]
@@ -93,28 +89,33 @@ export function deriveConversationTitle(
 
 /**
  * 提取最新消息片段
- * @param messages 消息列表
+ * @param lastMessageContent 最后一条消息内容
  * @param maxLength 最大长度，默认80字符
  * @returns 最新消息的文本片段
  */
-export function extractLastSnippet(messages: ChatMessage[], maxLength: number = 80): string {
-  if (!messages || messages.length === 0) {
+export function extractLastSnippet(lastMessageContent: string | null, maxLength: number = 80): string {
+  if (!lastMessageContent || lastMessageContent.trim().length === 0) {
     return '暂无消息'
   }
 
-  // 找到最新的用户或助手消息
-  const lastMessage = [...messages]
-    .reverse()
-    .find(msg => (msg.role === 'user' || msg.role === 'assistant') && msg.content?.trim())
-
-  if (!lastMessage || !lastMessage.content) {
-    return '暂无消息'
-  }
-
-  const content = lastMessage.content.trim()
+  const content = lastMessageContent.trim()
   const snippet = content.slice(0, maxLength)
 
   return content.length > maxLength ? snippet + '...' : snippet
+}
+
+/**
+ * 安全的日期创建函数 - 消除特殊情况
+ * @param timestamp 时间戳（可能是无效值）
+ * @returns 有效的Date对象
+ */
+function safeDate(timestamp: number): Date {
+  // NaN检查
+  if (Number.isNaN(timestamp) || !Number.isFinite(timestamp)) {
+    console.warn('⚠️ 无效的时间戳:', timestamp, '使用当前时间')
+    return new Date()
+  }
+  return new Date(timestamp)
 }
 
 /**
@@ -123,12 +124,15 @@ export function extractLastSnippet(messages: ChatMessage[], maxLength: number = 
  * @returns 包含派生字段的对话数据
  */
 export function deriveConversationData(conversation: Conversation): DerivedConversation {
-  const updatedAt = new Date(conversation.updatedAt)
+  const updatedAt = safeDate(conversation.updatedAt)
+  const lastMessage = conversation.metadata?.lastMessage
 
   return {
     ...conversation,
-    title: deriveConversationTitle(conversation),
-    lastSnippet: extractLastSnippet(conversation.messages),
+    // 不再派生标题，直接使用服务器返回的标题
+    title: conversation.title,
+    // 使用 lastMessage 而不是 messages
+    lastSnippet: extractLastSnippet(lastMessage?.content || null),
     lastUpdatedLabel: formatRelativeTime(updatedAt),
     isPinned: conversation.metadata?.tags?.includes('pinned') || false
   }
@@ -158,10 +162,21 @@ export function buildConversationSections(conversations: Conversation[]): Conver
   })
 
   // 分组逻辑
-  const now = new Date()
+  const now = dt.now()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
   const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
+
+  console.log('📅 时间分组调试:', {
+    now: now.toISOString(),
+    today: today.toISOString(),
+    yesterday: yesterday.toISOString(),
+    weekAgo: weekAgo.toISOString(),
+    firstConv: sortedConversations[0] ? {
+      title: sortedConversations[0].title,
+      updatedAt: safeDate(sortedConversations[0].updatedAt).toISOString()
+    } : null
+  })
 
   const sections: ConversationSection[] = []
 
@@ -178,22 +193,22 @@ export function buildConversationSections(conversations: Conversation[]): Conver
   const unpinnedConversations = sortedConversations.filter(conv => !conv.isPinned)
 
   const todayConversations = unpinnedConversations.filter(conv => {
-    const convDate = new Date(conv.updatedAt)
+    const convDate = safeDate(conv.updatedAt)
     return convDate >= today
   })
 
   const yesterdayConversations = unpinnedConversations.filter(conv => {
-    const convDate = new Date(conv.updatedAt)
+    const convDate = safeDate(conv.updatedAt)
     return convDate >= yesterday && convDate < today
   })
 
   const thisWeekConversations = unpinnedConversations.filter(conv => {
-    const convDate = new Date(conv.updatedAt)
+    const convDate = safeDate(conv.updatedAt)
     return convDate >= weekAgo && convDate < yesterday
   })
 
   const olderConversations = unpinnedConversations.filter(conv => {
-    const convDate = new Date(conv.updatedAt)
+    const convDate = safeDate(conv.updatedAt)
     return convDate < weekAgo
   })
 
@@ -287,13 +302,15 @@ export function toggleConversationPinned(conversation: DerivedConversation): {
     newTags = [...currentTags, 'pinned']
   }
 
+  // 只提取用户自定义字段，排除实时统计字段
+  const { totalTokens, messageCount, lastActivity, lastMessage, ...customFields } = conversation.metadata || {}
+
   return {
     metadata: {
-      ...conversation.metadata,
-      tags: newTags,
-      totalTokens: conversation.metadata?.totalTokens || 0,
-      messageCount: conversation.metadata?.messageCount || conversation.messages?.length || 0,
-      lastActivity: Date.now()
+      ...customFields,  // 保留其他用户自定义字段
+      tags: newTags     // 更新 tags
+      // 注意：不包含 totalTokens、messageCount、lastActivity、lastMessage
+      // 这些字段由服务端从数据库表列计算，不应该存储在 metadata JSON 中
     }
   }
 }

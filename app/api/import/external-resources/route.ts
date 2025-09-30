@@ -10,16 +10,21 @@ import { importExternalResources } from '../../../../lib/import/external-resourc
 import { writeFile, mkdir } from 'fs/promises'
 import { existsSync } from 'fs'
 import path from 'path'
+import * as dt from '@/lib/utils/date-toolkit'
+import {
+  success,
+  validationError,
+  unauthorized,
+  serverError
+} from '@/lib/api/http-response'
+
 
 export async function POST(request: NextRequest) {
   try {
     // 验证用户身份
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: '未授权访问' },
-        { status: 401 }
-      )
+      return unauthorized('未授权访问')
     }
 
     // 解析表单数据
@@ -31,18 +36,12 @@ export async function POST(request: NextRequest) {
     const mapping = formData.get('mapping') as string
 
     if (!file) {
-      return NextResponse.json(
-        { error: '未找到上传文件' },
-        { status: 400 }
-      )
+      return validationError('未找到上传文件')
     }
 
     // 验证文件大小 (50MB)
     if (file.size > 50 * 1024 * 1024) {
-      return NextResponse.json(
-        { error: '文件大小不能超过50MB' },
-        { status: 400 }
-      )
+      return validationError('文件大小不能超过50MB')
     }
 
     // 验证文件类型
@@ -63,7 +62,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 保存临时文件
-    const tempFilePath = path.join(tempDir, `import-${Date.now()}-${file.name}`)
+    const tempFilePath = path.join(tempDir, `import-${dt.timestamp()}-${file.name}`)
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
     await writeFile(tempFilePath, buffer)
@@ -74,10 +73,7 @@ export async function POST(request: NextRequest) {
       try {
         parsedMapping = mapping ? JSON.parse(mapping) : getDefaultMapping(detectedType)
       } catch {
-        return NextResponse.json(
-          { error: '字段映射配置格式错误' },
-          { status: 400 }
-        )
+        return validationError('字段映射配置格式错误')
       }
 
       // 执行导入
@@ -96,10 +92,7 @@ export async function POST(request: NextRequest) {
         }
       })
 
-      return NextResponse.json({
-        success: true,
-        data: result
-      })
+      return success(result)
 
     } finally {
       // 清理临时文件
@@ -109,18 +102,14 @@ export async function POST(request: NextRequest) {
           fs.unlinkSync(tempFilePath)
         }
       } catch (error) {
-        void error
+   console.error("处理请求失败", error)
+        // error handled
         }
     }
 
   } catch (error) {
-    return NextResponse.json(
-      { 
-        error: error instanceof Error ? error.message : '导入失败',
-        success: false
-      },
-      { status: 500 }
-    )
+   console.error("处理请求失败", error)
+    return serverError(error instanceof Error ? error.message : '导入失败')
   }
 }
 

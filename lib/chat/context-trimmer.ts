@@ -5,7 +5,7 @@
  */
 
 import type { ChatMessage } from '@/types/chat'
-import { MESSAGE_LIMITS } from '@/lib/constants/message-limits'
+import { MESSAGE_LIMITS, getModelContextConfig } from '@/lib/constants/message-limits'
 
 export interface TrimOptions {
   maxMessages?: number      // 最大消息数量限制
@@ -126,10 +126,20 @@ export function trimMessageHistory(
 }
 
 /**
- * 专门用于聊天API的裁剪
+ * 专门用于聊天API的裁剪 - 支持动态模型配置和创作模式
+ * @param messages 消息列表
+ * @param modelId 模型ID
+ * @param creativeMode 是否启用创作模式
  */
-export function trimForChatAPI(messages: ChatMessage[]): TrimResult {
-  const config = MESSAGE_LIMITS.CONTEXT_LIMITS.API
+export function trimForChatAPI(
+  messages: ChatMessage[],
+  modelId?: string,
+  creativeMode: boolean = false
+): TrimResult {
+  const config = modelId
+    ? getModelContextConfig(modelId, creativeMode)
+    : MESSAGE_LIMITS.CONTEXT_LIMITS.DEFAULT
+
   return trimMessageHistory(messages, {
     maxMessages: config.maxMessages,
     maxTokens: config.maxTokens,

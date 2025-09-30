@@ -3,7 +3,7 @@
  * 消除所有特殊情况，提供清晰一致的API
  */
 
-import { toast as sonner, type ExternalToast } from 'sonner'
+import { toast as sonner, ExternalToast } from 'sonner'
 
 // 简化的配置选项
 export interface ToastOptions extends Omit<ExternalToast, 'duration'> {

@@ -4,6 +4,7 @@
  */
 
 import { PrismaClient } from '@prisma/client'
+import * as dt from '@/lib/utils/date-toolkit'
 
 interface UsageRecord {
   userId: string
@@ -27,7 +28,7 @@ export function recordUsageAsync(
   Promise.resolve().then(async () => {
     try {
       await recordUsageInternal(prisma, record)
-    } catch (error) {
+    } catch (_error) {
       // 记录但不抛出错误，避免影响主流程
       if (process.env.NODE_ENV === 'development') {
         // Usage stats recording failed - logged in development
@@ -78,7 +79,7 @@ async function recordUsageInternal(
           promptTokens: record.promptTokens ? { increment: record.promptTokens } : undefined,
           completionTokens: record.completionTokens ? { increment: record.completionTokens } : undefined,
           messagesCreated: record.messagesCreated ? { increment: record.messagesCreated } : undefined,
-          updatedAt: new Date(),
+          updatedAt: dt.now(),
         },
         create: {
           userId: record.userId,
@@ -109,7 +110,7 @@ async function recordUsageInternal(
           promptTokens: record.promptTokens ? { increment: record.promptTokens } : undefined,
           completionTokens: record.completionTokens ? { increment: record.completionTokens } : undefined,
           messagesCreated: record.messagesCreated ? { increment: record.messagesCreated } : undefined,
-          updatedAt: new Date(),
+          updatedAt: dt.now(),
         },
         create: {
           userId: record.userId,
@@ -132,7 +133,7 @@ async function recordUsageInternal(
  * 获取UTC日期（0点）
  */
 function getTodayUTC(): Date {
-  const today = new Date()
+  const today = dt.now()
   today.setUTCHours(0, 0, 0, 0)
   return today
 }

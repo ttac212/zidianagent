@@ -4,6 +4,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import * as dt from '@/lib/utils/date-toolkit'
 
 // 错误类型定义
 export const API_ERROR_CODES = {
@@ -103,7 +104,7 @@ export function createErrorResponse(
       code: apiError.code,
       message: shouldHideDetails ? '服务暂时不可用，请稍后重试' : apiError.message,
       details: shouldHideDetails ? undefined : apiError.details,
-      timestamp: new Date().toISOString(),
+      timestamp: dt.toISO(),
       requestId
     }
   }
@@ -200,7 +201,7 @@ export function validateInput(data: any, required: string[]): ApiError | null {
  * 请求ID生成器（用于追踪）
  */
 export function generateRequestId(): string {
-  return `req_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+  return `req_${dt.timestamp()}_${Math.random().toString(36).substring(2, 9)}`
 }
 
 /**

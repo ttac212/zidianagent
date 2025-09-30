@@ -3,20 +3,31 @@ import { prisma } from '@/lib/prisma'
 import { getToken } from 'next-auth/jwt'
 import { DEFAULT_MODEL, isAllowed } from '@/lib/ai/models'
 import { checkRateLimit } from '@/lib/security/rate-limiter'
+import {
+  success,
+  error,
+  notFound,
+  unauthorized,
+  validationError,
+  serverError
+} from '@/lib/api/http-response'
+
+// DoS保护配置（修复R3）
+const MAX_LIMIT = 50 // 最大页面大小
+const MAX_LIMIT_WITH_MESSAGES = 10 // 包含消息时的最大页面大小
+const MAX_MESSAGES_PER_CONVERSATION = 100 // 每个对话最多返回的消息数
+
 
 // 获取对话列表（受保护）
 export async function GET(request: NextRequest) {
   try {
     const token = await getToken({ req: request as any })
-    if (!token?.sub) return NextResponse.json({ error: '未认证' }, { status: 401 })
+    if (!token?.sub) return unauthorized('未认证')
 
     // 速率限制检查
     const rateLimitResult = await checkRateLimit(request, 'GENERAL', String(token.sub))
     if (!rateLimitResult.allowed) {
-      return NextResponse.json(
-        { error: rateLimitResult.error?.message || '请求过于频繁' },
-        { status: 429 }
-      )
+      return error(rateLimitResult.error?.message || '请求过于频繁', { status: 429 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -24,31 +35,42 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20')
     const includeMessages = searchParams.get('includeMessages') === 'true'
 
-    // userId 从 token 解析，无需校验查询参数
+    // 参数校验（修复R3：DoS保护）
+    if (page < 1) {
+      return validationError('页码必须大于0')
+    }
+
+    if (limit < 1) {
+      return validationError('页面大小必须大于0')
+    }
+
+    // 根据是否包含消息设置不同的限制
+    const maxAllowedLimit = includeMessages ? MAX_LIMIT_WITH_MESSAGES : MAX_LIMIT
+    if (limit > maxAllowedLimit) {
+      return validationError(
+        includeMessages
+          ? `包含消息时页面大小不能超过${MAX_LIMIT_WITH_MESSAGES}`
+          : `页面大小不能超过${MAX_LIMIT}`
+      )
+    }
 
     const skip = (page - 1) * limit
 
-    // 获取对话列表
+    // 优化查询：只获取必要字段，减少数据传输
     const conversations = await prisma.conversation.findMany({
       where: {
-        userId: String(token.sub),
-        user: {
-          status: { not: 'DELETED' }
-        }
+        userId: String(token.sub)
       },
-      include: {
-        user: {
-          select: {
-            id: true,
-            displayName: true,
-            email: true,
-          }
-        },
-        _count: {
-          select: {
-            messages: true
-          }
-        },
+      select: {
+        id: true,
+        title: true,
+        modelId: true,
+        messageCount: true,
+        totalTokens: true,
+        metadata: true, // 修复：返回metadata字段（包含pinned、tags等）
+        createdAt: true,
+        lastMessageAt: true,
+        // 根据includeMessages决定消息查询策略
         messages: includeMessages ? {
           orderBy: { createdAt: 'asc' },
           select: {
@@ -58,37 +80,54 @@ export async function GET(request: NextRequest) {
             promptTokens: true,
             completionTokens: true,
             modelId: true,
-            temperature: true,
-            finishReason: true,
-            metadata: true,
+            createdAt: true,
+          },
+          // 严格限制消息数量
+          take: MAX_MESSAGES_PER_CONVERSATION,
+        } : {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            role: true,
+            content: true,
             createdAt: true,
           }
-        } : false,
+        },
       },
       orderBy: [
         { lastMessageAt: 'desc' },
-        { createdAt: 'desc' }  // 使用createdAt作为第二排序，有索引支持
+        { createdAt: 'desc' }
       ],
       skip,
       take: limit,
     })
-    
-    // 获取总数
+
+    // 获取总数 - 简化查询
     const total = await prisma.conversation.count({
       where: {
-        userId: String(token.sub),
-        user: {
-          status: { not: 'DELETED' }
-        }
+        userId: String(token.sub)
       }
     })
-    
-    // 映射消息计数到messageCount字段
-    const conversationsWithCount = conversations.map((conv: any) => ({
-      ...conv,
-      messageCount: conv._count?.messages || 0,
-      _count: undefined  // 移除内部字段，不暴露给前端
-    }))
+
+    // 映射响应数据 - 修复模型字段映射问题
+    const conversationsWithCount = conversations.map((conv: any) => {
+      const lastMessage = !includeMessages && conv.messages?.[0] ? conv.messages[0] : null
+
+      // 映射消息字段（如果需要）
+      const mappedMessages = includeMessages && conv.messages ? conv.messages.map((msg: any) => ({
+        ...msg,
+        model: msg.modelId, // 映射 modelId 到 model 字段
+        totalTokens: (msg.promptTokens || 0) + (msg.completionTokens || 0) // 修复字段名匹配
+      })) : undefined
+
+      return {
+        ...conv,
+        model: conv.modelId, // 映射 modelId 到 model 字段以匹配 TypeScript 类型
+        lastMessage,
+        messages: mappedMessages,
+      }
+    })
 
     return NextResponse.json({
       success: true,
@@ -103,11 +142,9 @@ export async function GET(request: NextRequest) {
       }
     })
   } catch (error) {
-    void error
-    return NextResponse.json(
-      { error: '获取对话列表失败' },
-      { status: 500 }
-    )
+   console.error("处理请求失败", error)
+    // error handled
+    return serverError('获取对话列表失败')
   }
 }
 
@@ -115,17 +152,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const token = await getToken({ req: request as any })
-    if (!token?.sub) return NextResponse.json({ error: '未认证' }, { status: 401 })
+    if (!token?.sub) return unauthorized('未认证')
 
     const userId = String(token.sub)
 
     // 速率限制检查
     const rateLimitResult = await checkRateLimit(request, 'GENERAL', userId)
     if (!rateLimitResult.allowed) {
-      return NextResponse.json(
-        { error: rateLimitResult.error?.message || '请求过于频繁' },
-        { status: 429 }
-      )
+      return error(rateLimitResult.error?.message || '请求过于频繁', { status: 429 })
     }
 
     const body = await request.json()
@@ -150,10 +184,7 @@ export async function POST(request: NextRequest) {
     })
     
     if (!user || user.status === 'DELETED') {
-      return NextResponse.json(
-        { error: '用户不存在或已被删除' },
-        { status: 404 }
-      )
+      return notFound('用户不存在或已被删除')
     }
     
     // 创建对话
@@ -176,17 +207,17 @@ export async function POST(request: NextRequest) {
         }
       }
     })
-    
-    return NextResponse.json({
-      success: true,
-      data: conversation,
-      message: '对话创建成功'
-    }, { status: 201 })
+
+    // 映射响应数据字段 - 修复模型字段映射问题
+    const mappedConversation = {
+      ...conversation,
+      model: conversation.modelId, // 映射 modelId 到 model 字段以匹配 TypeScript 类型
+    }
+
+    return success(mappedConversation)
   } catch (error) {
-    void error
-    return NextResponse.json(
-      { error: '创建对话失败' },
-      { status: 500 }
-    )
+   console.error("处理请求失败", error)
+    // error handled
+    return serverError('创建对话失败')
   }
 }

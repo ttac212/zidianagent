@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Brain, Search, Zap, HelpCircle } from "lucide-react"
-import { getProviderColor, getProviderIcon, formatStatsNumber } from "@/lib/ai/model-stats-helper"
+import { getProviderColor, formatStatsNumber } from "@/lib/ai/model-stats-helper"
 
 interface ModelUsageData {
   displayName: string

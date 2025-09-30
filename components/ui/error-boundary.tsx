@@ -1,8 +1,9 @@
 "use client"
 
 import type React from "react"
+import type { ReactNode } from "react"
 
-import { Component, type ReactNode } from "react"
+import { Component } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { AlertTriangle, RefreshCw } from "lucide-react"

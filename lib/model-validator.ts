@@ -4,6 +4,8 @@
  */
 
 import { ALLOWED_MODELS } from '@/lib/ai/models'
+import { lifecycle } from '@/lib/lifecycle-manager'
+import * as dt from '@/lib/utils/date-toolkit'
 
 interface ModelValidationResult {
   isValid: boolean
@@ -106,15 +108,20 @@ export function validateModelConsistency(
   }
 
   // 记录验证日志
-  const logLevel = result.isValid ? 'log' : 'error'
-  console[logLevel](`[模型一致性验证] ${context.component}:`, {
+  const logData = {
     结果: result.isValid ? '一致' : '不一致',
     模型: models,
     时间: context.timestamp,
     环境: context.environment,
     错误: result.errors,
     警告: result.warnings
-  })
+  }
+
+  if (result.isValid) {
+    console.info(`[模型一致性验证] ${context.component}:`, logData)
+  } else {
+    console.error(`[模型一致性验证] ${context.component}:`, logData)
+  }
 
   return result
 }
@@ -150,6 +157,7 @@ export function createModelValidationMiddleware() {
 export class ModelConsistencyChecker {
   private checkInterval: NodeJS.Timeout | null = null
   private isRunning = false
+  private lifecycleRegistered = false
 
   constructor(private _intervalMs: number = 30000) {} // 默认30秒检查一次
 
@@ -157,6 +165,13 @@ export class ModelConsistencyChecker {
     if (this.isRunning) return
 
     this.isRunning = true
+
+    // 首次启动时注册生命周期清理，保持幂等
+    if (!this.lifecycleRegistered && typeof window === 'undefined') {
+      lifecycle.register(() => this.stop(), 'model-consistency-checker')
+      this.lifecycleRegistered = true
+    }
+
     this.checkInterval = setInterval(() => {
       try {
         const states = getModelStates()
@@ -166,7 +181,7 @@ export class ModelConsistencyChecker {
           states.storage,
           {
             component: 'ModelConsistencyChecker',
-            timestamp: new Date().toISOString(),
+            timestamp: dt.toISO(),
             environment: process.env.NODE_ENV || 'unknown'
           }
         )
@@ -178,7 +193,7 @@ export class ModelConsistencyChecker {
             console.warn('[ModelValidator] Validation failed:', {
               errors: validation.errors,
               warnings: validation.warnings,
-              timestamp: new Date().toISOString()
+              timestamp: dt.toISO()
             })
           }
         }
@@ -207,7 +222,7 @@ export class ModelConsistencyChecker {
       states.storage,
       {
         component: 'ManualCheck',
-        timestamp: new Date().toISOString(),
+        timestamp: dt.toISO(),
         environment: process.env.NODE_ENV || 'unknown'
       }
     )
@@ -230,7 +245,7 @@ export const ModelDebugTools = {
       states.allowedModels = ALLOWED_MODELS.map(m => ({ id: m.id, name: m.name }))
       
       // 当前时间
-      states.timestamp = new Date().toISOString()
+      states.timestamp = dt.toISO()
       
       return states
     // eslint-disable-next-line no-unused-vars

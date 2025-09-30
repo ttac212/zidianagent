@@ -9,7 +9,7 @@ const prisma = new PrismaClient()
 
 async function fixConversationStats() {
   try {
-    console.log('🚀 开始修复对话统计字段...')
+    console.info('🚀 开始修复对话统计字段...')
 
     // 1. 查找所有有消息但统计可能不准确的对话
     const allConversationsWithMessages = await prisma.conversation.findMany({
@@ -26,7 +26,7 @@ async function fixConversationStats() {
       }
     })
 
-    console.log(`📊 找到 ${allConversationsWithMessages.length} 个有消息的对话`)
+    console.info(`📊 找到 ${allConversationsWithMessages.length} 个有消息的对话`)
 
     let fixedCount = 0
     let skippedCount = 0
@@ -35,7 +35,7 @@ async function fixConversationStats() {
     // 2. 分批处理所有有消息的对话
     for (let i = 0; i < allConversationsWithMessages.length; i += BATCH_SIZE) {
       const batch = allConversationsWithMessages.slice(i, i + BATCH_SIZE)
-      console.log(`🔄 处理批次 ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(allConversationsWithMessages.length / BATCH_SIZE)}`)
+      console.info(`🔄 处理批次 ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(allConversationsWithMessages.length / BATCH_SIZE)}`)
 
       await prisma.$transaction(async (tx) => {
         for (const conversation of batch) {
@@ -67,7 +67,7 @@ async function fixConversationStats() {
                 }
               })
 
-              console.log(`  ✅ 修复对话 "${conversation.title}": tokens ${conversation.totalTokens}→${actualTotalTokens}, 消息数 ${conversation.messageCount}→${actualMessageCount}`)
+              console.info(`  ✅ 修复对话 "${conversation.title}": tokens ${conversation.totalTokens}→${actualTotalTokens}, 消息数 ${conversation.messageCount}→${actualMessageCount}`)
               fixedCount++
             } else {
               skippedCount++
@@ -81,16 +81,16 @@ async function fixConversationStats() {
 
       // 显示进度
       if (i % (BATCH_SIZE * 5) === 0) {
-        console.log(`📈 进度: 已处理 ${Math.min(i + BATCH_SIZE, allConversationsWithMessages.length)}/${allConversationsWithMessages.length} 个对话`)
+        console.info(`📈 进度: 已处理 ${Math.min(i + BATCH_SIZE, allConversationsWithMessages.length)}/${allConversationsWithMessages.length} 个对话`)
       }
     }
 
-    console.log('\n✅ 统计字段修复完成！')
-    console.log(`   - 成功修复: ${fixedCount} 个对话`)
-    console.log(`   - 无需修复: ${skippedCount} 个对话`)
+    console.info('\n✅ 统计字段修复完成！')
+    console.info(`   - 成功修复: ${fixedCount} 个对话`)
+    console.info(`   - 无需修复: ${skippedCount} 个对话`)
 
     // 3. 最终验证
-    console.log('\n🔍 最终验证...')
+    console.info('\n🔍 最终验证...')
 
     const brokenTokens = await prisma.conversation.count({
       where: {
@@ -114,11 +114,11 @@ async function fixConversationStats() {
       );
     `
 
-    console.log(`   - totalTokens仍有问题: ${brokenTokens} 个`)
-    console.log(`   - messageCount仍有问题: ${(brokenCounts as any)[0]?.count || 0} 个`)
+    console.info(`   - totalTokens仍有问题: ${brokenTokens} 个`)
+    console.info(`   - messageCount仍有问题: ${(brokenCounts as any)[0]?.count || 0} 个`)
 
     if (brokenTokens === 0 && (brokenCounts as any)[0]?.count === 0) {
-      console.log('\n🎉 所有统计数据已修复完毕！')
+      console.info('\n🎉 所有统计数据已修复完毕！')
     }
 
   } catch (error) {

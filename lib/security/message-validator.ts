@@ -4,7 +4,8 @@
  */
 
 import { validateMessageContent } from './content-filter'
-import { MESSAGE_LIMITS } from '@/lib/constants/message-limits'
+import { MESSAGE_LIMITS } from '../constants/message-limits'
+import * as dt from '@/lib/utils/date-toolkit'
 
 export interface ValidatedMessage {
   role: 'user'  // 强制只允许user角色
@@ -39,7 +40,8 @@ export function validateMessages(
   } = {}
 ): MessageValidationResult {
   const {
-    maxMessages = 100,
+    // SAFETY: 防御性编程，确保默认值存在
+    maxMessages = MESSAGE_LIMITS.CONTEXT_LIMITS.DEFAULT?.maxMessages || 80,
     allowEmptyContent = false,
     logSecurityEvents = true,
     onlyValidateLastMessage = false,
@@ -108,7 +110,7 @@ export function validateMessages(
           console.warn('[Security Alert] Blocked non-user role in new message:', {
             attemptedRole: lastMessage.role,
             contentPreview: String(lastMessage.content || '').substring(0, 50),
-            timestamp: new Date().toISOString(),
+            timestamp: dt.toISO(),
             violation: 'NEW_MESSAGE_ROLE_VIOLATION'
           })
         }
@@ -145,7 +147,7 @@ export function validateMessages(
           console.warn('[Security Alert] Blocked non-user role message:', {
             attemptedRole: msg.role,
             contentPreview: String(msg.content || '').substring(0, 50),
-            timestamp: new Date().toISOString(),
+            timestamp: dt.toISO(),
             violation: 'ROLE_INJECTION_ATTEMPT'
           })
         }
@@ -214,7 +216,7 @@ export function validateMessages(
         totalAttempted: messages.length,
         roleViolations,
         contentViolations,
-        timestamp: new Date().toISOString(),
+        timestamp: dt.toISO(),
         severity: 'HIGH'
       })
     }
@@ -330,3 +332,5 @@ export function validateChatMessages(
     allowHistoricalAssistantMessages: false
   })
 }
+
+

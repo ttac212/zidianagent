@@ -5,6 +5,7 @@ import { useState, useEffect, useDeferredValue } from "react"
 import { useSearchParams } from 'next/navigation'
 import { useConversations } from "@/hooks/use-conversations"
 import { useSafeLocalStorage } from "@/hooks/use-safe-local-storage"
+import { useModelState } from "@/hooks/use-model-state"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -26,9 +27,7 @@ const SmartChatCenterV2 = dynamic(
   { ssr: false, loading: () => <ChatCenterSkeleton /> }
 )
 import { Header } from "@/components/header"
-import { ALLOWED_MODELS, DEFAULT_MODEL, isAllowed } from "@/lib/ai/models"
 import { WorkspaceSkeleton } from "@/components/skeletons/workspace-skeleton"
-import { ConnectionStatus } from "@/components/ui/connection-status"
 
 // 导入新的数据处理工具和组件
 import {
@@ -41,6 +40,7 @@ import {
 import { ConversationItem } from "@/components/conversation/conversation-item"
 
 import type { Conversation } from '@/types/chat'
+import * as dt from '@/lib/utils/date-toolkit'
 
 export default function WorkspacePage() {
   const searchParams = useSearchParams()
@@ -49,22 +49,8 @@ export default function WorkspacePage() {
   const [searchQuery, setSearchQuery] = useState('')
   const deferredSearchQuery = useDeferredValue(searchQuery)
 
-  // 使用安全的localStorage hook，并验证模型
-  const defaultModelId = ALLOWED_MODELS.length > 0 ? ALLOWED_MODELS[0].id : DEFAULT_MODEL
-  const [storedModel, setStoredModel] = useSafeLocalStorage('lastSelectedModelId', defaultModelId)
-  
-  // 验证存储的模型是否有效
-  const [selectedModel] = useState(() => {
-    // 如果存储的模型在允许列表中，使用它；否则使用默认模型
-    return isAllowed(storedModel) ? storedModel : defaultModelId
-  })
-  
-  // 同步到localStorage（仅在有效且值变化时）
-  useEffect(() => {
-    if (isAllowed(selectedModel) && storedModel !== selectedModel) {
-      setStoredModel(selectedModel)
-    }
-  }, [selectedModel, storedModel, setStoredModel])
+  // 真正的模型状态管理 - 直接订阅而非快照（修复R1）
+  const { selectedModel } = useModelState()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     // 移动端默认折叠侧边栏
     if (typeof window !== 'undefined') {
@@ -82,8 +68,8 @@ export default function WorkspacePage() {
   const [conversationToDelete, setConversationToDelete] = useState<Conversation | null>(null)
 
 
-  // 管理当前对话ID状态
-  const [currentConversationId, setCurrentConversationId] = useSafeLocalStorage<string | null>('currentConversationId', null)
+  // 管理当前对话ID状态 - 使用统一前缀确保"清空数据"能完整清除
+  const [currentConversationId, setCurrentConversationId] = useSafeLocalStorage<string | null>('zhidian_currentConversationId', null)
 
   // 解析 URL 参数，支持复制对话链接功能
   useEffect(() => {
@@ -118,28 +104,32 @@ export default function WorkspacePage() {
 
   // 搜索过滤逻辑
   const isSearching = deferredSearchQuery.trim().length > 0
+
   const filteredConversations = isSearching
     ? filterConversations(
         conversations.map(conv => buildConversationSections([conv])[0]?.conversations[0]).filter(Boolean) as DerivedConversation[],
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         deferredSearchQuery
       )
     : []
 
   // 基础性能监控
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     if (!loading && conversations.length > 0) {
       // 性能监控逻辑
     }
   }, [loading, conversations.length])
   
   // 确保始终有可用对话（页面加载完成后，如果没有对话就创建一个）
-  useEffect(() => {
-    if (!loading && conversations.length === 0 && !currentConversationId) {
-      // 确保使用验证过的模型
-      const modelToUse = isAllowed(selectedModel) ? selectedModel : defaultModelId
-      createConversation(modelToUse)
-    }
-  }, [loading, conversations.length, currentConversationId, createConversation, selectedModel, defaultModelId])
+  // 【已禁用】此逻辑导致删除对话后自动创建，误导用户以为删除失败
+  // useEffect(() => {
+  //   if (!loading && conversations.length === 0 && !currentConversationId) {
+  //     createConversation(selectedModel)
+  //   }
+  // }, [loading, conversations.length, currentConversationId, createConversation, selectedModel])
 
   // 固定/取消固定对话功能
   const handleTogglePin = async (conversation: DerivedConversation) => {
@@ -151,7 +141,7 @@ export default function WorkspacePage() {
       toast.success(`已${action}对话`, {
         description: `"${conversation.title}" 已${action}`
       })
-    } catch (error) {
+    } catch (_error) {
       toast.error('操作失败', {
         description: '请稍后重试'
       })
@@ -161,9 +151,8 @@ export default function WorkspacePage() {
   // 简化的对话管理函数
   const handleCreateConversation = async () => {
     try {
-      // 确保使用验证过的模型
-      const modelToUse = isAllowed(selectedModel) ? selectedModel : defaultModelId
-      const newConversation = await createConversation(modelToUse)
+      // 直接使用响应式的模型状态
+      const newConversation = await createConversation(selectedModel)
       if (newConversation) {
         // 设置为当前对话
         setCurrentConversationId(newConversation.id)
@@ -179,8 +168,8 @@ export default function WorkspacePage() {
     }
   }
 
-  const handleUpdateConversation = (id: string, updates: Partial<Conversation>) => {
-    updateConversation(id, updates)
+  const handleUpdateConversation = async (id: string, updates: Partial<Conversation>) => {
+    await updateConversation(id, updates)
   }
 
   // 打开删除确认对话框
@@ -291,7 +280,7 @@ export default function WorkspacePage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${conversation.title || 'conversation'}-${new Date().toISOString().split('T')[0]}.json`
+      a.download = `${conversation.title || 'conversation'}-${dt.toISO().split('T')[0]}.json`
       document.body.appendChild(a)
       a.click()
       a.remove()
@@ -353,16 +342,6 @@ export default function WorkspacePage() {
   return (
     <div className="h-screen flex flex-col bg-background">
       <Header />
-      
-      {/* 连接状态指示器 - 工作区专用，调整位置避免与时间轴冲突 */}
-      <ConnectionStatus
-        position="fixed"
-        size="sm"
-        className="top-20 left-4 z-[45] md:left-auto md:right-4"
-        animated={true}
-        showDetails={false}
-        autoHideWhenHealthy={false}
-      />
 
       <div className="flex-1 flex overflow-hidden min-h-0 relative">
         {/* 移动端遮罩层 - 调整层级避免干扰组件交互 */}
@@ -517,10 +496,11 @@ export default function WorkspacePage() {
           <div className="flex-1 flex justify-center px-4 md:px-6 min-h-0 overflow-hidden">
             <div className="w-full max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl flex flex-col h-full">
               <SmartChatCenterV2
-                conversationId={currentConversation?.id}
+                conversationId={currentConversationId || undefined}
                 onUpdateConversation={handleUpdateConversation}
                 onCreateConversation={handleCreateConversation}
                 onSelectConversation={handleSelectConversation}
+                onDeleteConversation={handleOpenDeleteConfirm}
               />
             </div>
           </div>

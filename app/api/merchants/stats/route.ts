@@ -8,11 +8,15 @@ import { getToken } from 'next-auth/jwt'
 import { prisma } from '@/lib/prisma'
 import type { MerchantStatsResponse } from '@/types/merchant'
 import { createErrorResponse, generateRequestId } from '@/lib/api/error-handler'
+import {
+  unauthorized
+} from '@/lib/api/http-response'
+
 
 // GET /api/merchants/stats - 获取商家统计数据
 export async function GET(request: NextRequest) {
   const token = await getToken({ req: request as any })
-  if (!token?.sub) return NextResponse.json({ error: '未认证' }, { status: 401 })
+  if (!token?.sub) return unauthorized('未认证')
   try {
     // 并行查询所有统计数据
     const [

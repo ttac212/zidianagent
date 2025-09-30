@@ -1,0 +1,14 @@
+
+> my-zhidian-project@0.1.0 dev D:\zdqidongxiangmu
+> next dev --hostname 0.0.0.0 --port 3007 --turbo
+
+ ⨯ Failed to start server
+Error: listen EADDRINUSE: address already in use 0.0.0.0:3007
+    at <unknown> (Error: listen EADDRINUSE: address already in use 0.0.0.0:3007) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3007
+}
+[?25h

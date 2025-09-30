@@ -73,6 +73,8 @@ function SidebarProvider({
   // We use openProp and setOpenProp for control from outside the component.
   const [_open, _setOpen] = React.useState(defaultOpen)
   const open = openProp ?? _open
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const setOpen = React.useCallback(
     (_value: boolean | ((_value: boolean) => boolean)) => {
       const openState = typeof _value === "function" ? _value(open) : _value
@@ -88,6 +90,8 @@ function SidebarProvider({
     [setOpenProp, open]
   )
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   // Helper to toggle the sidebar.
   const toggleSidebar = React.useCallback(() => {
     return isMobile ? setOpenMobile((open) => !open) : setOpen((open) => !open)

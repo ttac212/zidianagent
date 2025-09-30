@@ -1,4 +1,5 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse, NextRequest } from "next/server"
+
 
 // 重定向到统一的度量API
 export async function POST(request: NextRequest) {
@@ -8,7 +9,7 @@ export async function POST(request: NextRequest) {
       ...body,
       type: 'event'
     }
-    
+
     // 转发到新的统一API
     const response = await fetch(new URL('/api/data/metrics', request.url).toString(), {
       method: 'POST',
@@ -23,8 +24,10 @@ export async function POST(request: NextRequest) {
     const data = await response.json()
     return NextResponse.json(data, { status: response.status })
   } catch (error) {
-    void error
-    return NextResponse.json({ success: false, error: "记录事件失败" }, { status: 500 })
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : "记录事件失败"
+    }, { status: 500 })
   }
 }
 
@@ -32,7 +35,7 @@ export async function GET(request: NextRequest) {
   // 构建新的URL，添加type参数
   const url = new URL('/api/data/metrics', request.url)
   url.searchParams.set('type', 'event')
-  
+
   // 复制原有参数
   const { searchParams } = new URL(request.url)
   searchParams.forEach((value, key) => {

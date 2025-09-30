@@ -6,7 +6,6 @@
 import React, { useMemo, forwardRef, useEffect, useRef, useCallback } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { MessageItem } from './message-item'
-import { TypingIndicator } from './typing-indicator'
 import type { ChatMessagesProps } from '@/types/chat'
 import { VIRTUAL_SCROLL_CONFIG } from '@/lib/config/chat-config'
 
@@ -44,9 +43,7 @@ export const ChatMessagesVirtual = forwardRef<HTMLDivElement, ChatMessagesProps>
   isLoading,
   error,
   onCopyMessage,
-  onRetryMessage,
-  responsePhase = 'idle',
-  previewContent = ''
+  onRetryMessage
 }, ref) => {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [visibleRange, setVisibleRange] = React.useState({ start: 0, end: 20 })
@@ -80,6 +77,8 @@ export const ChatMessagesVirtual = forwardRef<HTMLDivElement, ChatMessagesProps>
   }, [handleScroll])
   
   // 滚动到底部
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (scrollRef.current && messages.length > 0) {
       const scrollElement = scrollRef.current
@@ -186,13 +185,6 @@ export const ChatMessagesVirtual = forwardRef<HTMLDivElement, ChatMessagesProps>
           
           {/* 消息列表 */}
           {renderedMessages}
-
-          {/* 生成过程指示器 */}
-          <TypingIndicator
-            isVisible={isLoading}
-            phase={responsePhase}
-            previewContent={previewContent}
-          />
 
           {/* 底部间距 */}
           <div className="h-4" />

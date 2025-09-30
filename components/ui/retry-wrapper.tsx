@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useCallback, type ReactNode } from "react"
+import { useState, useCallback } from "react"
+import type { ReactNode } from "react"
 import { ErrorState } from "./error-state"
 import { LoadingState } from "./loading-state"
 
@@ -43,16 +44,11 @@ export function RetryWrapper({
     try {
       await new Promise((resolve) => setTimeout(resolve, retryDelay))
       await onRetry()
-    } catch (error) {
+    } catch (_error) {
       } finally {
       setIsRetrying(false)
     }
   }, [onRetry, retryCount, maxRetries, retryDelay])
-
-  const handleReset = useCallback(() => {
-    setRetryCount(0)
-    setIsRetrying(false)
-  }, [])
 
   if (loading || isRetrying) {
     return <LoadingState message={isRetrying ? `重试中... (${retryCount}/${maxRetries})` : loadingMessage} />

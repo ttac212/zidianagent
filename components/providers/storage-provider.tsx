@@ -4,6 +4,7 @@ import type React from "react"
 
 import { createContext, useContext, useEffect, useState } from "react"
 import { LocalStorage } from "@/lib/storage"
+import * as dt from '@/lib/utils/date-toolkit'
 
 interface StorageContextType {
   isStorageAvailable: boolean
@@ -34,10 +35,10 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
         conversations: LocalStorage.getItem("conversations", []),
         userSettings: LocalStorage.getItem("user_settings", {}),
         documents: LocalStorage.getItem("documents", []),
-        exportTime: new Date().toISOString(),
+        exportTime: dt.toISO(),
       }
       return JSON.stringify(data, null, 2)
-    } catch (error) {
+    } catch (_error) {
       return ""
     }
   }
@@ -57,7 +58,7 @@ export function StorageProvider({ children }: { children: React.ReactNode }) {
       }
 
       return true
-    } catch (error) {
+    } catch (_error) {
       return false
     }
   }

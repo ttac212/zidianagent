@@ -53,12 +53,20 @@ export function useUpdateConversationMutation() {
 
     onSuccess: (updatedConversation) => {
       // 立即在所有对话列表缓存中更新对话
+      // 修复：使用 predicate 匹配所有 lists 相关的查询（包括 summary）
       queryClient.setQueriesData(
-        { queryKey: conversationKeys.lists(), type: 'active' },
+        {
+          predicate: (query) => {
+            const key = query.queryKey
+            return Array.isArray(key) &&
+                   key[0] === 'conversations' &&
+                   key[1] === 'list'
+          }
+        },
         (oldData: any) => {
           if (Array.isArray(oldData)) {
             return oldData.map(conv =>
-              conv.id === updatedConversation.id ? updatedConversation : conv
+              conv.id === updatedConversation.id ? { ...conv, ...updatedConversation } : conv
             )
           }
           return oldData
@@ -72,12 +80,7 @@ export function useUpdateConversationMutation() {
         exact: true
       })
 
-      // 刷新所有相关查询
-      queryClient.invalidateQueries({ queryKey: conversationKeys.lists(), exact: false })
-      queryClient.invalidateQueries({
-        queryKey: [...conversationKeys.lists(), 'summary'],
-        exact: false,
-      })
+      // ✅ 修复：只invalidate详情，不invalidate列表，避免不必要的refetch
     },
   })
 }
@@ -94,8 +97,16 @@ export function useDeleteConversationMutation() {
 
     onSuccess: (id) => {
       // 立即从所有对话列表缓存中移除已删除的对话
+      // 修复：使用 predicate 匹配所有 lists 相关的查询（包括 summary）
       queryClient.setQueriesData(
-        { queryKey: conversationKeys.lists(), type: 'active' },
+        {
+          predicate: (query) => {
+            const key = query.queryKey
+            return Array.isArray(key) &&
+                   key[0] === 'conversations' &&
+                   key[1] === 'list'
+          }
+        },
         (oldData: any) => {
           if (Array.isArray(oldData)) {
             return oldData.filter(conv => conv.id !== id)
@@ -106,13 +117,6 @@ export function useDeleteConversationMutation() {
 
       // 移除详情缓存
       queryClient.removeQueries({ queryKey: conversationKeys.detail(id) })
-
-      // 作为后备，刷新所有相关查询
-      queryClient.invalidateQueries({ queryKey: conversationKeys.lists(), exact: false })
-      queryClient.invalidateQueries({
-        queryKey: [...conversationKeys.lists(), 'summary'],
-        exact: false,
-      })
 
       toast.success('对话已删除')
     },
@@ -147,8 +151,16 @@ export function useCreateConversationMutation() {
 
     onSuccess: (newConversation) => {
       // 立即将新对话添加到所有对话列表缓存的开头
+      // 修复：使用 predicate 匹配所有 lists 相关的查询（包括 summary）
       queryClient.setQueriesData(
-        { queryKey: conversationKeys.lists(), type: 'active' },
+        {
+          predicate: (query) => {
+            const key = query.queryKey
+            return Array.isArray(key) &&
+                   key[0] === 'conversations' &&
+                   key[1] === 'list'
+          }
+        },
         (oldData: any) => {
           if (Array.isArray(oldData)) {
             return [newConversation, ...oldData]
@@ -163,12 +175,7 @@ export function useCreateConversationMutation() {
         newConversation
       )
 
-      // 作为后备，刷新所有相关查询
-      queryClient.invalidateQueries({ queryKey: conversationKeys.lists(), exact: false })
-      queryClient.invalidateQueries({
-        queryKey: [...conversationKeys.lists(), 'summary'],
-        exact: false,
-      })
+      // ✅ 修复：移除invalidateQueries，避免不必要的refetch
 
       toast.success('新对话已创建')
     },

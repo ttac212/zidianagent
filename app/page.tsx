@@ -9,7 +9,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Sparkles, Shield, Layers } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { HomePageSkeleton } from "@/components/skeletons/home-page-skeleton"
-import { ConnectionStatus } from "@/components/ui/connection-status"
 
 export default function HomePage() {
   const { status } = useSession()
@@ -44,18 +43,6 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      
-      {/* 连接状态指示器 - 仅在认证用户的情况下显示 */}
-      {status === "authenticated" && (
-        <ConnectionStatus
-          position="fixed"
-          size="sm"
-          className="top-20 right-4 z-[45]"
-          animated={true}
-          autoHideWhenHealthy={true}
-          showDetails={false}
-        />
-      )}
 
       {/* Hero：微网格/噪点纹理 + 排版优化 */}
       <section className="relative overflow-hidden py-32 md:py-40 px-4">

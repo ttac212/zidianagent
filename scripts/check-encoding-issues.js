@@ -81,7 +81,7 @@ function checkFileEncoding(filePath) {
 
 // 主函数
 async function main() {
-  console.log('正在检查项目文件的编码问题...\n')
+  console.info('正在检查项目文件的编码问题...\n')
   
   // 要检查的文件类型
   const patterns = [
@@ -99,7 +99,7 @@ async function main() {
       ignore: ['**/node_modules/**', '**/.next/**', '**/dist/**', '**/build/**']
     })
     
-    console.log(`检查 ${pattern} (${files.length} 个文件)...`)
+    console.info(`检查 ${pattern} (${files.length} 个文件)...`)
     
     for (const file of files) {
       const issues = checkFileEncoding(file)
@@ -110,12 +110,12 @@ async function main() {
   }
   
   // 输出结果
-  console.log('\n' + '='.repeat(80))
+  console.info('\n' + '='.repeat(80))
   
   if (allIssues.length === 0) {
-    console.log('✅ 没有发现编码问题！')
+    console.info('✅ 没有发现编码问题！')
   } else {
-    console.log(`⚠️  发现 ${allIssues.length} 个潜在的编码问题：\n`)
+    console.info(`⚠️  发现 ${allIssues.length} 个潜在的编码问题：\n`)
     
     // 按文件分组
     const groupedIssues = {}
@@ -128,20 +128,20 @@ async function main() {
     
     // 输出每个文件的问题
     Object.entries(groupedIssues).forEach(([file, issues]) => {
-      console.log(`\n📄 ${file}:`)
+      console.info(`\n📄 ${file}:`)
       issues.forEach(issue => {
         if (issue.line > 0) {
-          console.log(`   行 ${issue.line}: ${issue.description}`)
-          console.log(`   字符编码: 0x${issue.char}`)
-          console.log(`   上下文: "${issue.context}"`)
+          console.info(`   行 ${issue.line}: ${issue.description}`)
+          console.info(`   字符编码: 0x${issue.char}`)
+          console.info(`   上下文: "${issue.context}"`)
         } else {
-          console.log(`   文件级问题: ${issue.description}`)
+          console.info(`   文件级问题: ${issue.description}`)
         }
       })
     })
   }
   
-  console.log('\n' + '='.repeat(80))
+  console.info('\n' + '='.repeat(80))
 }
 
 // 运行主函数

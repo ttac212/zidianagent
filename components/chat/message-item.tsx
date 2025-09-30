@@ -19,39 +19,42 @@ export const MessageItem = React.memo<MessageItemProps>(({
   const isUser = message.role === 'user'
   const isAssistant = message.role === 'assistant'
   const hasError = message.metadata?.error
-  
+  const isStreaming = message.status === 'streaming'
+  const isPending = message.status === 'pending'
+  const isCompleted = message.status === 'completed'
+
   // 微光闪烁状态 - 新回复时触发
   const [shouldGlow, setShouldGlow] = useState(false)
   const [isNewMessage, setIsNewMessage] = useState(false)
-  
+
   // 复制状态
   const [copied, setCopied] = useState(false)
-  
+
   // 字数统计
   const wordCount = message.content.length
-  
+
   useEffect(() => {
-    // 如果是助手消息且有内容，触发微光效果
-    if (isAssistant && message.content && message.content.length > 10) {
+    // 如果是助手消息且状态变为完成，触发微光效果
+    if (isAssistant && isCompleted && message.content && message.content.length > 10) {
       setIsNewMessage(true)
       setShouldGlow(true)
-      
+
       // 3秒后停止微光效果
       const timer = setTimeout(() => {
         setShouldGlow(false)
       }, 3000)
-      
+
       // 5秒后取消新消息标记
       const newTimer = setTimeout(() => {
         setIsNewMessage(false)
       }, 5000)
-      
+
       return () => {
         clearTimeout(timer)
         clearTimeout(newTimer)
       }
     }
-  }, [message.content, isAssistant])
+  }, [message.status, message.content, isAssistant, isCompleted])
 
   const handleCopy = async () => {
     try {
@@ -75,7 +78,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
       setTimeout(() => {
         setCopied(false)
       }, 2000)
-    } catch (err) {
+    } catch (_err) {
       // 复制失败提示
       toast.error('复制失败，请手动选择文本', {
         duration: 3000,
@@ -91,7 +94,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
   }
 
   return (
-    <div 
+    <div
       data-message-id={message.id}
       className={cn(
         "flex gap-2 sm:gap-4 transition-all duration-300",
@@ -127,6 +130,28 @@ export const MessageItem = React.memo<MessageItemProps>(({
           {hasError && (
             <div className="text-xs text-destructive mb-2 font-medium">
                {message.metadata?.error}
+            </div>
+          )}
+
+          {/* 状态指示器 - 仅对助手消息显示 */}
+          {isAssistant && (isPending || isStreaming) && (
+            <div className="flex items-center gap-2 mb-2 text-xs text-muted-foreground">
+              {isPending && (
+                <>
+                  <div className="animate-pulse rounded-full h-2 w-2 bg-yellow-500" />
+                  <span>正在思考...</span>
+                </>
+              )}
+              {isStreaming && (
+                <>
+                  <div className="flex gap-1">
+                    <div className="animate-bounce rounded-full h-1.5 w-1.5 bg-green-500" style={{ animationDelay: '0ms' }} />
+                    <div className="animate-bounce rounded-full h-1.5 w-1.5 bg-green-500" style={{ animationDelay: '150ms' }} />
+                    <div className="animate-bounce rounded-full h-1.5 w-1.5 bg-green-500" style={{ animationDelay: '300ms' }} />
+                  </div>
+                  <span>正在生成...</span>
+                </>
+              )}
             </div>
           )}
 

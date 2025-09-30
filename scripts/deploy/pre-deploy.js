@@ -213,13 +213,13 @@ class PreDeployValidator {
     this.header('部署前验证报告');
     
     if (this.errors.length > 0) {
-      console.log(`${colors.red}错误：${colors.reset}`);
-      this.errors.forEach(err => console.log(`  - ${err}`));
+      console.info(`${colors.red}错误：${colors.reset}`);
+      this.errors.forEach(err => console.info(`  - ${err}`));
     }
     
     if (this.warnings.length > 0) {
-      console.log(`${colors.yellow}警告：${colors.reset}`);
-      this.warnings.forEach(warn => console.log(`  - ${warn}`));
+      console.info(`${colors.yellow}警告：${colors.reset}`);
+      this.warnings.forEach(warn => console.info(`  - ${warn}`));
     }
     
     const hasErrors = this.errors.length > 0;
@@ -227,10 +227,10 @@ class PreDeployValidator {
       `${colors.red}部署验证失败${colors.reset}` : 
       `${colors.green}部署验证通过${colors.reset}`;
     
-    console.log(`\n状态: ${status}`);
+    console.info(`\n状态: ${status}`);
     
     if (this.warnings.length > 0) {
-      console.log(`${colors.yellow}注意: 存在 ${this.warnings.length} 个警告${colors.reset}`);
+      console.info(`${colors.yellow}注意: 存在 ${this.warnings.length} 个警告${colors.reset}`);
     }
     
     return !hasErrors;

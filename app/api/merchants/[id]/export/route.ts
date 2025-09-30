@@ -8,6 +8,13 @@ import { getToken } from 'next-auth/jwt'
 import { prisma } from '@/lib/prisma'
 import { parseAndCleanTags } from '@/lib/utils/tag-parser'
 import { createErrorResponse, generateRequestId } from '@/lib/api/error-handler'
+import * as dt from '@/lib/utils/date-toolkit'
+import {
+  validationError,
+  notFound,
+  unauthorized
+} from '@/lib/api/http-response'
+
 
 // GET /api/merchants/[id]/export - 导出商家数据
 export async function GET(
@@ -15,7 +22,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const token = await getToken({ req: request as any })
-  if (!token?.sub) return NextResponse.json({ error: '未认证' }, { status: 401 })
+  if (!token?.sub) return unauthorized('未认证')
   try {
     const { id } = await params
     const { searchParams } = new URL(request.url)
@@ -23,10 +30,7 @@ export async function GET(
     const type = searchParams.get('type') || 'content' // content | analytics | tags
     
     if (!id) {
-      return NextResponse.json(
-        { error: '商家ID不能为空' },
-        { status: 400 }
-      )
+      return validationError('商家ID不能为空')
     }
 
     // 获取商家及其内容
@@ -43,10 +47,7 @@ export async function GET(
     })
 
     if (!merchant) {
-      return NextResponse.json(
-        { error: '商家不存在' },
-        { status: 404 }
-      )
+      return notFound('商家不存在')
     }
 
     let csvContent = ''
@@ -54,7 +55,7 @@ export async function GET(
 
     if (type === 'content') {
       // 导出内容数据
-      filename = `${merchant.name}_内容数据_${new Date().toISOString().split('T')[0]}.csv`
+      filename = `${merchant.name}_内容数据_${dt.toISO().split('T')[0]}.csv`
       
       // CSV 头部
       const headers = [
@@ -102,7 +103,7 @@ export async function GET(
       })
     } else if (type === 'analytics') {
       // 导出分析数据
-      filename = `${merchant.name}_分析数据_${new Date().toISOString().split('T')[0]}.csv`
+      filename = `${merchant.name}_分析数据_${dt.toISO().split('T')[0]}.csv`
       
       // 计算分析数据
       const totalEngagement = merchant.totalDiggCount + merchant.totalCommentCount + 
@@ -144,7 +145,7 @@ export async function GET(
       csvContent = analyticsData.map(row => row.join(',')).join('\n')
     } else if (type === 'tags') {
       // 导出标签数据
-      filename = `${merchant.name}_标签数据_${new Date().toISOString().split('T')[0]}.csv`
+      filename = `${merchant.name}_标签数据_${dt.toISO().split('T')[0]}.csv`
       
       // 统计标签
       const tagMap = new Map<string, { count: number; engagementSum: number }>()

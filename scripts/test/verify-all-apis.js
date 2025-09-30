@@ -118,7 +118,7 @@ async function runTests() {
     
     if (failed > 0) {
       results.filter(r => !r.success && r.error !== '服务器未运行').forEach(r => {
-        console.log(`  ${r.endpoint}: ${r.error || `HTTP ${r.status}`}`);
+        console.info(`  ${r.endpoint}: ${r.error || `HTTP ${r.status}`}`);
       });
     }
   }
@@ -129,10 +129,10 @@ async function runTests() {
 // 执行测试
 runTests().then(serverDown => {
   if (serverDown) {
-    console.log('\n服务器未运行，请先启动开发服务器');
+    console.info('\n服务器未运行，请先启动开发服务器');
     process.exit(1);
   } else {
-    console.log('\n所有API测试完成');
+    console.info('\n所有API测试完成');
     process.exit(0);
   }
 });

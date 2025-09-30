@@ -6,7 +6,7 @@ const { PrismaClient } = require('@prisma/client')
 const prisma = new PrismaClient()
 
 async function checkNullUsageStats() {
-  console.log('🔍 检查UsageStats表中的NULL值...')
+  console.info('🔍 检查UsageStats表中的NULL值...')
 
   try {
     // 检查是否有NULL的modelId
@@ -16,10 +16,10 @@ async function checkNullUsageStats() {
       WHERE modelId IS NULL;
     `
 
-    console.log(`📊 modelId为NULL的记录数: ${nullModelIds[0]?.count || 0}`)
+    console.info(`📊 modelId为NULL的记录数: ${nullModelIds[0]?.count || 0}`)
 
     if (nullModelIds[0]?.count > 0) {
-      console.log('\n🚨 发现NULL值！需要清理')
+      console.info('\n🚨 发现NULL值！需要清理')
 
       // 显示样本数据
       const samples = await prisma.$queryRaw`
@@ -29,14 +29,14 @@ async function checkNullUsageStats() {
         LIMIT 5;
       `
 
-      console.log('📋 样本数据:')
+      console.info('📋 样本数据:')
       samples.forEach((row, i) => {
-        console.log(`  ${i + 1}. ID: ${row.id}, 用户: ${row.userId}, 日期: ${row.date}`)
+        console.info(`  ${i + 1}. ID: ${row.id}, 用户: ${row.userId}, 日期: ${row.date}`)
       })
 
       return false
     } else {
-      console.log('✅ 没有发现NULL值')
+      console.info('✅ 没有发现NULL值')
       return true
     }
 

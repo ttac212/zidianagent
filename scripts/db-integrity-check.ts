@@ -4,6 +4,7 @@
  */
 
 import { PrismaClient } from '@prisma/client'
+import * as dt from '@/lib/utils/date-toolkit'
 
 const prisma = new PrismaClient({
   log: ['error', 'warn']
@@ -21,7 +22,7 @@ const colors = {
 }
 
 function log(message: string, color: keyof typeof colors = 'reset') {
-  const timestamp = new Date().toISOString().split('T')[1].split('.')[0]
+  const timestamp = dt.toISO().split('T')[1].split('.')[0]
   }
 
 interface CheckResult {
@@ -71,7 +72,8 @@ class DatabaseIntegrityChecker {
         prisma.usageStats.count(),
         prisma.account.count(),
         prisma.session.count(),
-        prisma.inviteCode.count()
+        // prisma.inviteCode.count() - 已删除
+        Promise.resolve(0)
       ])
 
       const [userCount, convCount, msgCount, statsCount, accountCount, sessionCount, inviteCount] = counts
@@ -90,7 +92,7 @@ class DatabaseIntegrityChecker {
       return {
         name: '表结构',
         passed: true,
-        details: `所有表正常访问，总记录数: ${counts.reduce((a, b) => a + b, 0)}`
+        details: `所有表正常访问，总记录数: ${counts.reduce((a: number, b: number) => a + b, 0)}`
       }
     } catch (error) {
       log(`❌ 表结构检查失败: ${error instanceof Error ? error.message : '未知错误'}`, 'red')
@@ -218,7 +220,7 @@ class DatabaseIntegrityChecker {
     
     try {
       // 获取当月开始时间
-      const currentMonth = new Date()
+      const currentMonth = dt.now()
       currentMonth.setDate(1)
       currentMonth.setHours(0, 0, 0, 0)
 

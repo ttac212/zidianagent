@@ -8,6 +8,8 @@ export function useSafeLocalStorage<T>(
   const [value, setValue] = useState<T>(defaultValue)
 
   // 仅在客户端环境初始化localStorage读取
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     // 确保在客户端环境
     if (typeof window === 'undefined') return
@@ -18,7 +20,7 @@ export function useSafeLocalStorage<T>(
         const parsed = JSON.parse(item)
         setValue(parsed)
       }
-    } catch (error) {
+    } catch (_error) {
       }
   }, [key])
 
@@ -33,7 +35,7 @@ export function useSafeLocalStorage<T>(
       if (typeof window !== 'undefined') {
         try {
           window.localStorage.setItem(key, JSON.stringify(newValue))
-        } catch (error) {
+        } catch (_error) {
           // 静默处理localStorage错误
         }
       }

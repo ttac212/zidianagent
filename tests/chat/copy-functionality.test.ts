@@ -81,7 +81,7 @@ describe('对话复制功能测试', () => {
           duration: 1500
         })
         return true
-      } catch (error) {
+      } catch (_error) {
         mockToast({
           title: "复制失败",
           description: "无法访问剪贴板，请手动复制",
@@ -330,7 +330,7 @@ function test() {
       // 尝试复制并捕获错误
       try {
         await navigator.clipboard.writeText(messageContent)
-      } catch (e) {
+      } catch (_e) {
         // 模拟错误处理
         mockToast({
           title: "复制失败",
