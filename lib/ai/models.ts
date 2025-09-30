@@ -3,6 +3,8 @@
 
 const raw = (process.env.MODEL_ALLOWLIST || '').trim()
 const DEFAULT_ALLOWLIST = [
+  'claude-sonnet-4-5-20250929-thinking',
+  'claude-sonnet-4-5-20250929',
   'claude-opus-4-1-20250805',
   'gemini-2.5-pro',
 ]
@@ -11,9 +13,11 @@ const allowlist = raw
   ? raw.split(',').map((s) => s.trim()).filter(Boolean)
   : DEFAULT_ALLOWLIST
 
-// 模型友好名称映射
+// 模型友好名称映射（简化版，避免名称过长）
 const MODEL_NAME_MAP: Record<string, string> = {
-  'claude-opus-4-1-20250805': 'Claude Opus 4.1',
+  'claude-sonnet-4-5-20250929-thinking': 'Sonnet 4.5 (思考)',
+  'claude-sonnet-4-5-20250929': 'Sonnet 4.5',
+  'claude-opus-4-1-20250805': 'Opus 4.1',
   'gemini-2.5-pro': 'Gemini 2.5 Pro',
 }
 
@@ -33,4 +37,6 @@ export function isAllowed(model?: string) {
   if (!model) return false
   return ALLOWED_MODEL_IDS.includes(model)
 }
+
+
 
