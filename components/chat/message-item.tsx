@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Copy, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -111,11 +112,11 @@ export const MessageItem = React.memo<MessageItemProps>(({
           "text-sm leading-relaxed relative overflow-hidden transition-all duration-500",
           // 用户消息：紧凑型气泡设计
           isUser
-            ? "bg-primary/90 text-primary-foreground rounded-2xl rounded-br-md px-4 py-3"
+            ? "bg-primary text-primary-foreground rounded-2xl rounded-br-md px-4 py-3"
             : hasError
-              ? "bg-destructive/10 border border-destructive/20 text-destructive rounded-2xl px-6 py-4"
-              // 助手消息：宽松型设计，更适合长内容
-              : "bg-muted/30 dark:bg-muted/20 border border-border/50 rounded-2xl rounded-bl-md px-6 py-4",
+              ? "bg-destructive/10 border border-destructive/30 text-destructive rounded-2xl px-6 py-4"
+              // 助手消息：宽松型设计，更适合长内容，增强对比度
+              : "bg-muted/50 dark:bg-muted/40 border border-border rounded-2xl rounded-bl-md px-6 py-4",
           // 微光闪烁效果 - 增强视觉反馈
           isAssistant && shouldGlow && "shadow-lg ring-2 ring-primary/30 bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5"
         )}>
@@ -135,24 +136,44 @@ export const MessageItem = React.memo<MessageItemProps>(({
 
           {/* 状态指示器 - 仅对助手消息显示 */}
           {isAssistant && (isPending || isStreaming) && (
-            <div className="flex items-center gap-2 mb-2 text-xs text-muted-foreground">
+            <motion.div
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-center gap-2 mb-2 text-xs text-muted-foreground font-medium"
+            >
               {isPending && (
                 <>
-                  <div className="animate-pulse rounded-full h-2 w-2 bg-yellow-500" />
+                  <motion.div
+                    animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
+                    transition={{ repeat: Infinity, duration: 1.5 }}
+                    className="rounded-full h-2 w-2 bg-amber-500"
+                  />
                   <span>正在思考...</span>
                 </>
               )}
               {isStreaming && (
                 <>
-                  <div className="flex gap-1">
-                    <div className="animate-bounce rounded-full h-1.5 w-1.5 bg-green-500" style={{ animationDelay: '0ms' }} />
-                    <div className="animate-bounce rounded-full h-1.5 w-1.5 bg-green-500" style={{ animationDelay: '150ms' }} />
-                    <div className="animate-bounce rounded-full h-1.5 w-1.5 bg-green-500" style={{ animationDelay: '300ms' }} />
-                  </div>
+                  <motion.div className="flex gap-1">
+                    <motion.div
+                      animate={{ y: [0, -4, 0] }}
+                      transition={{ repeat: Infinity, duration: 0.6, delay: 0 }}
+                      className="rounded-full h-1.5 w-1.5 bg-emerald-500"
+                    />
+                    <motion.div
+                      animate={{ y: [0, -4, 0] }}
+                      transition={{ repeat: Infinity, duration: 0.6, delay: 0.15 }}
+                      className="rounded-full h-1.5 w-1.5 bg-emerald-500"
+                    />
+                    <motion.div
+                      animate={{ y: [0, -4, 0] }}
+                      transition={{ repeat: Infinity, duration: 0.6, delay: 0.3 }}
+                      className="rounded-full h-1.5 w-1.5 bg-emerald-500"
+                    />
+                  </motion.div>
                   <span>正在生成...</span>
                 </>
               )}
-            </div>
+            </motion.div>
           )}
 
           {/* 消息文本 */}
@@ -202,7 +223,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
               {wordCount > 0 && (
                 <>
                   <span>•</span>
-                  <span className="text-muted-foreground/70">
+                  <span className="text-muted-foreground">
                     {wordCount} 字
                   </span>
                 </>

@@ -76,4 +76,39 @@ export const STORAGE_KEYS = {
   DOCUMENTS: "documents",
   RECENT_MODELS: "recent_models",
   CHAT_DRAFTS: "chat_drafts",
+  SELECTED_MODEL: "lastSelectedModelId", // 当前选中的模型ID
 } as const
+
+// 导出导入函数用于数据迁移和备份
+export function exportAllData(): Record<string, unknown> {
+  if (!LocalStorage.isAvailable()) return {}
+
+  const data: Record<string, unknown> = {}
+  Object.values(STORAGE_KEYS).forEach(key => {
+    try {
+      const value = LocalStorage.getItem(key, null)
+      if (value !== null) {
+        data[key] = value
+      }
+    } catch {
+      // 忽略单个key的错误
+    }
+  })
+  return data
+}
+
+export function importAllData(data: Record<string, unknown>): void {
+  if (!LocalStorage.isAvailable()) return
+
+  Object.entries(data).forEach(([key, value]) => {
+    try {
+      LocalStorage.setItem(key, value)
+    } catch {
+      // 忽略单个key的错误
+    }
+  })
+}
+
+export function clearAllAppData(): void {
+  LocalStorage.clear()
+}

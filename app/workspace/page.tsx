@@ -3,6 +3,7 @@
 import type React from "react"
 import { useState, useEffect, useDeferredValue } from "react"
 import { useSearchParams } from 'next/navigation'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useConversations } from "@/hooks/use-conversations"
 import { useSafeLocalStorage } from "@/hooks/use-safe-local-storage"
 import { useModelState } from "@/hooks/use-model-state"
@@ -353,14 +354,19 @@ export default function WorkspacePage() {
         )}
 
         {/* 左侧对话历史侧边栏 */}
-        <div className={`bg-card border-r border-border flex flex-col min-h-0 z-20 transition-all duration-200 ${
-          sidebarCollapsed
-            ? 'w-0 overflow-hidden opacity-0'
-            : 'w-80 md:relative fixed left-0 top-0 h-full opacity-100'
-        }`}
-        style={{
-          transition: 'width 300ms cubic-bezier(0.4, 0, 0.2, 1), opacity 200ms ease-in-out'
-        }}>
+        <AnimatePresence mode="wait">
+          {!sidebarCollapsed && (
+            <motion.div
+              key="sidebar"
+              initial={{ width: 0, opacity: 0, x: -20 }}
+              animate={{ width: 320, opacity: 1, x: 0 }}
+              exit={{ width: 0, opacity: 0, x: -20 }}
+              transition={{
+                duration: 0.3,
+                ease: [0.4, 0, 0.2, 1]
+              }}
+              className="bg-card border-r border-border flex flex-col min-h-0 z-20 md:relative fixed left-0 top-0 h-full"
+            >
           {/* 侧边栏头部 - 固定高度 */}
           <div className="flex-shrink-0 p-4 border-b border-border">
             <div className="flex items-center justify-between mb-3">
@@ -475,7 +481,9 @@ export default function WorkspacePage() {
               </div>
             )}
           </div>
-        </div>
+        </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* 侧边栏折叠按钮 */}
         {sidebarCollapsed && (

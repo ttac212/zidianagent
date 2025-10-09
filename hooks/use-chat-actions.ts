@@ -3,7 +3,7 @@
  * 实现 started/chunk/done/error 事件流
  */
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from '@/lib/toast/toast'
 import type { ChatMessage, ChatEvent } from '@/types/chat'
 import { useQueryClient } from '@tanstack/react-query'
@@ -25,6 +25,14 @@ export function useChatActions({
   const abortRef = useRef<AbortController | null>(null)
   const [isStreaming, setIsStreaming] = useState(false)
   const queryClient = useQueryClient()
+
+  // 组件卸载时清理 AbortController，防止内存泄漏
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort()
+      abortRef.current = null
+    }
+  }, [])
 
   const sendMessage = useCallback(async (content: string, dynamicConversationId?: string) => {
     if (!content.trim()) return

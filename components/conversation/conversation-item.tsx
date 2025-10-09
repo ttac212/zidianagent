@@ -4,6 +4,7 @@
  */
 
 import React from 'react'
+import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -62,7 +63,7 @@ export function ConversationItem({
 
   if (isEditing) {
     return (
-      <div className="w-full p-3 bg-secondary rounded-md border border-primary/20 animate-in fade-in-0 duration-200">
+      <div className="w-full p-3 bg-secondary/80 rounded-md border border-primary/30 animate-in fade-in-0 duration-200">
         <Input
           value={editTitle}
           onChange={(e) => onEditTitleChange(e.target.value)}
@@ -86,13 +87,21 @@ export function ConversationItem({
   }
 
   return (
-    <div className="relative w-full group">
+    <motion.div
+      className="relative w-full group"
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -10 }}
+      transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+      whileHover={{ x: 4 }}
+      whileTap={{ scale: 0.98 }}
+    >
       <div
         data-active={isSelected}
         className={`w-full justify-start text-left h-auto p-3 transition-all duration-200 cursor-pointer rounded-md ${
           isSelected
-            ? 'bg-secondary ring-1 ring-primary/20 shadow-sm border-l-2 border-l-primary'
-            : 'hover:bg-accent hover:shadow-sm'
+            ? 'bg-secondary/80 ring-1 ring-primary/30 border-l-2 border-l-primary'
+            : 'hover:bg-accent/80 active:bg-accent'
         }`}
         onClick={onSelect}
         onDoubleClick={(e) => {
@@ -115,7 +124,7 @@ export function ConversationItem({
             </div>
 
             {/* 消息片段 */}
-            <div className="text-xs text-muted-foreground/80 truncate mb-2 leading-relaxed">
+            <div className="text-xs text-muted-foreground truncate mb-2 leading-relaxed">
               {conversation.lastSnippet}
             </div>
 
@@ -179,6 +188,6 @@ export function ConversationItem({
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   )
 }

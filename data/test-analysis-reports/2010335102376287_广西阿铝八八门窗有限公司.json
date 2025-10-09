@@ -1,0 +1,65 @@
+{
+  "merchantId": "cmewpn33d02wowtns3dray1dn",
+  "merchantName": "广西阿铝八八门窗有限公司",
+  "analysisDate": "2025-09-30T09:41:01.336Z",
+  "basicInfo": {
+    "uid": "2010335102376287",
+    "name": "广西阿铝八八门窗有限公司",
+    "category": "系统门窗",
+    "location": "广西",
+    "businessType": "B2C",
+    "status": "ACTIVE",
+    "dataSource": "douyin"
+  },
+  "contentStats": {
+    "totalCount": 462,
+    "videoCount": 10,
+    "articleCount": 0,
+    "imageCount": 0,
+    "audioCount": 0,
+    "otherCount": 0,
+    "contentTypeDistribution": "视频2%"
+  },
+  "engagementMetrics": {
+    "totalDiggs": 58982,
+    "totalComments": 17724,
+    "totalCollects": 9369,
+    "totalShares": 7581,
+    "avgDiggsPerContent": 128,
+    "avgCommentsPerContent": 38,
+    "engagementRate": "一般"
+  },
+  "contentInsights": {
+    "mostPopularContentType": "视频",
+    "avgPublishFrequency": "每周2-3条",
+    "topPerformingContent": [
+      {
+        "title": "国补对商家来说是好事吗 #南宁门窗...窗厂家 #南宁封阳台 #阿铝八八门窗",
+        "diggCount": 46,
+        "commentCount": 5
+      },
+      {
+        "title": "南宁业主为什么喜欢来我们工厂 #南...窗厂家 #南宁封阳台 #阿铝八八门窗",
+        "diggCount": 40,
+        "commentCount": 1
+      },
+      {
+        "title": "通风和气密兼顾的平移侧压窗来了 #...窗厂家 #南宁封阳台 #阿铝八八门窗",
+        "diggCount": 31,
+        "commentCount": 1
+      }
+    ]
+  },
+  "tags": [
+    "B2C",
+    "系统门窗",
+    "广西",
+    "来源:douyin"
+  ],
+  "videoScriptSuggestions": [
+    "介绍\"广西阿铝八八门窗有限公司\"的核心业务和特色服务",
+    "参考热门内容\"国补对商家来说是好事吗 #南宁门窗......\"的创作角度",
+    "延续视频内容优势,创作短视频系列",
+    "融入广西的地域特色和文化元素"
+  ]
+}

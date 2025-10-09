@@ -51,32 +51,18 @@ class Analytics {
     this.sendMetricToServer(fullMetric)
   }
 
-  // 发送事件到服务器
-  private async sendEventToServer(event: UserEvent) {
-    try {
-      await fetch("/api/analytics/events", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(event),
-      })
-    } catch (_error) {
-      }
+  // 发送事件到服务器（已禁用 - 使用结构化日志）
+  private async sendEventToServer(_event: UserEvent) {
+    // SECURITY: Analytics API 已完全禁用
+    // 如需追踪，请使用结构化日志系统
+    // console.info('[Analytics Event]', event);
   }
 
-  // 发送指标到服务器
-  private async sendMetricToServer(metric: SystemMetric) {
-    try {
-      await fetch("/api/analytics/metrics", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(metric),
-      })
-    } catch (_error) {
-      }
+  // 发送指标到服务器（已禁用 - 使用结构化日志）
+  private async sendMetricToServer(_metric: SystemMetric) {
+    // SECURITY: Metrics API 已完全禁用
+    // 如需监控，请使用结构化日志系统
+    // console.info('[System Metric]', metric);
   }
 
   // 生成会话ID

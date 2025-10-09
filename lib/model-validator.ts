@@ -5,6 +5,7 @@
 
 import { ALLOWED_MODELS } from '@/lib/ai/models'
 import { lifecycle } from '@/lib/lifecycle-manager'
+import { LocalStorage, STORAGE_KEYS } from '@/lib/storage'
 import * as dt from '@/lib/utils/date-toolkit'
 
 interface ModelValidationResult {
@@ -236,17 +237,17 @@ export const ModelDebugTools = {
   // 导出当前所有模型状态
   exportModelStates: () => {
     const states: any = {}
-    
+
     try {
-      // 从localStorage获取
-      states.localStorage = localStorage.getItem('lastSelectedModelId')
-      
+      // 从localStorage获取，使用统一的 STORAGE_KEYS
+      states.localStorage = LocalStorage.getItem(STORAGE_KEYS.SELECTED_MODEL, null)
+
       // 从白名单获取
       states.allowedModels = ALLOWED_MODELS.map(m => ({ id: m.id, name: m.name }))
-      
+
       // 当前时间
       states.timestamp = dt.toISO()
-      
+
       return states
     // eslint-disable-next-line no-unused-vars
     } catch (_error) {
@@ -257,7 +258,7 @@ export const ModelDebugTools = {
   // 重置所有模型状态
   resetModelStates: () => {
     try {
-      localStorage.removeItem('lastSelectedModelId')
+      LocalStorage.removeItem(STORAGE_KEYS.SELECTED_MODEL)
       // 建议刷新页面
       // eslint-disable-next-line no-unused-vars
       } catch (_error) {
@@ -272,7 +273,7 @@ export const ModelDebugTools = {
     }
 
     try {
-      localStorage.setItem('lastSelectedModelId', modelId)
+      LocalStorage.setItem(STORAGE_KEYS.SELECTED_MODEL, modelId)
       return true
     // eslint-disable-next-line no-unused-vars
     } catch (_error) {

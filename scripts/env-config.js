@@ -54,15 +54,16 @@ class EnvConfig {
     const connectionMonitoring = config.NEXT_PUBLIC_CONNECTION_MONITORING;
     
     if (!connectionMonitoring) {
-      issues.push('❌ NEXT_PUBLIC_CONNECTION_MONITORING 未设置');
+      issues.push('[ERROR] NEXT_PUBLIC_CONNECTION_MONITORING 未设置');
       recommendations.push('添加: NEXT_PUBLIC_CONNECTION_MONITORING=enabled');
     } else {
       const validValues = ['enabled', 'disabled', 'debug'];
       if (validValues.includes(connectionMonitoring)) {
         if (connectionMonitoring === 'debug') {
-          }
+          console.log('[WARNING] 调试模式已启用，将输出详细日志');
+        }
       } else {
-        issues.push(`❌ NEXT_PUBLIC_CONNECTION_MONITORING 值无效: ${connectionMonitoring}`);
+        issues.push(`[ERROR] NEXT_PUBLIC_CONNECTION_MONITORING 值无效: ${connectionMonitoring}`);
         recommendations.push(`有效值: ${validValues.join(', ')}`);
       }
     }
@@ -74,32 +75,36 @@ class EnvConfig {
       try {
         const url = new URL(nextAuthUrl);
         const port = url.port || (url.protocol === 'https:' ? '443' : '80');
-        } catch (_error) {
-        issues.push(`❌ NEXTAUTH_URL 格式无效: ${nextAuthUrl}`);
+        console.log(`[OK] NEXTAUTH_URL 已配置: ${url.hostname}:${port}`);
+      } catch (_error) {
+        issues.push(`[ERROR] NEXTAUTH_URL 格式无效: ${nextAuthUrl}`);
       }
     } else {
-      issues.push('❌ NEXTAUTH_URL 未设置');
+      issues.push('[ERROR] NEXTAUTH_URL 未设置');
       recommendations.push('添加: NEXTAUTH_URL=http://localhost:3007');
     }
 
     // 检查数据库配置（影响健康检查）
     const databaseUrl = config.DATABASE_URL;
     if (databaseUrl) {
-      }...`);
+      console.log(`[OK] DATABASE_URL 已配置: ${databaseUrl.substring(0, 30)}...`);
     } else {
-      issues.push('❌ DATABASE_URL 未设置');
+      issues.push('[ERROR] DATABASE_URL 未设置');
     }
 
     // 汇总结果
     if (issues.length === 0) {
+      console.log('\n[SUCCESS] 所有配置验证通过！');
       return { valid: true, issues: [], recommendations: [] };
     } else {
-      issues.forEach(issue => );
-      
+      console.log('\n[WARNING] 发现配置问题：');
+      issues.forEach(issue => console.log(issue));
+
       if (recommendations.length > 0) {
-        recommendations.forEach(rec => );
+        console.log('\n[INFO] 建议修复：');
+        recommendations.forEach(rec => console.log(rec));
       }
-      
+
       return { valid: false, issues, recommendations };
     }
   }
@@ -107,15 +112,17 @@ class EnvConfig {
   // 切换连接监控状态
   toggleConnectionMonitoring(newState) {
     const validStates = ['enabled', 'disabled', 'debug'];
-    
+
     if (!validStates.includes(newState)) {
-      }`);
+      console.log(`[ERROR] 无效的状态值: ${newState}`);
+      console.log(`有效值: ${validStates.join(', ')}`);
       return false;
     }
 
     const envLocalPath = path.join(this.rootDir, '.env.local');
-    
+
     if (!fs.existsSync(envLocalPath)) {
+      console.log('[ERROR] .env.local 文件不存在');
       return false;
     }
 
@@ -124,13 +131,15 @@ class EnvConfig {
     // 查找并替换配置行
     const regex = /^NEXT_PUBLIC_CONNECTION_MONITORING=.*$/m;
     const newLine = `NEXT_PUBLIC_CONNECTION_MONITORING=${newState}`;
-    
+
     if (regex.test(content)) {
       content = content.replace(regex, newLine);
-      } else {
+      console.log(`[SUCCESS] 已更新连接监控状态: ${newState}`);
+    } else {
       content += `\n# 连接监控功能开关\n${newLine}\n`;
-      }
-    
+      console.log(`[SUCCESS] 已添加连接监控配置: ${newState}`);
+    }
+
     fs.writeFileSync(envLocalPath, content);
     return true;
   }
@@ -203,10 +212,11 @@ LOG_LEVEL=info
   // 快速回滚配置
   rollbackConnectionMonitoring() {
     const success = this.toggleConnectionMonitoring('disabled');
-    
+
     if (success) {
-      }
-    
+      console.log('[SUCCESS] 连接监控已成功回滚（禁用）');
+    }
+
     return success;
   }
 }
@@ -226,6 +236,8 @@ async function main() {
     case 'toggle':
       const newState = args[1];
       if (!newState) {
+        console.log('[ERROR] 请提供状态值');
+        console.log('用法: node env-config.js toggle <enabled|disabled|debug>');
         return;
       }
       envConfig.toggleConnectionMonitoring(newState);
@@ -241,7 +253,9 @@ async function main() {
       
     case 'show':
       const config = envConfig.readEnvConfig();
-      
+
+      console.log('\n[INFO] 当前环境配置：');
+
       // 只显示连接监控相关的配置
       const relevantKeys = [
         'NEXT_PUBLIC_CONNECTION_MONITORING',
@@ -249,7 +263,7 @@ async function main() {
         'DATABASE_URL',
         'NODE_ENV'
       ];
-      
+
       relevantKeys.forEach(key => {
         if (config[key]) {
           // 隐藏敏感信息
@@ -257,14 +271,24 @@ async function main() {
           if (key.includes('DATABASE_URL') && value.length > 20) {
             value = value.substring(0, 20) + '...';
           }
-          } else {
-          `);
+          console.log(`  ${key} = ${value}`);
+        } else {
+          console.log(`  ${key} = <未设置>`);
         }
       });
       break;
       
     default:
-      rollback              快速回滚（禁用连接监控）
+      console.log(`
+环境配置管理工具
+
+用法:
+  node env-config.js <command> [arguments]
+
+命令:
+  validate              验证连接监控相关配置
+  toggle <state>        切换连接监控状态（enabled|disabled|debug）
+  rollback              快速回滚（禁用连接监控）
   template              创建环境变量模板文件
   show                  显示当前相关配置
 

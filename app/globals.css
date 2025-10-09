@@ -18,62 +18,62 @@
 }
 
 :root {
-  /* 更新为极简蓝白黑配色方案 */
+  /* 优化浅色模式配色 - 扁平化设计，强调对比度和可读性 */
   --background: #ffffff;
-  --foreground: #000000; /* 修复对比度问题，将前景色改为黑色 */
+  --foreground: #0f172a; /* 使用更深的颜色确保可读性 */
   --card: #f8fafc;
-  --card-foreground: #000000; /* 修复对比度问题，将前景色改为黑色 */
+  --card-foreground: #0f172a;
   --popover: #ffffff;
-  --popover-foreground: #000000; /* 修复对比度问题，将前景色改为黑色 */
-  --primary: #1e3a8a;
+  --popover-foreground: #0f172a;
+  --primary: #1e40af; /* 稍微加深主色，提升对比度 */
   --primary-foreground: #ffffff;
   --secondary: #f1f5f9;
-  --secondary-foreground: #1e293b;
-  --muted: #0000000D; /* 黑 5% */
-  --muted-foreground: #000000B3; /* 黑 70% */
+  --secondary-foreground: #0f172a; /* 确保次要区域文字清晰 */
+  --muted: #f1f5f9; /* 使用更明显的浅灰色背景 */
+  --muted-foreground: #334155; /* 提升到灰-700，确保在浅色背景上清晰可读 */
   --accent: var(--primary);
   --accent-foreground: var(--primary-foreground);
   --destructive: #dc2626;
   --destructive-foreground: #ffffff;
-  --border: #0000001A; /* 黑 10% 发丝线 */
-  --input: #0000000D; /* 表面底色（黑 5%）*/
+  --border: #e2e8f0; /* 使用更清晰的边框颜色 */
+  --input: #f8fafc; /* 输入框背景更明显 */
   --ring: var(--primary);
-  --chart-1: #1e3a8a;
+  --chart-1: #1e40af;
   --chart-2: #3b82f6;
   --chart-3: #f8fafc;
   --chart-4: #1f2937;
   --chart-5: #e5e7eb;
   --radius: 0.5rem;
   --sidebar: #f8fafc;
-  --sidebar-foreground: #000000; /* 修复对比度问题，将前景色改为黑色 */
-  --sidebar-primary: #1e3a8a;
+  --sidebar-foreground: #0f172a;
+  --sidebar-primary: #1e40af;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #3b82f6;
   --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #e5e7eb;
+  --sidebar-border: #e2e8f0;
   --sidebar-ring: #3b82f6;
 }
 
 .dark {
-  /* 深色模式保持蓝白黑主题 */
-  --background: #0b1220; /* 更接近深蓝黑，AA 友好 */
-  --foreground: #ffffff;
-  --card: #101826;
-  --card-foreground: #ffffff;
-  --popover: #0b1220;
-  --popover-foreground: #ffffff;
+  /* 优化深色模式配色 - 增强对比度和界面清晰度 */
+  --background: #0f172a; /* 使用更柔和的深色背景 */
+  --foreground: #f8fafc;
+  --card: #1e293b;
+  --card-foreground: #f8fafc;
+  --popover: #1e293b;
+  --popover-foreground: #f8fafc;
   --primary: #3b82f6; /* 深色模式主色维持亮蓝，确保对比 */
-  --primary-foreground: #ffffff; /* 使用白字，确保蓝底对比度更佳 */
+  --primary-foreground: #ffffff;
   --secondary: #1e293b;
-  --secondary-foreground: #f1f5f9;
-  --muted: #ffffff0D; /* 白 5% */
-  --muted-foreground: #ffffffB3; /* 白 70% */
+  --secondary-foreground: #e2e8f0; /* 提升次要文字亮度 */
+  --muted: #1e293b; /* 使用更明显的深灰色背景 */
+  --muted-foreground: #94a3b8; /* 优化为灰 400，对比度更好 */
   --accent: var(--primary);
   --accent-foreground: var(--primary-foreground);
-  --destructive: #dc2626;
+  --destructive: #ef4444; /* 稍微提亮，在深色背景上更清晰 */
   --destructive-foreground: #ffffff;
-  --border: #ffffff26; /* 白 15% 发丝线 */
-  --input: #ffffff0D; /* 表面底色（白 5%）*/
+  --border: #334155; /* 使用更明显的边框颜色 */
+  --input: #1e293b; /* 输入框背景更清晰 */
   --ring: var(--primary);
   --chart-1: #3b82f6;
   --chart-2: #60a5fa;
@@ -217,6 +217,87 @@
   @media (min-width: 1024px) {
     .connection-responsive {
       @apply px-4 py-2 gap-2.5;
+    }
+  }
+
+  /* ========================================
+   * 全局微交互优化 - 提升用户体验
+   * ======================================== */
+
+  /* 平滑滚动 */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* 按钮点击反馈 */
+  button:not(:disabled):active,
+  [role="button"]:not([aria-disabled="true"]):active {
+    transform: scale(0.97);
+    transition: transform 0.1s ease;
+  }
+
+  /* 卡片悬浮效果 */
+  [data-card]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px hsl(var(--primary) / 0.12);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Toast通知滑入动画 */
+  @keyframes slide-in-from-top {
+    from {
+      transform: translateY(-100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  [data-sonner-toast] {
+    animation: slide-in-from-top 0.3s cubic-bezier(0.21, 1.02, 0.73, 1) forwards;
+  }
+
+  /* 骨架屏渐变动画 */
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 25%,
+      hsl(var(--muted) / 0.5) 50%,
+      hsl(var(--muted)) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  /* 性能优化 - 动画元素使用GPU加速 */
+  .will-change-transform {
+    will-change: transform;
+  }
+
+  .will-change-opacity {
+    will-change: opacity;
+  }
+
+  /* 尊重用户系统设置 - 减少动画 */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
     }
   }
 }

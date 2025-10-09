@@ -167,17 +167,6 @@ export function buildConversationSections(conversations: Conversation[]): Conver
   const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
   const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
 
-  console.log('📅 时间分组调试:', {
-    now: now.toISOString(),
-    today: today.toISOString(),
-    yesterday: yesterday.toISOString(),
-    weekAgo: weekAgo.toISOString(),
-    firstConv: sortedConversations[0] ? {
-      title: sortedConversations[0].title,
-      updatedAt: safeDate(sortedConversations[0].updatedAt).toISOString()
-    } : null
-  })
-
   const sections: ConversationSection[] = []
 
   // 固定的对话（如果有的话）
@@ -303,6 +292,7 @@ export function toggleConversationPinned(conversation: DerivedConversation): {
   }
 
   // 只提取用户自定义字段，排除实时统计字段
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { totalTokens, messageCount, lastActivity, lastMessage, ...customFields } = conversation.metadata || {}
 
   return {

@@ -9,9 +9,7 @@ const fs = require('fs')
 const path = require('path')
 
 const files = [
-  'app/api/analytics/events/route.ts',
   'app/api/admin/stats/route.ts',
-  'app/api/analytics/metrics/route.ts',
   'app/api/auth/me/route.ts',
   'app/api/auth/verify-invite-code/route.ts',
   'app/api/chat/route.ts',

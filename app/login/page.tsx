@@ -56,7 +56,7 @@ export default function LoginPage() {
         const callbackUrl = searchParams.get('callbackUrl') || '/workspace'
         router.push(callbackUrl)
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('登录失败', {
         description: '网络错误，请稍后重试'
       })
@@ -79,17 +79,17 @@ export default function LoginPage() {
             className="object-cover"
             priority
           />
-          {/* 蒙层：保持与全局风格一致的浅色基底，确保文字可读性 */}
-          <div className="absolute inset-0 bg-background/5" />
+          {/* 蒙层：增强对比度，确保文字清晰可读 */}
+          <div className="absolute inset-0 bg-gradient-to-br from-background/80 via-background/70 to-background/60 backdrop-blur-[2px]" />
         </div>
 
         {/* 内容 */}
         <div className="relative z-10 p-8">
-          <div className="text-sm font-semibold tracking-wide text-foreground/02">支点有星辰</div>
+          <div className="text-sm font-semibold tracking-wide text-foreground drop-shadow-sm">支点有星辰</div>
         </div>
         <div className="relative z-10 px-8 pb-8">
-          <h2 className="text-2xl font-semibold mb-2">支点有星辰</h2>
-          <p className="text-sm text-muted-foreground max-w-md">
+          <h2 className="text-2xl font-semibold mb-2 text-foreground drop-shadow-sm">支点有星辰</h2>
+          <p className="text-sm text-foreground/90 max-w-md drop-shadow-sm">
             {`"使用一线的主流模型，助力文案创作"`}
             <span className="ml-1">— 天才游戏大王</span>
           </p>
@@ -152,9 +152,9 @@ export default function LoginPage() {
               </Button>
             </form>
 
-            <div className="bg-muted/30 p-4 rounded-lg text-xs text-muted-foreground">
-              <p className="mb-2 font-medium">登录说明：</p>
-              <ul className="space-y-1">
+            <div className="bg-muted/60 dark:bg-muted p-4 rounded-lg text-xs">
+              <p className="mb-2 font-medium text-foreground">登录说明：</p>
+              <ul className="space-y-1 text-muted-foreground">
                 <li>• 使用管理员为您分配的邮箱账户</li>
                 <li>• 首次登录请联系管理员获取密码</li>
                 <li>• 如遇问题请联系系统管理员</li>

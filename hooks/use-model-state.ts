@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { ALLOWED_MODELS, DEFAULT_MODEL } from '@/lib/ai/models'
 import * as dt from '@/lib/utils/date-toolkit'
+import { LocalStorage, STORAGE_KEYS } from '@/lib/storage'
 
 interface ModelState {
   selectedModel: string
@@ -22,7 +23,7 @@ interface UseModelStateReturn {
   syncWithStorage: () => void
 }
 
-const STORAGE_KEY = 'zhidian_lastSelectedModelId'
+const STORAGE_KEY = STORAGE_KEYS.SELECTED_MODEL
 
 /**
  * 统一模型状态管理Hook
@@ -47,10 +48,10 @@ export function useModelState(initialModel?: string): UseModelStateReturn {
   // 从localStorage同步模型状态
   const syncWithStorage = useCallback(() => {
     // 确保在客户端环境
-    if (typeof window === 'undefined' || typeof localStorage === 'undefined') return
-    
+    if (!LocalStorage.isAvailable()) return
+
     try {
-      const savedModel = window.localStorage.getItem(STORAGE_KEY)
+      const savedModel = LocalStorage.getItem<string>(STORAGE_KEY, '')
       if (savedModel && validateModel(savedModel)) {
         const newModel = savedModel
         setState(prev => ({
@@ -69,9 +70,7 @@ export function useModelState(initialModel?: string): UseModelStateReturn {
           lastSyncTime: dt.timestamp()
         }))
         currentModelRef.current = newModel
-        if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
-          window.localStorage.setItem(STORAGE_KEY, newModel)
-        }
+        LocalStorage.setItem(STORAGE_KEY, newModel)
         } else {
         // 使用默认模型
         const allowedIds = ALLOWED_MODELS.map(m => m.id)
@@ -83,9 +82,7 @@ export function useModelState(initialModel?: string): UseModelStateReturn {
           lastSyncTime: dt.timestamp()
         }))
         currentModelRef.current = defaultModel
-        if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
-          window.localStorage.setItem(STORAGE_KEY, defaultModel)
-        }
+        LocalStorage.setItem(STORAGE_KEY, defaultModel)
         }
     } catch (_error) {
       // 降级到默认模型
@@ -106,23 +103,17 @@ export function useModelState(initialModel?: string): UseModelStateReturn {
     if (!validateModel(modelId)) {
       return
     }
-    
+
     setState(prev => ({
       ...prev,
       selectedModel: modelId,
       lastSyncTime: dt.timestamp()
     }))
     currentModelRef.current = modelId
-    
+
     // 持久化到localStorage
-    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
-      try {
-        window.localStorage.setItem(STORAGE_KEY, modelId)
-      } catch (_error) {
-    // 错误处理
-  }
-    }
-  }, [state.selectedModel, validateModel])
+    LocalStorage.setItem(STORAGE_KEY, modelId)
+  }, [validateModel])
   
   // 获取当前模型（确保返回最新值）
   const getCurrentModel = useCallback((): string => {

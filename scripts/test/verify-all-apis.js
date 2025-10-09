@@ -6,8 +6,6 @@ const http = require('http');
 const apiEndpoints = [
   { path: '/api/health', method: 'GET', description: '健康检查API' },
   { path: '/api/data/metrics', method: 'GET', description: '统一度量API (GET)' },
-  { path: '/api/analytics/events', method: 'GET', description: 'API重定向测试 (events)' },
-  { path: '/api/analytics/metrics', method: 'GET', description: 'API重定向测试 (metrics)' },
   { path: '/api/auth/session', method: 'GET', description: '会话检查API' },
   { path: '/api/conversations', method: 'GET', description: '对话列表API' },
 ];

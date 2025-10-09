@@ -1,0 +1,65 @@
+{
+  "merchantId": "cmewpmt4a0072wtnss6pukgwc",
+  "merchantName": "南宁娟姐-米维斯全屋定制工厂",
+  "analysisDate": "2025-09-30T09:41:01.338Z",
+  "basicInfo": {
+    "uid": "2184062618837822",
+    "name": "南宁娟姐-米维斯全屋定制工厂",
+    "category": "全屋定制工厂",
+    "location": "南宁",
+    "businessType": "B2C",
+    "status": "ACTIVE",
+    "dataSource": "douyin"
+  },
+  "contentStats": {
+    "totalCount": 345,
+    "videoCount": 10,
+    "articleCount": 0,
+    "imageCount": 0,
+    "audioCount": 0,
+    "otherCount": 0,
+    "contentTypeDistribution": "视频3%"
+  },
+  "engagementMetrics": {
+    "totalDiggs": 57825,
+    "totalComments": 7818,
+    "totalCollects": 12383,
+    "totalShares": 10320,
+    "avgDiggsPerContent": 168,
+    "avgCommentsPerContent": 23,
+    "engagementRate": "一般"
+  },
+  "contentInsights": {
+    "mostPopularContentType": "视频",
+    "avgPublishFrequency": "每周2-3条",
+    "topPerformingContent": [
+      {
+        "title": "津头小区想要落地效果好，又想要工...落地效果#南宁全屋定制 #南宁装修",
+        "diggCount": 118,
+        "commentCount": 2
+      },
+      {
+        "title": "山渐青业主很大胆，设计上完全放手...业主信任#南宁全屋定制 #意式轻奢",
+        "diggCount": 105,
+        "commentCount": 5
+      },
+      {
+        "title": "山渐青别墅全房柜子落地，总价21万，...南宁全屋定制 #意式轻奢 #南宁装修",
+        "diggCount": 90,
+        "commentCount": 7
+      }
+    ]
+  },
+  "tags": [
+    "B2C",
+    "全屋定制工厂",
+    "南宁",
+    "来源:douyin"
+  ],
+  "videoScriptSuggestions": [
+    "介绍\"南宁娟姐-米维斯全屋定制工厂\"的核心业务和特色服务",
+    "参考热门内容\"津头小区想要落地效果好，又想要工...落...\"的创作角度",
+    "延续视频内容优势,创作短视频系列",
+    "融入南宁的地域特色和文化元素"
+  ]
+}

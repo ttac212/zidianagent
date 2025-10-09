@@ -8,7 +8,10 @@
       "Bash(curl http://localhost:3003/api/test-db -X POST)",
       "Bash(pnpm install:*)",
       "Bash(pnpm lint:*)",
-      "Bash(npx prisma:*)"
+      "Bash(npx prisma:*)",
+      "Read(//d/**)",
+      "Bash(pnpm type-check:*)",
+      "Bash(git restore:*)"
     ],
     "additionalDirectories": [
       "C:\\Users\\ADMIN\\AppData\\Roaming",

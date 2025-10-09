@@ -1,7 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
+import { LocalStorage } from '@/lib/storage'
 
+/**
+ * 安全的 localStorage hook，使用统一的存储管理器
+ * @deprecated 建议直接使用 LocalStorage.getItem/setItem 或者使用 STORAGE_KEYS 中定义的键
+ */
 export function useSafeLocalStorage<T>(
-  key: string, 
+  key: string,
   defaultValue: T
 ): [T, (value: T) => void] {
   // 在服务端总是返回默认值
@@ -9,20 +14,11 @@ export function useSafeLocalStorage<T>(
 
   // 仅在客户端环境初始化localStorage读取
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    // 确保在客户端环境
-    if (typeof window === 'undefined') return
-    
-    try {
-      const item = window.localStorage.getItem(key)
-      if (item !== null) {
-        const parsed = JSON.parse(item)
-        setValue(parsed)
-      }
-    } catch (_error) {
-      }
-  }, [key])
+    // 使用统一的 LocalStorage 工具类读取
+    const storedValue = LocalStorage.getItem(key, defaultValue)
+    setValue(storedValue)
+  }, [key, defaultValue])
 
   const setStoredValue = useCallback((newValue: T) => {
     setValue(prevValue => {
@@ -31,14 +27,8 @@ export function useSafeLocalStorage<T>(
         return prevValue
       }
 
-      // 确保在客户端环境再写入localStorage
-      if (typeof window !== 'undefined') {
-        try {
-          window.localStorage.setItem(key, JSON.stringify(newValue))
-        } catch (_error) {
-          // 静默处理localStorage错误
-        }
-      }
+      // 使用统一的 LocalStorage 工具类写入
+      LocalStorage.setItem(key, newValue)
 
       return newValue
     })

@@ -31,16 +31,21 @@ export function ModelSelectorAnimated({
 }: ModelSelectorAnimatedProps) {
   const current = ALLOWED_MODELS.find((m) => m.id === modelId)
   const isEmpty = ALLOWED_MODELS.length === 0
+  const [open, setOpen] = React.useState(false)
 
   const button = (
     <Button
       type="button"
-      variant="ghost"
+      variant="secondary"
       disabled={disabled}
+      data-state={disabled ? undefined : (open ? "open" : "closed")}
       className={cn(
-        "flex items-center gap-1 h-8 pl-1 pr-2 text-xs rounded-md",
-        "bg-secondary text-secondary-foreground transition-colors",
-        disabled ? "opacity-60 cursor-not-allowed" : "hover:bg-secondary/80",
+        "flex items-center gap-1 h-8 px-2 text-xs rounded-md font-medium",
+        "border border-border",
+        "transition-all duration-200",
+        "hover:bg-secondary/80 hover:border-ring/60",
+        "active:bg-secondary/60",
+        "data-[state=open]:bg-secondary/60 data-[state=open]:border-ring data-[state=open]:ring-[3px] data-[state=open]:ring-ring/50",
         className
       )}
       {...buttonProps}
@@ -54,8 +59,14 @@ export function ModelSelectorAnimated({
           transition={{ duration: 0.15 }}
           className="flex items-center gap-1"
         >
-          <span>{current?.name || modelId}</span>
-          <ChevronDown className="w-3 h-3 opacity-50" aria-hidden="true" />
+          <span className="text-secondary-foreground">{current?.name || modelId}</span>
+          <ChevronDown
+            className={cn(
+              "w-3 h-3 text-muted-foreground transition-transform duration-200",
+              open && "rotate-180"
+            )}
+            aria-hidden="true"
+          />
         </motion.div>
       </AnimatePresence>
     </Button>
@@ -66,7 +77,7 @@ export function ModelSelectorAnimated({
   }
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         {button}
       </DropdownMenuTrigger>
