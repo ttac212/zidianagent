@@ -92,7 +92,10 @@ export const ChatMessages = forwardRef<HTMLDivElement, ChatMessagesProps>(({
   messages,
   isLoading,
   error,
-  onRetryMessage
+  onRetryMessage,
+  onLoadMore,
+  hasMoreBefore,
+  isLoadingMore
 }, ref) => {
   // 优化：使用 useMemo 缓存渲染的消息列表
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -137,6 +140,21 @@ export const ChatMessages = forwardRef<HTMLDivElement, ChatMessagesProps>(({
   return (
     <ScrollArea ref={ref} className="h-full w-full">
       <div className="p-4 space-y-6 max-w-[720px] mx-auto min-h-full">
+        {hasMoreBefore && onLoadMore && (
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={onLoadMore}
+              disabled={isLoadingMore}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-border text-xs text-muted-foreground hover:text-foreground hover:border-foreground transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isLoadingMore && (
+                <span className="h-3 w-3 border-b-2 border-current rounded-full animate-spin" />
+              )}
+              {isLoadingMore ? '加载更多消息...' : '加载更早的消息'}
+            </button>
+          </div>
+        )}
 
         {/* 如果没有消息，显示友好提示 */}
         {messages.length === 0 && !isLoading && !error && (

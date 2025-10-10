@@ -42,6 +42,7 @@ import { ConversationItem } from "@/components/conversation/conversation-item"
 
 import type { Conversation } from '@/types/chat'
 import * as dt from '@/lib/utils/date-toolkit'
+import { CHAT_HISTORY_CONFIG } from '@/lib/config/chat-config'
 
 export default function WorkspacePage() {
   const searchParams = useSearchParams()
@@ -255,23 +256,75 @@ export default function WorkspacePage() {
       // 显示加载状态
       toast.loading('正在准备导出数据...', { id: 'export-loading' })
 
-      // 从详情 API 获取完整对话数据，确保包含所有消息
-      const response = await fetch(`/api/conversations/${conversation.id}?includeMessages=true`)
-      if (!response.ok) {
-        throw new Error(`获取对话详情失败: ${response.status}`)
+      let beforeId: string | undefined
+      let hasMore = true
+      const collectedMessages: any[] = []
+      let exportData: any = null
+      const pageSize = CHAT_HISTORY_CONFIG.maxWindow
+      let safetyCounter = 0
+
+      while (hasMore) {
+        safetyCounter += 1
+        if (safetyCounter > 1000) {
+          throw new Error('导出失败：分页请求次数异常')
+        }
+
+        const params = new URLSearchParams({
+          includeMessages: 'true'
+        })
+
+        if (pageSize) {
+          params.set('take', pageSize.toString())
+        }
+
+        if (beforeId) {
+          params.set('beforeId', beforeId)
+        }
+
+        const response = await fetch(`/api/conversations/${conversation.id}?${params.toString()}`)
+        if (!response.ok) {
+          throw new Error(`获取对话详情失败: ${response.status}`)
+        }
+
+        const result = await response.json()
+        if (!result.success) {
+          throw new Error(result.message || '获取对话详情失败')
+        }
+
+        const pageData = result.data
+        exportData = exportData ?? pageData
+
+        const existingIds = new Set(collectedMessages.map((msg) => msg.id))
+        const pageMessages: any[] = Array.isArray(pageData.messages) ? pageData.messages.filter((msg: any) => !existingIds.has(msg.id)) : []
+        collectedMessages.splice(0, 0, ...pageMessages)
+
+        hasMore = Boolean(pageData.messagesWindow?.hasMoreBefore)
+        beforeId = pageData.messagesWindow?.oldestMessageId ?? undefined
+
+        if (hasMore && !beforeId) {
+          throw new Error('导出失败：无法定位更早的消息')
+        }
       }
 
-      const result = await response.json()
-      if (!result.success) {
-        throw new Error(result.message || '获取对话详情失败')
-      }
+      const fullConversation = exportData
+        ? {
+            ...exportData,
+            messages: collectedMessages,
+            messageCount: exportData.messageCount ?? collectedMessages.length,
+          }
+        : {
+            id: conversation.id,
+            title: conversation.title,
+            model: conversation.model,
+            createdAt: conversation.createdAt,
+            messageCount: collectedMessages.length,
+            messages: collectedMessages,
+          }
 
-      // 使用完整数据进行导出
-      const fullConversation = result.data
       const data = JSON.stringify({
         id: fullConversation.id,
         title: fullConversation.title,
-        model: fullConversation.modelId,
+        model: fullConversation.model,
         createdAt: fullConversation.createdAt,
         messageCount: fullConversation.messageCount || fullConversation.messages?.length || 0,
         messages: fullConversation.messages || []

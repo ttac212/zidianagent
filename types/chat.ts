@@ -37,6 +37,16 @@ export interface Conversation {
   maxTokens?: number
   contextAware?: boolean
   metadata?: ConversationMetadata
+  messagesWindow?: {
+    size: number
+    hasMoreBefore: boolean
+    oldestMessageId?: string | null
+    newestMessageId?: string | null
+    request?: {
+      take: number | null
+      beforeId: string | null
+    } | null
+  }
 }
 
 // 对话元数据
@@ -93,6 +103,7 @@ export type ChatAction =
   | { type: 'ADD_MESSAGE'; payload: ChatMessage }
   | { type: 'UPDATE_MESSAGE'; payload: { id: string; updates: Partial<ChatMessage> } }
   | { type: 'SET_MESSAGES'; payload: ChatMessage[] }
+  | { type: 'PREPEND_MESSAGES'; payload: ChatMessage[] }
   | { type: 'CLEAR_MESSAGES' }
   | { type: 'SET_SETTINGS'; payload: Partial<ChatSettings> }
   | { type: 'SET_EDITING_TITLE'; payload: boolean }
@@ -148,6 +159,9 @@ export interface ChatMessagesProps {
   error: string | null
   onCopyMessage?: (messageId: string) => void
   onRetryMessage?: (messageId: string) => void
+  onLoadMore?: () => void
+  hasMoreBefore?: boolean
+  isLoadingMore?: boolean
   // 移除 responsePhase 和 previewContent，状态直接在消息中
 }
 

@@ -8,9 +8,21 @@ import {
   notFound,
   forbidden,
   unauthorized,
-  serverError
+  serverError,
+  validationError
 } from '@/lib/api/http-response'
+import { CHAT_HISTORY_CONFIG } from '@/lib/config/chat-config'
 
+const MAX_MESSAGES_WINDOW = CHAT_HISTORY_CONFIG.maxWindow
+
+function parseWindowSize(value: string | null) {
+  if (!value) return undefined
+  const parsed = Number.parseInt(value, 10)
+  if (Number.isNaN(parsed)) {
+    return NaN
+  }
+  return parsed
+}
 
 // 获取单个对话详情（包含消息，受保护）
 export async function GET(
@@ -25,7 +37,37 @@ export async function GET(
     const { id } = await params
     const { searchParams } = new URL(request.url)
     const includeMessages = searchParams.get('includeMessages') !== 'false'
+    const takeParam = parseWindowSize(searchParams.get('take'))
+    const beforeId = searchParams.get('beforeId') ?? undefined
+
+    if (takeParam !== undefined) {
+      if (Number.isNaN(takeParam)) {
+        return validationError('take 参数必须是数字')
+      }
+
+      if (takeParam < 1) {
+        return validationError('take 参数必须大于0')
+      }
+
+      if (takeParam > MAX_MESSAGES_WINDOW) {
+        return validationError(`单次加载消息数量不能超过 ${MAX_MESSAGES_WINDOW}`)
+      }
+    }
+
+    const windowSize = takeParam ?? (beforeId ? CHAT_HISTORY_CONFIG.initialWindow : undefined)
+    let hasMoreBefore = false
     
+    if (beforeId) {
+      const messageExists = await prisma.message.findFirst({
+        where: { id: beforeId, conversationId: id },
+        select: { id: true }
+      })
+
+      if (!messageExists) {
+        return validationError('无效的 beforeId 参数')
+      }
+    }
+
     const conversation = await prisma.conversation.findUnique({
       where: { id },
       include: {
@@ -38,7 +80,10 @@ export async function GET(
           }
         },
         messages: includeMessages ? {
-          orderBy: { createdAt: 'asc' },
+          orderBy: [
+            { createdAt: 'desc' as const },
+            { id: 'desc' as const }
+          ],
           select: {
             id: true,
             role: true,
@@ -50,7 +95,9 @@ export async function GET(
             finishReason: true,
             metadata: true,
             createdAt: true,
-          }
+          },
+          ...(windowSize ? { take: windowSize + 1 } : {}),
+          ...(beforeId ? { cursor: { id: beforeId }, skip: 1 } : {})
         } : false,
         _count: {
           select: {
@@ -75,15 +122,37 @@ export async function GET(
     }
 
     // 映射响应数据字段 - 修复模型字段映射问题
+    let messages = conversation.messages as any[] | undefined
+
+    if (includeMessages && messages) {
+      if (windowSize && messages.length > windowSize) {
+        hasMoreBefore = true
+        messages = messages.slice(0, windowSize)
+      }
+
+      // 还原为按时间顺序排列
+      messages = messages.slice().reverse()
+    }
+
     const mappedConversation = {
       ...conversation,
       model: conversation.modelId, // 映射 modelId 到 model 字段以匹配 TypeScript 类型
-      messages: conversation.messages ? conversation.messages.map((msg: any) => ({
+      messages: messages ? messages.map((msg: any) => ({
         ...msg,
         model: msg.modelId, // 映射消息中的 modelId 到 model 字段
         totalTokens: (msg.promptTokens || 0) + (msg.completionTokens || 0) // 修复字段名匹配
       })) : conversation.messages,
       messageCount: conversation._count.messages,
+      messagesWindow: includeMessages ? {
+        size: messages ? messages.length : 0,
+        hasMoreBefore,
+        oldestMessageId: messages && messages.length > 0 ? messages[0].id : null,
+        newestMessageId: messages && messages.length > 0 ? messages[messages.length - 1].id : null,
+        request: {
+          take: windowSize ?? null,
+          beforeId: beforeId ?? null
+        }
+      } : undefined
     }
 
     return success(mappedConversation)

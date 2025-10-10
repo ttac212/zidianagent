@@ -10,7 +10,7 @@ import { selectApiKey } from "@/lib/ai/key-manager"
 import { createSSETransformStream } from "@/lib/utils/sse-parser"
 import { checkRateLimit } from "@/lib/security/rate-limiter"
 import { trimForChatAPI } from "@/lib/chat/context-trimmer"
-import { isAllowed } from "@/lib/ai/models"
+import { DEFAULT_MODEL, isAllowed } from "@/lib/ai/models"
 import { QuotaManager, QuotaExceededError } from "@/lib/security/quota-manager"
 import { getModelContextConfig } from "@/lib/constants/message-limits"
 import {
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
   const {
     conversationId,
     messages,
-    model = "claude-3-5-haiku-20241022",
+    model = DEFAULT_MODEL,
     temperature = 0.7,
     creativeMode = false  // 创作模式：启用长文本优化
   } = body

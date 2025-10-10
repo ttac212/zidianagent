@@ -11,7 +11,9 @@
       "Bash(npx prisma:*)",
       "Read(//d/**)",
       "Bash(pnpm type-check:*)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(npx tsx:*)",
+      "Bash(TIKHUB_API_KEY=\"nasQXM88xWilwWy0O6/F5DftDxaSfaA9vSPz62eARtiKgAucPXmRZzaxaA==\" npx tsx scripts/test-merchant-fetch.ts)"
     ],
     "additionalDirectories": [
       "C:\\Users\\ADMIN\\AppData\\Roaming",

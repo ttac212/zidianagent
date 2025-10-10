@@ -6,12 +6,13 @@
 "use client"
 
 import React, { useReducer, useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { ChatHeader } from './chat-header'
 import { ChatMessages } from './chat-messages'
 import { ChatInput } from './chat-input'
 import { chatReducer } from './chat-reducer'
 import { useChatActions } from '@/hooks/use-chat-actions'
-import { useConversationQuery } from '@/hooks/api/use-conversations-query'
+import { useConversationQuery, conversationApi, matchesConversationDetailKey } from '@/hooks/api/use-conversations-query'
 import { useModelState } from '@/hooks/use-model-state'
 import { useChatScroll } from '@/hooks/use-chat-scroll'
 import { useChatKeyboard } from '@/hooks/use-chat-keyboard'
@@ -21,6 +22,7 @@ import type { Conversation, ChatEvent, ChatSettings, ChatMessage } from '@/types
 import { DEFAULT_CHAT_STATE } from '@/types/chat'
 import { toast } from '@/lib/toast/toast'
 import * as dt from '@/lib/utils/date-toolkit'
+import { CHAT_HISTORY_CONFIG } from '@/lib/config/chat-config'
 
 interface Props {
   conversationId?: string
@@ -70,15 +72,21 @@ function SmartChatCenterInternal({
   onSelectConversation,
   onDeleteConversation
 }: Props) {
+  const queryClient = useQueryClient()
   const [state, dispatch] = useReducer(chatReducer, DEFAULT_CHAT_STATE)
   const { selectedModel: currentModel, setSelectedModel } = useModelState()
   // 添加标志跟踪对话模型是否已经同步过，防止用户选择被历史对话覆盖
   const [isModelSynced, setIsModelSynced] = React.useState(false)
+  const detailParams = React.useMemo(() => ({ take: CHAT_HISTORY_CONFIG.initialWindow }), [])
+  const [isHistoryLoading, setIsHistoryLoading] = React.useState(false)
 
   // 获取对话数据 - 只在有有效conversationId时启用
   const { data: conversation, isLoading: isConversationLoading, error: conversationError } = useConversationQuery(
     conversationId || '',
-    !!conversationId // 只有当conversationId存在时才启用查询
+    {
+      enabled: !!conversationId,
+      params: detailParams
+    }
   )
 
   // 同步消息状态 - 修复历史消息不显示问题
@@ -192,6 +200,71 @@ function SmartChatCenterInternal({
         break
     }
   }, [])
+
+  const handleLoadOlderMessages = useCallback(async () => {
+    if (!conversation?.id) return
+    if (isHistoryLoading) return
+    if (!conversation.messagesWindow?.hasMoreBefore) return
+
+    const oldestMessage = state.messages[0]
+    if (!oldestMessage) return
+
+    setIsHistoryLoading(true)
+
+    try {
+      const older = await conversationApi.fetchConversation(conversation.id, {
+        take: CHAT_HISTORY_CONFIG.initialWindow,
+        beforeId: oldestMessage.id
+      })
+
+      if (older?.messages?.length) {
+        dispatch({ type: 'PREPEND_MESSAGES', payload: older.messages })
+      }
+
+      queryClient.setQueriesData(
+        {
+          predicate: (query) => matchesConversationDetailKey(query.queryKey, conversation.id)
+        },
+        (oldData: Conversation | null | undefined) => {
+          if (!oldData) return oldData
+          if (!older) return oldData
+
+          const existingMessages = oldData.messages || []
+          const existingIds = new Set(existingMessages.map(msg => msg.id))
+          const prefix = (older.messages || []).filter(msg => !existingIds.has(msg.id))
+          const mergedMessages = prefix.length > 0 ? [...prefix, ...existingMessages] : existingMessages
+
+          const nextWindow = older.messagesWindow || oldData.messagesWindow
+            ? {
+                size: mergedMessages.length,
+                hasMoreBefore: older.messagesWindow?.hasMoreBefore ?? oldData.messagesWindow?.hasMoreBefore ?? false,
+                oldestMessageId: older.messagesWindow?.oldestMessageId ?? oldData.messagesWindow?.oldestMessageId ?? (mergedMessages[0]?.id ?? null),
+                newestMessageId: oldData.messagesWindow?.newestMessageId ?? (mergedMessages[mergedMessages.length - 1]?.id ?? null),
+                request: {
+                  take: oldData.messagesWindow?.request?.take ?? older.messagesWindow?.request?.take ?? null,
+                  beforeId: older.messagesWindow?.request?.beforeId ?? oldData.messagesWindow?.request?.beforeId ?? null
+                }
+              }
+            : undefined
+
+          return {
+            ...oldData,
+            messages: mergedMessages,
+            messagesWindow: nextWindow,
+            metadata: {
+              ...oldData.metadata,
+              messageCount: older.messageCount ?? oldData.metadata?.messageCount ?? mergedMessages.length
+            }
+          }
+        }
+      )
+    } catch (error) {
+      console.error('Failed to load older messages:', error)
+      toast.error('加载历史消息失败', { description: '请稍后重试' })
+    } finally {
+      setIsHistoryLoading(false)
+    }
+  }, [conversation?.id, conversation?.messagesWindow?.hasMoreBefore, isHistoryLoading, state.messages, queryClient])
 
   // 聊天操作 - 使用事件协议，优先使用用户选择的模型
   // 动态获取conversationId，避免新创建的对话消息丢失
@@ -413,6 +486,9 @@ function SmartChatCenterInternal({
           messages={state.messages}
           isLoading={state.isLoading}
           error={state.error}
+          onLoadMore={conversation?.messagesWindow?.hasMoreBefore ? handleLoadOlderMessages : undefined}
+          hasMoreBefore={conversation?.messagesWindow?.hasMoreBefore}
+          isLoadingMore={isHistoryLoading}
         />
       </div>
 

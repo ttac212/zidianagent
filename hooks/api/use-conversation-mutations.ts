@@ -6,7 +6,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast/toast'
 import type { Conversation } from '@/types/chat'
-import { conversationApi, conversationKeys } from './use-conversations-query'
+import { conversationApi, conversationKeys, matchesConversationDetailKey } from './use-conversations-query'
 
 type CreateConversationPayload = Parameters<typeof conversationApi.createConversation>[0]
 type CreateConversationInput = string | (Partial<CreateConversationPayload> & { modelId: string })
@@ -28,22 +28,28 @@ export function useUpdateConversationMutation() {
       conversationApi.updateConversation(id, updates),
 
     onMutate: async ({ id, updates }) => {
-      await queryClient.cancelQueries({ queryKey: conversationKeys.detail(id) })
+      await queryClient.cancelQueries({
+        predicate: (query) => matchesConversationDetailKey(query.queryKey, id)
+      })
 
-      const previousDetail = queryClient.getQueryData<Conversation | undefined>(
-        conversationKeys.detail(id)
-      )
+      const previousDetails = queryClient.getQueriesData<Conversation | undefined>({
+        predicate: (query) => matchesConversationDetailKey(query.queryKey, id)
+      })
 
-      if (previousDetail) {
-        queryClient.setQueryData(conversationKeys.detail(id), { ...previousDetail, ...updates })
-      }
+      previousDetails.forEach(([key, data]) => {
+        if (data) {
+          queryClient.setQueryData(key, { ...data, ...updates })
+        }
+      })
 
-      return { previousDetail }
+      return { previousDetails }
     },
 
     onError: (err, { id }, context) => {
-      if (context?.previousDetail) {
-        queryClient.setQueryData(conversationKeys.detail(id), context.previousDetail)
+      if (context?.previousDetails) {
+        context.previousDetails.forEach(([key, data]) => {
+          queryClient.setQueryData(key, data)
+        })
       }
 
       toast.error('更新失败，请重试', {
@@ -76,8 +82,7 @@ export function useUpdateConversationMutation() {
       // 不直接覆盖详情缓存，而是 invalidate 让它重新请求完整数据（包含消息）
       // 避免 PATCH 响应（不含 messages）污染缓存导致消息瞬间消失
       queryClient.invalidateQueries({
-        queryKey: conversationKeys.detail(updatedConversation.id),
-        exact: true
+        predicate: (query) => matchesConversationDetailKey(query.queryKey, updatedConversation.id)
       })
 
       // ✅ 修复：只invalidate详情，不invalidate列表，避免不必要的refetch
@@ -116,7 +121,9 @@ export function useDeleteConversationMutation() {
       )
 
       // 移除详情缓存
-      queryClient.removeQueries({ queryKey: conversationKeys.detail(id) })
+      queryClient.removeQueries({
+        predicate: (query) => matchesConversationDetailKey(query.queryKey, id)
+      })
 
       toast.success('对话已删除')
     },

@@ -5,17 +5,18 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from '@/lib/toast/toast'
-import type { ChatMessage, ChatEvent } from '@/types/chat'
+import type { ChatMessage, ChatEvent, Conversation } from '@/types/chat'
 import { useQueryClient } from '@tanstack/react-query'
 import { processSSEStream } from '@/lib/utils/sse-parser'
 import { trimForChatAPI } from '@/lib/chat/context-trimmer'
 import * as dt from '@/lib/utils/date-toolkit'
+import { DEFAULT_MODEL } from '@/lib/ai/models'
 
 export function useChatActions({
   conversationId,
   onEvent,
   messages = [],
-  model = 'claude-opus-4-1-20250805'
+  model = DEFAULT_MODEL
 }: {
   conversationId?: string
   onEvent?: (event: ChatEvent) => void
@@ -150,25 +151,122 @@ export function useChatActions({
         abortRef.current = null
       }
 
-      // 触发缓存失效 - 使用正确的 query keys
       if (activeConversationId) {
-        const { conversationKeys } = await import('@/hooks/api/use-conversations-query')
+        const { matchesConversationDetailKey } = await import('@/hooks/api/use-conversations-query')
 
-        // 刷新对话详情
-        await queryClient.invalidateQueries({
-          queryKey: conversationKeys.detail(activeConversationId)
-        })
+        queryClient.setQueriesData(
+          {
+            predicate: (query) => matchesConversationDetailKey(query.queryKey, activeConversationId)
+          },
+          (oldData: Conversation | null | undefined) => {
+            if (!oldData) return oldData
 
-        // 刷新对话列表（更新最后消息/时间戳）
-        await queryClient.invalidateQueries({
-          queryKey: conversationKeys.lists()
-        })
+            const existingMessages = oldData.messages || []
+            const messageExists = existingMessages.some(msg => msg.id === assistantMessage.id)
+            const mergedMessages = messageExists
+              ? existingMessages.map(msg => msg.id === assistantMessage.id ? assistantMessage : msg)
+              : [...existingMessages, assistantMessage]
 
-        // 刷新对话摘要（包含所有分页和过滤参数）
-        await queryClient.invalidateQueries({
-          queryKey: [...conversationKeys.lists(), 'summary']
-        })
-      }
+            mergedMessages.sort((a, b) => a.timestamp - b.timestamp)
+
+            const targetWindow =
+              oldData.messagesWindow?.request?.take ??
+              oldData.messagesWindow?.size ??
+              mergedMessages.length
+
+            let adjustedMessages = mergedMessages
+            if (targetWindow && adjustedMessages.length > targetWindow) {
+              adjustedMessages = adjustedMessages.slice(adjustedMessages.length - targetWindow)
+            }
+
+            const updatedWindow = oldData.messagesWindow
+              ? {
+                  ...oldData.messagesWindow,
+                  size: adjustedMessages.length,
+                  newestMessageId: assistantMessage.id,
+                  oldestMessageId: adjustedMessages.length > 0 ? adjustedMessages[0].id : null
+                }
+              : oldData.messagesWindow
+
+            const totalCountBase =
+              oldData.messageCount ??
+              oldData.metadata?.messageCount ??
+              adjustedMessages.length
+
+            const newTotalCount = messageExists ? totalCountBase : totalCountBase + 1
+
+            const updatedMetadata = {
+              ...oldData.metadata,
+              messageCount: newTotalCount,
+              lastMessage: {
+                id: assistantMessage.id,
+                role: 'assistant' as const,
+                content: assistantMessage.content,
+                timestamp: assistantMessage.timestamp
+              }
+            }
+
+            return {
+              ...oldData,
+              messages: adjustedMessages,
+              messageCount: newTotalCount,
+              metadata: updatedMetadata,
+              messagesWindow: updatedWindow
+            }
+          }
+        )
+
+        queryClient.setQueriesData(
+          {
+            predicate: (query) => {
+              const key = query.queryKey
+              return Array.isArray(key) &&
+                     key[0] === 'conversations' &&
+                     key[1] === 'list'
+            }
+          },
+          (oldData: any) => {
+            if (!Array.isArray(oldData)) {
+              return oldData
+            }
+
+            return oldData.map((conv: any) => {
+              if (conv.id !== activeConversationId) return conv
+
+              const baseCount =
+                conv.messageCount ??
+                conv.metadata?.messageCount ??
+                (conv.messages?.length ?? 0)
+              const isSameAsLatest = conv.lastMessage?.id === assistantMessage.id
+              const nextCount = isSameAsLatest ? baseCount : baseCount + 1
+
+              return {
+                ...conv,
+                updatedAt: assistantMessage.timestamp,
+                messageCount: nextCount,
+                lastMessage: {
+                  ...(conv.lastMessage || {}),
+                  id: assistantMessage.id,
+                  role: 'assistant',
+                  content: assistantMessage.content,
+                  createdAt: new Date(assistantMessage.timestamp).toISOString()
+                },
+                metadata: {
+                  ...conv.metadata,
+                  messageCount: nextCount,
+                  lastActivity: assistantMessage.timestamp,
+                  lastMessage: {
+                    id: assistantMessage.id,
+                    role: 'assistant',
+                    content: assistantMessage.content,
+                    timestamp: assistantMessage.timestamp
+                  }
+                }
+              }
+            })
+          }
+        )
+    }
 
     } catch (error) {
       // 复位流状态

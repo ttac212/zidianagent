@@ -159,8 +159,8 @@ class EnvConfig {
 LLM_API_BASE=https://api.302.ai/v1
 LLM_API_KEY=your_api_key_here
 
-# 模型白名单（逗号分隔）
-MODEL_ALLOWLIST=claude-opus-4-1-20250805,gemini-2.5-pro
+# 模型白名单（逗号分隔，首项为默认模型）
+MODEL_ALLOWLIST=claude-sonnet-4-5-20250929-thinking,claude-sonnet-4-5-20250929,claude-opus-4-1-20250805,gemini-2.5-pro
 
 # ==============================
 # 数据库配置

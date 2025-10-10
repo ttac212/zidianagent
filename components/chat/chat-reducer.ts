@@ -38,6 +38,24 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'SET_MESSAGES':
       return { ...state, messages: action.payload }
 
+    case 'PREPEND_MESSAGES': {
+      if (!action.payload.length) {
+        return state
+      }
+
+      const existingIds = new Set(state.messages.map(m => m.id))
+      const uniqueMessages = action.payload.filter(msg => !existingIds.has(msg.id))
+
+      if (uniqueMessages.length === 0) {
+        return state
+      }
+
+      return {
+        ...state,
+        messages: [...uniqueMessages, ...state.messages]
+      }
+    }
+
     case 'CLEAR_MESSAGES':
       return { ...state, messages: [] }
 

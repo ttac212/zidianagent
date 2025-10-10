@@ -4,9 +4,15 @@
  */
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { QueryKey } from '@tanstack/react-query'
 import type { Conversation, ChatMessage } from '@/types/chat'
 
 // ==================== 查询Keys ====================
+
+export interface ConversationDetailParams {
+  take?: number
+  beforeId?: string
+}
 
 export const conversationKeys = {
   // 所有对话相关的查询
@@ -14,9 +20,33 @@ export const conversationKeys = {
   // 对话列表
   lists: () => [...conversationKeys.all, 'list'] as const,
   // 单个对话详情
-  detail: (id: string) => [...conversationKeys.all, 'detail', id] as const,
+  detail: (id: string, params?: ConversationDetailParams) => {
+    if (!params || (Object.keys(params).length === 0)) {
+      return [...conversationKeys.all, 'detail', id] as const
+    }
+    return [...conversationKeys.all, 'detail', { id, params }] as const
+  },
   // 对话消息
   messages: (id: string) => [...conversationKeys.all, 'messages', id] as const,
+}
+
+export function matchesConversationDetailKey(queryKey: QueryKey, id: string): boolean {
+  if (!Array.isArray(queryKey)) return false
+  if (queryKey.length < 3) return false
+  if (queryKey[0] !== 'conversations' || queryKey[1] !== 'detail') return false
+
+  const identifier = queryKey[2]
+
+  if (typeof identifier === 'string') {
+    return identifier === id
+  }
+
+  if (identifier && typeof identifier === 'object' && 'id' in identifier) {
+    const record = identifier as { id?: string }
+    return record.id === id
+  }
+
+  return false
 }
 
 // ==================== API响应类型 ====================
@@ -47,6 +77,16 @@ interface ApiConversation {
     createdAt: string
   } | null
   metadata?: Record<string, unknown>
+  messagesWindow?: {
+    size: number
+    hasMoreBefore: boolean
+    oldestMessageId?: string | null
+    newestMessageId?: string | null
+    request?: {
+      take: number | null
+      beforeId: string | null
+    } | null
+  }
 }
 
 interface ConversationListResponse {
@@ -169,6 +209,16 @@ function transformApiConversation(conv: ApiConversation): Conversation {
     }
   }
 
+  if (conv.messagesWindow) {
+    transformedConversation.messagesWindow = {
+      size: conv.messagesWindow.size,
+      hasMoreBefore: conv.messagesWindow.hasMoreBefore,
+      oldestMessageId: conv.messagesWindow.oldestMessageId ?? null,
+      newestMessageId: conv.messagesWindow.newestMessageId ?? null,
+      request: conv.messagesWindow.request ?? null
+    }
+  }
+
   return transformedConversation
 }
 
@@ -218,8 +268,20 @@ export const conversationApi = {
   },
 
   // 获取单个对话详情
-  fetchConversation: async (id: string): Promise<Conversation | null> => {
-    const response = await fetch('/api/conversations/' + id + '?includeMessages=true')
+  fetchConversation: async (id: string, params: ConversationDetailParams = {}): Promise<Conversation | null> => {
+    const searchParams = new URLSearchParams({
+      includeMessages: 'true'
+    })
+
+    if (params.take !== undefined) {
+      searchParams.set('take', params.take.toString())
+    }
+
+    if (params.beforeId) {
+      searchParams.set('beforeId', params.beforeId)
+    }
+
+    const response = await fetch('/api/conversations/' + id + '?' + searchParams.toString())
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -383,10 +445,15 @@ export function useConversationsSummary(options: {
 /**
  * 获取单个对话详情的查询hook
  */
-export function useConversationQuery(id: string, enabled: boolean = true) {
+export function useConversationQuery(
+  id: string,
+  options: { enabled?: boolean; params?: ConversationDetailParams } = {}
+) {
+  const { enabled = true, params } = options
+
   return useQuery({
-    queryKey: conversationKeys.detail(id),
-    queryFn: () => conversationApi.fetchConversation(id),
+    queryKey: conversationKeys.detail(id, params),
+    queryFn: () => conversationApi.fetchConversation(id, params),
     enabled: enabled && !!id,
     staleTime: 2 * 60 * 1000, // 2分钟内数据保持新鲜
     gcTime: 5 * 60 * 1000,    // 5分钟后清理缓存

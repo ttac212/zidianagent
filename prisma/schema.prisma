@@ -220,6 +220,9 @@ model Merchant {
   updatedAt         DateTime          @updatedAt
   contents          MerchantContent[]
   category          MerchantCategory? @relation(fields: [categoryId], references: [id])
+  promptAssets      MerchantPromptAsset[]
+  referenceAssets   ReferenceAsset[]
+  creativeBatches   CreativeBatch[]
 
   @@index([categoryId])
   @@index([location])
@@ -258,6 +261,155 @@ model MerchantContent {
   @@index([externalId])
   @@index([collectedAt])
   @@map("merchant_contents")
+}
+
+model MerchantPromptAsset {
+  id               String                @id @default(cuid())
+  merchantId       String
+  type             PromptAssetType
+  title            String
+  version          Int
+  parentId         String?
+  content          String?
+  referenceAssetId String?
+  metadata         Json?
+  isActive         Boolean              @default(false)
+  createdBy        String
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  merchant         Merchant             @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  parent           MerchantPromptAsset? @relation("PromptAssetParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children         MerchantPromptAsset[] @relation("PromptAssetParent")
+  referenceAsset   ReferenceAsset?      @relation("PromptAssetAttachment", fields: [referenceAssetId], references: [id], onDelete: SetNull)
+  batchLinks       CreativeBatchAsset[] @relation("PromptAssetBatchLinks")
+
+  @@index([merchantId, type, createdAt], map: "merchant_prompt_assets_type_created_idx")
+  @@unique([merchantId, type, version], map: "merchant_prompt_assets_type_version_key")
+  @@map("merchant_prompt_assets")
+}
+
+model ReferenceAsset {
+  id               String              @id @default(cuid())
+  merchantId       String
+  kind             ReferenceKind
+  sourceMeta       Json?
+  originalText     String
+  ocrText          String?
+  summary          String?
+  isDefaultEnabled Boolean             @default(true)
+  createdBy        String
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  merchant         Merchant            @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  promptAssets     MerchantPromptAsset[] @relation("PromptAssetAttachment")
+  batchLinks       CreativeBatchAsset[]  @relation("ReferenceAssetBatchLinks")
+
+  @@index([merchantId, kind, createdAt], map: "reference_assets_kind_created_idx")
+  @@map("reference_assets")
+}
+
+model CreativeBatch {
+  id             String               @id @default(cuid())
+  merchantId     String
+  parentBatchId  String?
+  status         CreativeBatchStatus  @default(QUEUED)
+  modelId        String               @default("claude-sonnet-4-5-20250929")
+  statusVersion  Int                  @default(1)
+  startedAt      DateTime?
+  completedAt    DateTime?
+  triggeredBy    String
+  errorCode      String?
+  errorMessage   String?
+  tokenUsage     Json?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  archivedAt     DateTime?
+  merchant       Merchant             @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  parent         CreativeBatch?       @relation("BatchParent", fields: [parentBatchId], references: [id], onDelete: SetNull)
+  children       CreativeBatch[]      @relation("BatchParent")
+  assets         CreativeBatchAsset[]
+  copies         CreativeCopy[]
+  exceptions     GenerationException[]
+
+  @@index([merchantId, createdAt], map: "creative_batches_merchant_created_idx")
+  @@index([status, createdAt], map: "creative_batches_status_created_idx")
+  @@map("creative_batches")
+}
+
+model CreativeBatchAsset {
+  id               String              @id @default(cuid())
+  batchId          String
+  role             CreativeAssetRole
+  promptAssetId    String?
+  referenceAssetId String?
+  isEnabled        Boolean             @default(true)
+  sortOrder        Int                 @default(0)
+  batch            CreativeBatch       @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  promptAsset      MerchantPromptAsset? @relation("PromptAssetBatchLinks", fields: [promptAssetId], references: [id], onDelete: SetNull)
+  referenceAsset   ReferenceAsset?     @relation("ReferenceAssetBatchLinks", fields: [referenceAssetId], references: [id], onDelete: SetNull)
+
+  @@index([batchId, role, sortOrder], map: "creative_batch_assets_role_order_idx")
+  @@index([promptAssetId], map: "creative_batch_assets_prompt_idx")
+  @@index([referenceAssetId], map: "creative_batch_assets_reference_idx")
+  @@map("creative_batch_assets")
+}
+
+model CreativeCopy {
+  id                String             @id @default(cuid())
+  batchId           String
+  sequence          Int
+  markdownContent   String
+  rawModelOutput    Json?
+  userOverride      String?
+  state             CreativeCopyState  @default(DRAFT)
+  regeneratedFromId String?
+  editedBy          String?
+  editedAt          DateTime?
+  contentVersion    Int                @default(1)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  batch             CreativeBatch      @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  regeneratedFrom   CreativeCopy?      @relation("CopyRegeneration", fields: [regeneratedFromId], references: [id], onDelete: SetNull)
+  regenerations     CreativeCopy[]     @relation("CopyRegeneration")
+  revisions         CreativeCopyRevision[]
+  exceptions        GenerationException[]
+
+  @@index([batchId, sequence], map: "creative_copies_batch_sequence_idx")
+  @@index([regeneratedFromId], map: "creative_copies_regenerated_idx")
+  @@map("creative_copies")
+}
+
+model CreativeCopyRevision {
+  id        String         @id @default(cuid())
+  copyId    String
+  version   Int
+  content   String
+  source    RevisionSource
+  note      String?
+  createdBy String
+  createdAt DateTime       @default(now())
+  copy      CreativeCopy   @relation(fields: [copyId], references: [id], onDelete: Cascade)
+
+  @@unique([copyId, version], map: "creative_copy_revisions_unique")
+  @@map("creative_copy_revisions")
+}
+
+model GenerationException {
+  id              String           @id @default(cuid())
+  batchId         String
+  copyId          String?
+  errorCode       String?
+  errorDetail     Json?
+  requestPayload  Json?
+  responsePayload Json?
+  status          ExceptionStatus  @default(OPEN)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  batch           CreativeBatch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  copy            CreativeCopy?    @relation(fields: [copyId], references: [id], onDelete: SetNull)
+
+  @@index([batchId, status], map: "generation_exceptions_batch_status_idx")
+  @@map("generation_exceptions")
 }
 
 enum UserRole {
@@ -306,4 +458,49 @@ enum ContentType {
   IMAGE
   AUDIO
   OTHER
+}
+
+enum PromptAssetType {
+  REPORT
+  PROMPT
+  ATTACHMENT
+}
+
+enum ReferenceKind {
+  TOPIC
+  BENCHMARK
+  RAW_ATTACHMENT
+}
+
+enum CreativeBatchStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  ARCHIVED
+}
+
+enum CreativeAssetRole {
+  REPORT
+  PROMPT
+  ATTACHMENT
+  TOPIC
+  BENCHMARK
+}
+
+enum CreativeCopyState {
+  DRAFT
+  APPROVED
+  REJECTED
+}
+
+enum RevisionSource {
+  MODEL
+  USER
+}
+
+enum ExceptionStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
 }
