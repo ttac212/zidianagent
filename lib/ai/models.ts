@@ -17,7 +17,7 @@ const allowlist = raw
 const MODEL_NAME_MAP: Record<string, string> = {
   'claude-sonnet-4-5-20250929-thinking': 'Sonnet 4.5 (思考)',
   'claude-sonnet-4-5-20250929': 'Sonnet 4.5',
-  'claude-opus-4-1-20250805': 'Opus 4.1',
+  'claude-opus-4-1-20250805': 'Claude Opus 4.1',
   'gemini-2.5-pro': 'Gemini 2.5 Pro',
 }
 

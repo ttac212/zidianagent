@@ -19,6 +19,7 @@ import {
   forbidden,
   unauthorized
 } from '@/lib/api/http-response'
+import { saveMessage } from "@/lib/repositories/message-repository"
 
 
 const API_BASE = process.env.LLM_API_BASE || "https://api.302.ai/v1"
@@ -128,23 +129,21 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 4. 保存用户消息（权限已验证）- 使用真正的QuotaManager
+  // 4. 保存用户消息（权限已验证）
   if (conversationId && messages.length > 0) {
     const userMessage = messages[messages.length - 1]
     if (userMessage.role === 'user') {
       try {
-        // 使用QuotaManager保存用户消息（不计费）
-        const success = await QuotaManager.commitTokens(
+        // 显式调用消息保存函数
+        const success = await saveMessage({
+          conversationId,
           userId,
-          { promptTokens: 0, completionTokens: 0 }, // 用户消息不计费
-          0, // 用户消息无预留消耗
-          {
-            conversationId,
-            role: 'USER',
-            content: userMessage.content,
-            modelId: model
-          }
-        )
+          role: 'USER',
+          content: userMessage.content,
+          modelId: model,
+          promptTokens: 0,  // 用户消息只算输入
+          completionTokens: 0
+        })
 
         if (!success) {
           console.error('[Chat] Failed to save user message')
@@ -225,40 +224,51 @@ export async function POST(request: NextRequest) {
   const sseTransform = createSSETransformStream(
     undefined, // onContent - 不需要实时处理
     async (fullContent, usage) => {
-      // onComplete - 流结束后保存完整消息，使用真正的QuotaManager
+      // onComplete - 流结束后保存完整消息并调整配额
       if (conversationId && fullContent) {
         try {
           const promptTokens = usage?.prompt_tokens || 0
           const completionTokens = usage?.completion_tokens || 0
+          const totalTokens = promptTokens + completionTokens
 
-          // 使用QuotaManager提交实际使用的tokens
-          const success = await QuotaManager.commitTokens(
+          // 1. 保存助手消息
+          const messageSaved = await saveMessage({
+            conversationId,
             userId,
-            { promptTokens, completionTokens },
-            estimatedTokens, // 传入预留的token数量
-            {
-              conversationId,
-              role: 'ASSISTANT',
-              content: fullContent,
-              modelId: model
-            }
-          )
+            role: 'ASSISTANT',
+            content: fullContent,
+            modelId: model,
+            promptTokens,
+            completionTokens
+          })
 
-          if (!success) {
+          if (!messageSaved) {
             console.error('[Chat] Failed to save assistant message')
-            // 释放预留配额，避免配额卡死
+            // 保存失败，释放预留配额
             await QuotaManager.releaseTokens(userId, estimatedTokens)
+            return
           }
-        } catch (dbError) {
-          console.error('[Chat] Failed to save assistant message:', dbError)
 
-          if (dbError instanceof QuotaExceededError) {
-            console.error(`[Chat] Quota exceeded during commit: ${dbError.message}`)
-            // 配额超限时，系统已经确保不会扣减配额，无需释放
-          } else {
-            // 其他错误时释放预留配额
-            await QuotaManager.releaseTokens(userId, estimatedTokens)
+          // 2. 调整配额（实际使用 vs 预估）
+          try {
+            await QuotaManager.commitTokens(
+              userId,
+              totalTokens,
+              estimatedTokens
+            )
+          } catch (quotaError) {
+            if (quotaError instanceof QuotaExceededError) {
+              console.error(`[Chat] Quota exceeded during commit: ${quotaError.message}`)
+              // QuotaManager已经确保不会扣减超限配额
+            } else {
+              console.error('[Chat] Quota commit failed:', quotaError)
+              // 其他错误，尝试释放预留配额
+              await QuotaManager.releaseTokens(userId, estimatedTokens)
+            }
           }
+        } catch (error) {
+          console.error('[Chat] Failed to process completion:', error)
+          await QuotaManager.releaseTokens(userId, estimatedTokens)
         }
       } else {
         // 如果没有内容或对话ID，释放预留配额

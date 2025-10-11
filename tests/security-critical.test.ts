@@ -54,12 +54,20 @@ describe('关键安全检查', () => {
   })
 
   describe('模型配置安全', () => {
-    it('应该有token上限保护', async () => {
+    it('应该有合理的上下文窗口配置', async () => {
       const { getModelContextConfig } = await import('../lib/constants/message-limits')
 
-      // 测试超大模型配置不会导致内存问题
+      // Gemini 2.5 Pro 的上下文窗口是100万tokens（模型特性）
       const config = getModelContextConfig('gemini-2.5-pro')
-      expect(config.maxTokens).toBeLessThanOrEqual(500000) // 50万token上限
+      
+      // 验证输出token限制在合理范围内（防止无限生成）
+      expect(config.outputMaxTokens).toBeLessThanOrEqual(32000) // API max_tokens参数
+      
+      // 验证模型窗口不超过官方限制
+      expect(config.modelWindow).toBeLessThanOrEqual(1000000) // Gemini 2.5 Pro官方限制
+      
+      // 验证上下文可用tokens（扣除reserve后）
+      expect(config.maxTokens).toBeLessThanOrEqual(1000000)
     })
 
     it('应该拒绝未授权模型', async () => {
