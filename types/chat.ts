@@ -36,6 +36,7 @@ export interface Conversation {
   temperature?: number
   maxTokens?: number
   contextAware?: boolean
+  messageCount?: number
   metadata?: ConversationMetadata
   messagesWindow?: {
     size: number

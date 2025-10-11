@@ -72,7 +72,7 @@ async function analyzeSingleMerchant(merchantId: string) {
     })),
     basicStats: {
       category: merchant.category?.name,
-      location: merchant.location,
+      location: merchant.location ?? undefined,
       businessType: merchant.businessType,
       totalContentCount: merchant.totalContentCount,
       totalEngagement:

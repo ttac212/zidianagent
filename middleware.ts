@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
+import '@/lib/config/env-init'
 
 // 公开路径 - 无需认证
 const PUBLIC_PATHS = new Set([

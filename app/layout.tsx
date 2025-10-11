@@ -8,6 +8,7 @@ import { ErrorBoundary } from "@/components/ui/error-boundary"
 import { SessionProvider } from "@/components/providers/session-provider"
 import { QueryProvider } from "@/lib/providers/query-provider"
 import { Toaster as SonnerToaster } from "@/components/ui/sonner"
+import '@/lib/config/env-init'
 
 // 使用系统字体配置，避免Google Fonts连接问题
 const inter = {

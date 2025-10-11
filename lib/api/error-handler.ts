@@ -4,6 +4,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import '@/lib/config/env-init'
 import * as dt from '@/lib/utils/date-toolkit'
 
 // 错误类型定义

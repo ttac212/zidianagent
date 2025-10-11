@@ -3,7 +3,7 @@
  * 验证修复后的metadata持久化功能
  */
 
-import { prisma } from '@/lib/prisma'
+import { prisma, toJsonInput } from '@/lib/prisma'
 
 async function testMetadataField() {
   console.log('🧪 测试Conversation.metadata字段\n')
@@ -27,7 +27,7 @@ async function testMetadataField() {
           title: 'Metadata测试对话',
           userId: user.id,
           modelId: 'gpt-3.5-turbo',
-          metadata: JSON.stringify({ pinned: false, tags: [] })
+          metadata: toJsonInput({ pinned: false, tags: [] })
         }
       })
       console.log('✅ 创建测试对话:', newConv.id)
@@ -44,7 +44,7 @@ async function testMetadataField() {
     const updatedConv1 = await prisma.conversation.update({
       where: { id: conversation.id },
       data: {
-        metadata: JSON.stringify({ pinned: true, tags: ['important'] })
+        metadata: toJsonInput({ pinned: true, tags: ['important'] })
       }
     })
     console.log('✅ 更新成功:', updatedConv1.metadata)
@@ -60,7 +60,9 @@ async function testMetadataField() {
     console.log('\n📦 测试3: JSON解析')
     if (verifyConv?.metadata) {
       try {
-        const parsed = JSON.parse(verifyConv.metadata)
+        const parsed = typeof verifyConv.metadata === 'string'
+          ? JSON.parse(verifyConv.metadata)
+          : (verifyConv.metadata as Record<string, unknown>)
         console.log('✅ JSON解析成功:', parsed)
         console.log(`  pinned: ${parsed.pinned}`)
         console.log(`  tags: ${JSON.stringify(parsed.tags)}`)
@@ -77,7 +79,7 @@ async function testMetadataField() {
     const updatedConv2 = await prisma.conversation.update({
       where: { id: conversation.id },
       data: {
-        metadata: JSON.stringify(apiUpdate.metadata)
+        metadata: toJsonInput(apiUpdate.metadata)
       }
     })
     console.log('✅ API模拟更新成功:', updatedConv2.metadata)

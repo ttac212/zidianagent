@@ -64,13 +64,28 @@
 | created_at | DateTime |
 | updated_at | DateTime |
 
+### merchant_members
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | cuid | 主键 |
+| merchant_id | FK → merchants.id |
+| user_id | FK → users.id |
+| role | `OWNER \| EDITOR \| VIEWER` |
+| created_at | DateTime default now |
+| updated_at | DateTime @updatedAt |
+
+约束：
+- `CHECK`：`role` 必须在允许范围
+- `UNIQUE (merchant_id, user_id)` 限制单商家单成员唯一
+- 索引 `merchant_member_user_idx` 支持按用户查询可访问商家
+
 ### creative_batches
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | id | cuid |
 | merchant_id | FK → merchants.id |
 | parent_batch_id | FK → self (ON DELETE SET NULL) | 整批再生链路 |
-| status | `QUEUED \| RUNNING \| SUCCEEDED \| FAILED \| ARCHIVED` |
+| status | `QUEUED \| RUNNING \| SUCCEEDED \| PARTIAL_SUCCESS \| FAILED \| ARCHIVED` |
 | model_id | string default `claude-sonnet-4-5-20250929` |
 | status_version | int default 1 | 状态版本号 |
 | started_at | DateTime? |
@@ -79,6 +94,7 @@
 | error_code | string? |
 | error_message | string? |
 | token_usage | JSON? |
+| metadata | JSON? | 批次上下文（再生类型、补充提示等） |
 | created_at | DateTime default now |
 | updated_at | DateTime @updatedAt |
 | archived_at | DateTime? |
@@ -111,7 +127,7 @@
 | --- | --- |
 | id | cuid |
 | batch_id | FK → creative_batches.id |
-| sequence | int (1-5) |
+| sequence | int (1-5) CHECK 约束已在数据库层强制 |
 | markdown_content | text |
 | raw_model_output | JSON? |
 | user_override | text? |
@@ -206,9 +222,15 @@
 ```
 
 ### Worker 输出
-- 将 5 条结果插入 `creative_copies`（`content_version=1`）、写 `creative_copy_revisions`（source=MODEL）。
-- 更新批次状态为 `SUCCEEDED`，填充 `token_usage`。
-- 若模型输出不足 5 条，补空位并在 `generation_exceptions` 记录异常，同时将批次标记 `FAILED`。
+- 将生成的文案插入 `creative_copies`（`content_version=1`）、写 `creative_copy_revisions`（source=MODEL）。
+- 根据生成数量决定批次状态：
+  - **5 条**：`SUCCEEDED`
+  - **1-4 条**：`PARTIAL_SUCCESS`（部分成功，保存已生成内容）
+  - **0 条**：`FAILED`
+- 填充 `token_usage`。
+- 若模型输出不足 5 条，在 `generation_exceptions` 记录详情供调试，但**不影响已生成文案的可用性**。
+
+**失败策略原则**：永远不要因为"少于 5 条"就丢弃已生成的内容。用户拿到 3 条文案总比什么都没有好。
 
 ### 单条再生成 `POST /api/creative/copies/{id}/regenerate`
 ```json
@@ -225,6 +247,22 @@
 ### 整批再生成 `POST /api/creative/batches/{id}/regenerate`
 - 新建批次并设置 `parent_batch_id`，复制上一批启用的资产状态（允许前端修改后提交）。
   - 校验 `parent_batch_id` 必须属于同一商家，否则直接拒绝，避免跨商家串联。
+  - 将单条再生的 `appendPrompt`、来源 copy 等信息写入 `creative_batches.metadata`，供后续 worker 拉取。
+
+### 文案级接口 `/api/creative/copies/{id}`
+- `GET`：返回文案详情、所属批次状态、全量版本历史；要求调用者具备商家成员身份或管理员角色。
+- `PUT`：支持更新 `content` 与 `state`，命中内容时自动生成 `creative_copy_revisions` 记录并递增 `content_version`；请求体可附带 `note`。
+- `POST`：单条再生入口，复用原批次资产生成新批次，且将以下上下文写入 `creative_batches.metadata`：
+  ```json
+  {
+    "source": "copy-regenerate",
+    "parentCopyId": "ccp_001",
+    "appendPrompt": "强调优惠信息",
+    "editedContentProvided": true,
+    "note": "用户手动修改后再生"
+  }
+  ```
+- 新批次与文案建立 lineage（`parent_batch_id`、`regenerated_from_id`），worker 应读取 `metadata.appendPrompt` 追加到模型提示，SSE 推送也需携带新的 `batchId`。
 
 ## SSE / 事件格式
 - **批次状态**
@@ -261,19 +299,49 @@
 - SQLite / Postgres 兼容：迁移脚本需在 `schema.prisma` 注释 raw SQL 同时在 `migrations/*/steps.sql` 中提供 `CREATE UNIQUE INDEX ... WHERE ...`/`CHECK` 语句；SQLite 需要 `partial index` 支持（已存在，注意语法）。
 
 ## 实施步骤
-### 进度快照（2025-10-10）
+### 进度快照（2025-01-15）
 - [x] 数据库迁移（`20240701_add_batch_module/` 正向+回滚脚本）
 - [x] Prisma Client schema & 关系修正（含 `PromptAssetAttachment` 双向关联）
+- [x] 商家成员表 `merchant_members` + 访问控制 helper
 - [x] 仓储层：版本乐观重试、批次事务化、父批校验
 - [x] Vitest 并发/约束测试：`tests/batch-repositories.test.ts`
-- [ ] API / Server Actions（创建批次、列表、详情、再生）
-- [ ] Worker 集成 & Claude 调用落地
-- [ ] 前端页面（资料面板、批次视图、历史）
+- [x] **数据完整性修复**：
+  - [x] 添加 `creative_copies.sequence` CHECK 约束 (1-5)，迁移脚本 `20250115_add_sequence_constraint/`
+  - [x] 引入 `PARTIAL_SUCCESS` 状态，修复 Worker 失败策略
+  - [x] Schema 更新并添加约束注释
+- [x] API / Server Actions
+  - [x] 批次创建 / 列表 / 详情 / 整批再生（基于成员表完成多租户隔离）
+  - [x] 单条文案再生 / 文案编辑接口
+- [x] Worker 框架（`lib/workers/creative-batch-worker.ts`）
+  - [x] 实现正确的失败策略（PARTIAL_SUCCESS）
+  - [x] Claude API 集成（已实现并测试通过）
+  - [x] 提示词构建和解析逻辑
+  - [x] SSE 实时推送（已实现并测试通过）
+- [x] 前端支持
+  - [x] BatchStatusBadge 组件（显示 PARTIAL_SUCCESS 等状态）
+  - [x] 批次列表页面（`app/creative/batches/page.tsx`）
+  - [x] Badge 组件扩展（添加 success/warning 变体）
+  - [x] SSE Hook（`hooks/use-batch-status-sse.ts`）- statusVersion 去重
+  - [x] **P0 核心页面和组件**（2025-01-15）：
+    - [x] BatchInfoCard - 批次信息卡片
+    - [x] CopyCard - 文案卡片（Markdown 预览 + 操作）
+    - [x] CopyEditDialog - 文案编辑对话框（双栏编辑器）
+    - [x] CopyRegenerateDialog - 单条重新生成对话框
+    - [x] 批次详情页面（`/creative/batches/[batchId]`）
+    - [x] 单条重新生成 API（`/api/creative/copies/:copyId/regenerate`）
+  - [ ] 资料管理面板（P1）
+  - [ ] 版本历史查看（P1）
+- [x] 运维脚本
+  - [x] 商家成员基线同步（`scripts/backfill-merchant-members.ts`）
+  - [x] 批次 Worker 测试（`scripts/test-batch-worker.ts`）
+  - [x] SSE 推送测试（`scripts/test-batch-sse.ts`）
 - [ ] 运维与清理脚本、异常面板
 
 1. **数据库迁移**
    - 更新 `schema.prisma` 并添加 raw SQL 迁移（建议目录如 `20240701_add_batch_module/`; 包含 forward/backward SQL，明示 CHECK / 部分唯一语句）。
    - 针对 SQLite/Postgres 分别验证迁移执行，确保 rollback 脚本可用。
+   - 应用 `20240703_add_batch_metadata` 迁移，向 `creative_batches` 增加 `metadata` 列，用于封装单条再生上下文（appendPrompt、parentCopyId、note 等）。
+   - 运行 `scripts/backfill-merchant-members.ts`，根据历史批次触发人补齐 `merchant_members` 基线数据。
 2. **数据访问层**
    - 编写 `PromptAssetRepository`、`BatchRepository`、`CopyRepository` 等，封装事务、乐观重试与状态更新。
 3. **API / Server Actions**
@@ -286,6 +354,51 @@
    - 单元测试（并发、约束、状态）、集成测试（生成流程、错误处理）、E2E（基础流程）。
 7. **运维支持**
    - 提供清理脚本（归档/删除批次）、异常查看页面、调用统计埋点。
+
+### 架构修复记录（2025-01-15）
+**问题发现**：
+1. `creative_copies.sequence` 缺少数据库约束，可能导致越界值（如 0、999）污染数据
+2. 原设计 Worker 失败策略会因为"不足 5 条"就标记 FAILED，丢弃已生成的文案
+
+**修复方案**：
+1. 添加 CHECK 约束 `sequence >= 1 AND sequence <= 5`，通过表重建迁移实现（SQLite 限制）
+2. 引入 `PARTIAL_SUCCESS` 状态：
+   - 5 条 → SUCCEEDED
+   - 1-4 条 → PARTIAL_SUCCESS（保存已生成内容）
+   - 0 条 → FAILED
+3. Worker 实现遵循"Never break userspace"原则，用户拿到部分结果总比什么都没有好
+
+**测试验证**（2025-01-15）：
+- ✅ Worker 测试通过：生成 3/5 条文案，正确标记 PARTIAL_SUCCESS
+- ✅ sequence 约束验证：数据库拒绝越界值
+- ✅ 异常记录：不足 5 条时记录详情但不影响已生成内容
+- ✅ Token 统计：正确记录 prompt/completion tokens
+
+**已完成的技术债**：
+- ✅ Prisma Client 重新生成
+- ✅ Worker Claude API 调用实现
+- ✅ 前端 PARTIAL_SUCCESS 状态显示
+
+**SSE 推送验证**（2025-01-15）：
+- ✅ 状态流转：QUEUED → RUNNING → PARTIAL_SUCCESS
+- ✅ statusVersion 递增：1 → 2 → 3
+- ✅ 事件正确接收和去重
+- ✅ 完成时自动关闭连接
+
+**商家成员同步**：
+- ✅ 脚本完成：`scripts/backfill-merchant-members.ts`
+- ✅ 用户有效性验证
+- ✅ 自动过滤无效关系
+- 📝 生产环境运行：`npx tsx scripts/backfill-merchant-members.ts`
+
+**剩余工作**（低优先级）：
+- 资料管理界面（报告、提示词、附件 CRUD）
+- 文案详情页面（查看、编辑、版本历史）
+- 整批/单条再生成前端界面
+
+### 风险与待办
+- 需要补充商家成员数据的初始化/同步脚本，保障老用户能正确访问对应商家。
+- 后续测试需覆盖“同商家不同成员共享访问”以及“跨商家拒绝”完整流程，包含 API 与页面端到端用例。
 
 ## 未来扩展
 - 切换至 Postgres 后可使用原生 partial unique/触发器、JSONB 查询优化。

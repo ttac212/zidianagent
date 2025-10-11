@@ -8,6 +8,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import '@/lib/config/env-init'
 import * as dt from '@/lib/utils/date-toolkit'
 
 /**
@@ -16,6 +17,7 @@ import * as dt from '@/lib/utils/date-toolkit'
 export interface ApiResponse<T = any> {
   success: boolean
   data?: T
+  message?: string
   error?: string
   details?: unknown
   timestamp?: string
@@ -59,10 +61,32 @@ export class HttpResponse {
    */
   static success<T = any>(
     data: T,
+    init?: ResponseOptions & { message?: string }
+  ): NextResponse<ApiResponse<T>> {
+    const response: ApiResponse<T> = {
+      success: true,
+      data,
+      message: init?.message,
+      timestamp: dt.toISO()
+    }
+
+    return NextResponse.json(response, {
+      status: init?.status || 200,
+      headers: init?.headers
+    })
+  }
+
+  /**
+   * 简化成功响应（带消息）
+   */
+  static ok<T = any>(
+    message: string,
+    data?: T,
     init?: ResponseOptions
   ): NextResponse<ApiResponse<T>> {
     const response: ApiResponse<T> = {
       success: true,
+      message,
       data,
       timestamp: dt.toISO()
     }
@@ -90,6 +114,21 @@ export class HttpResponse {
     return NextResponse.json(response, {
       status: options?.status || 400,
       headers: options?.headers
+    })
+  }
+
+  /**
+   * 400 请求错误
+   */
+  static badRequest(
+    message: string,
+    details?: unknown,
+    init?: Omit<ResponseOptions, 'status'>
+  ): NextResponse<ApiResponse> {
+    return HttpResponse.error(message, {
+      status: 400,
+      details,
+      headers: init?.headers
     })
   }
 
@@ -208,11 +247,13 @@ export class HttpResponse {
  * 便捷的导出函数
  */
 export const success = HttpResponse.success
+export const ok = HttpResponse.ok
 export const error = HttpResponse.error
 export const paginated = HttpResponse.paginated
 export const notFound = HttpResponse.notFound
 export const unauthorized = HttpResponse.unauthorized
 export const forbidden = HttpResponse.forbidden
+export const badRequest = HttpResponse.badRequest
 export const validationError = HttpResponse.validationError
 export const serverError = HttpResponse.serverError
 export const tooManyRequests = HttpResponse.tooManyRequests

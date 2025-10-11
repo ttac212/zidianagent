@@ -2,10 +2,12 @@ import {
   CreativeAssetRole,
   CreativeBatchStatus,
   CreativeBatch,
-  Prisma
+  Prisma,
+  PromptAssetType,
+  ReferenceKind
 } from '@prisma/client'
 
-import { prisma } from '@/lib/prisma'
+import { prisma, toJsonInput } from '@/lib/prisma'
 
 export interface BatchAssetInput {
   role: CreativeAssetRole
@@ -21,6 +23,7 @@ export interface CreateBatchInput {
   parentBatchId?: string | null
   modelId?: string
   status?: CreativeBatchStatus
+  metadata?: unknown
 }
 
 export interface CreateBatchResult {
@@ -29,7 +32,7 @@ export interface CreateBatchResult {
 }
 
 export async function createBatchWithAssets(input: CreateBatchInput): Promise<CreateBatchResult> {
-  const { merchantId, triggeredBy, assets, parentBatchId, modelId, status } = input
+  const { merchantId, triggeredBy, assets, parentBatchId, modelId, status, metadata } = input
 
   if (!assets.length) {
     throw new Error('Batch requires at least one asset')
@@ -38,21 +41,26 @@ export async function createBatchWithAssets(input: CreateBatchInput): Promise<Cr
   validateAssetRoles(assets)
 
   return prisma.$transaction(async tx => {
+    // 在事务内校验资产归属
+    await validateAssetOwnership(tx, merchantId, assets)
+
     let parentBatch: Pick<CreativeBatch, 'id' | 'merchantId' | 'parentBatchId' | 'status'> | undefined
 
     if (parentBatchId) {
-      parentBatch = await tx.creativeBatch.findUnique({
+      const existingParent = await tx.creativeBatch.findUnique({
         where: { id: parentBatchId },
         select: { id: true, merchantId: true, parentBatchId: true, status: true }
       })
 
-      if (!parentBatch) {
+      if (!existingParent) {
         throw new Error(`Parent batch ${parentBatchId} not found`)
       }
 
-      if (parentBatch.merchantId !== merchantId) {
+      if (existingParent.merchantId !== merchantId) {
         throw new Error(`Parent batch ${parentBatchId} does not belong to merchant ${merchantId}`)
       }
+
+      parentBatch = existingParent
     }
 
     const batch = await tx.creativeBatch.create({
@@ -61,7 +69,8 @@ export async function createBatchWithAssets(input: CreateBatchInput): Promise<Cr
         parentBatchId: parentBatchId ?? null,
         triggeredBy,
         modelId: modelId ?? undefined,
-        status: status ?? CreativeBatchStatus.QUEUED
+        status: status ?? CreativeBatchStatus.QUEUED,
+        metadata: metadata !== undefined ? toJsonInput(metadata) : undefined
       }
     })
 
@@ -87,7 +96,7 @@ export interface UpdateBatchStatusInput {
   completedAt?: Date | null
   errorCode?: string | null
   errorMessage?: string | null
-  tokenUsage?: Prisma.JsonValue | null
+  tokenUsage?: unknown
 }
 
 export async function updateBatchStatus(input: UpdateBatchStatusInput) {
@@ -119,7 +128,7 @@ export async function updateBatchStatus(input: UpdateBatchStatusInput) {
     data.errorMessage = errorMessage
   }
   if (tokenUsage !== undefined) {
-    data.tokenUsage = tokenUsage
+    data.tokenUsage = tokenUsage === null ? Prisma.JsonNull : toJsonInput(tokenUsage)
   }
 
   return prisma.creativeBatch.update({
@@ -146,5 +155,106 @@ function validateAssetRoles(assets: BatchAssetInput[]) {
     if ((seen.get(role) ?? 0) === 0) {
       throw new Error(`Batch requires a ${role} asset`)
     }
+  }
+}
+
+async function validateAssetOwnership(
+  tx: Prisma.TransactionClient,
+  merchantId: string,
+  assets: BatchAssetInput[]
+): Promise<void> {
+  const promptAssetIds = assets
+    .filter(asset => isPromptRole(asset.role))
+    .map(asset => asset.assetId)
+    .filter(Boolean)
+
+  const referenceAssetIds = assets
+    .filter(asset => !isPromptRole(asset.role))
+    .map(asset => asset.assetId)
+    .filter(Boolean)
+
+  // 批量查询 prompt 类资产
+  if (promptAssetIds.length > 0) {
+    const promptAssets = await tx.merchantPromptAsset.findMany({
+      where: {
+        id: { in: promptAssetIds },
+        merchantId
+      },
+      select: { id: true, type: true }
+    })
+
+    const foundIds = new Set(promptAssets.map(a => a.id))
+    const missingIds = promptAssetIds.filter(id => !foundIds.has(id))
+    
+    if (missingIds.length > 0) {
+      throw new Error(
+        `Prompt assets [${missingIds.join(', ')}] do not belong to merchant ${merchantId}`
+      )
+    }
+
+    // 校验类型匹配
+    const assetTypeMap = new Map(promptAssets.map(a => [a.id, a.type]))
+    for (const asset of assets.filter(a => isPromptRole(a.role))) {
+      const expectedType = getExpectedPromptType(asset.role)
+      const actualType = assetTypeMap.get(asset.assetId)
+      
+      if (actualType !== expectedType) {
+        throw new Error(
+          `Asset ${asset.assetId} type mismatch: expected ${expectedType}, got ${actualType}`
+        )
+      }
+    }
+  }
+
+  // 批量查询 reference 类资产
+  if (referenceAssetIds.length > 0) {
+    const referenceAssets = await tx.referenceAsset.findMany({
+      where: {
+        id: { in: referenceAssetIds },
+        merchantId
+      },
+      select: { id: true, kind: true }
+    })
+
+    const foundIds = new Set(referenceAssets.map(a => a.id))
+    const missingIds = referenceAssetIds.filter(id => !foundIds.has(id))
+    
+    if (missingIds.length > 0) {
+      throw new Error(
+        `Reference assets [${missingIds.join(', ')}] do not belong to merchant ${merchantId}`
+      )
+    }
+
+    // 校验类型匹配
+    const assetKindMap = new Map(referenceAssets.map(a => [a.id, a.kind]))
+    for (const asset of assets.filter(a => !isPromptRole(a.role))) {
+      const expectedKind = getExpectedReferenceKind(asset.role)
+      const actualKind = assetKindMap.get(asset.assetId)
+      
+      if (actualKind !== expectedKind) {
+        throw new Error(
+          `Asset ${asset.assetId} kind mismatch: expected ${expectedKind}, got ${actualKind}`
+        )
+      }
+    }
+  }
+}
+
+function getExpectedPromptType(role: CreativeAssetRole): PromptAssetType {
+  return role === CreativeAssetRole.REPORT
+    ? PromptAssetType.REPORT
+    : PromptAssetType.PROMPT
+}
+
+function getExpectedReferenceKind(role: CreativeAssetRole): ReferenceKind {
+  switch (role) {
+    case CreativeAssetRole.ATTACHMENT:
+      return ReferenceKind.RAW_ATTACHMENT
+    case CreativeAssetRole.TOPIC:
+      return ReferenceKind.TOPIC
+    case CreativeAssetRole.BENCHMARK:
+      return ReferenceKind.BENCHMARK
+    default:
+      throw new Error(`Unsupported reference role: ${role}`)
   }
 }

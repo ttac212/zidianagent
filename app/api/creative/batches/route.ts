@@ -10,7 +10,9 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import {
   validationError,
-  unauthorized
+  unauthorized,
+  notFound,
+  paginated
 } from '@/lib/api/http-response'
 import {
   createErrorResponse,
@@ -18,13 +20,17 @@ import {
 } from '@/lib/api/error-handler'
 import {
   CreativeAssetRole,
-  PromptAssetType,
-  ReferenceKind
+  CreativeBatchStatus
 } from '@prisma/client'
 import {
   createBatchWithAssets,
   type BatchAssetInput
 } from '@/lib/repositories/creative-batch-repository'
+import {
+  calculatePaginationMeta,
+  extractPaginationParams
+} from '@/lib/api/http-response'
+import { hasMerchantAccess } from '@/lib/auth/merchant-access'
 
 const assetSchema = z.object({
   role: z.nativeEnum(CreativeAssetRole),
@@ -39,30 +45,18 @@ const requestSchema = z.object({
   assets: z.array(assetSchema).min(2)
 })
 
-function isPromptRole(role: CreativeAssetRole) {
-  return (
-    role === CreativeAssetRole.REPORT || role === CreativeAssetRole.PROMPT
-  )
+function parseStatusFilter(searchParams: URLSearchParams) {
+  const raw = searchParams.getAll('status')
+  if (!raw.length) return []
+
+  const allowed = new Set(Object.values(CreativeBatchStatus))
+  return raw
+    .flatMap(part => part.split(','))
+    .map(item => item.trim().toUpperCase())
+    .filter(item => allowed.has(item as CreativeBatchStatus)) as CreativeBatchStatus[]
 }
 
-function getExpectedPromptType(role: CreativeAssetRole): PromptAssetType {
-  return role === CreativeAssetRole.REPORT
-    ? PromptAssetType.REPORT
-    : PromptAssetType.PROMPT
-}
 
-function getExpectedReferenceKind(role: CreativeAssetRole): ReferenceKind {
-  switch (role) {
-    case CreativeAssetRole.ATTACHMENT:
-      return ReferenceKind.RAW_ATTACHMENT
-    case CreativeAssetRole.TOPIC:
-      return ReferenceKind.TOPIC
-    case CreativeAssetRole.BENCHMARK:
-      return ReferenceKind.BENCHMARK
-    default:
-      throw new Error(`Unsupported reference role: ${role}`)
-  }
-}
 
 export async function POST(request: NextRequest) {
   const token = await getToken({ req: request as any })
@@ -74,10 +68,36 @@ export async function POST(request: NextRequest) {
     const payload = await request.json()
     const parsed = requestSchema.safeParse(payload)
     if (!parsed.success) {
-      return validationError(parsed.error.flatten().fieldErrors)
+      return validationError('请求参数无效', parsed.error.flatten().fieldErrors)
     }
 
     const { merchantId, parentBatchId } = parsed.data
+    const merchant = await prisma.merchant.findUnique({
+      where: { id: merchantId },
+      select: { id: true }
+    })
+    if (!merchant) {
+      return notFound('商家不存在')
+    }
+
+    const accessible = await hasMerchantAccess(
+      token.sub,
+      merchantId,
+      (token as any).role
+    )
+    if (!accessible) {
+      return notFound('商家不存在或无权访问')
+    }
+
+    if (parentBatchId) {
+      const parentBatch = await prisma.creativeBatch.findFirst({
+        where: { id: parentBatchId, merchantId },
+        select: { id: true }
+      })
+      if (!parentBatch) {
+        return notFound('父批次不存在或无权访问')
+      }
+    }
     const assetsInput = parsed.data.assets.map(
       (asset, index): BatchAssetInput => ({
         role: asset.role,
@@ -87,77 +107,7 @@ export async function POST(request: NextRequest) {
       })
     )
 
-    const reportAsset = assetsInput.find(
-      asset => asset.role === CreativeAssetRole.REPORT
-    )
-    const promptAsset = assetsInput.find(
-      asset => asset.role === CreativeAssetRole.PROMPT
-    )
-
-    if (!reportAsset || !promptAsset) {
-      return validationError('必须同时提供报告和提示资产')
-    }
-
-    // 校验提示/报告资产归属和类型
-    const promptAssetIds = assetsInput
-      .filter(asset => isPromptRole(asset.role))
-      .map(asset => asset.assetId)
-
-    if (promptAssetIds.length) {
-      const promptAssets = await prisma.merchantPromptAsset.findMany({
-        where: {
-          id: { in: promptAssetIds },
-          merchantId
-        },
-        select: { id: true, type: true }
-      })
-
-      const promptAssetMap = new Map(
-        promptAssets.map(asset => [asset.id, asset.type])
-      )
-
-      for (const asset of assetsInput.filter(isPromptRole)) {
-        const recordType = promptAssetMap.get(asset.assetId)
-        if (!recordType) {
-          return validationError(`资产 ${asset.assetId} 不属于该商家`)
-        }
-        if (recordType !== getExpectedPromptType(asset.role)) {
-          return validationError(`资产 ${asset.assetId} 类型与角色不匹配`)
-        }
-      }
-    }
-
-    // 校验引用类资产归属和类型
-    const referenceAssetIds = assetsInput
-      .filter(asset => !isPromptRole(asset.role))
-      .map(asset => asset.assetId)
-
-    if (referenceAssetIds.length) {
-      const referenceAssets = await prisma.referenceAsset.findMany({
-        where: {
-          id: { in: referenceAssetIds },
-          merchantId
-        },
-        select: { id: true, kind: true }
-      })
-
-      const referenceMap = new Map(
-        referenceAssets.map(asset => [asset.id, asset.kind])
-      )
-
-      for (const asset of assetsInput.filter(
-        asset => !isPromptRole(asset.role)
-      )) {
-        const recordKind = referenceMap.get(asset.assetId)
-        if (!recordKind) {
-          return validationError(`引用资产 ${asset.assetId} 不属于该商家`)
-        }
-        if (recordKind !== getExpectedReferenceKind(asset.role)) {
-          return validationError(`引用资产 ${asset.assetId} 类型与角色不匹配`)
-        }
-      }
-    }
-
+    // 仓库层会校验资产归属和类型匹配
     const { batch } = await createBatchWithAssets({
       merchantId,
       triggeredBy: token.sub,
@@ -181,3 +131,92 @@ export async function POST(request: NextRequest) {
 }
 
 export const dynamic = 'force-dynamic'
+
+export async function GET(request: NextRequest) {
+  const token = await getToken({ req: request as any })
+  if (!token?.sub) {
+    return unauthorized('未认证访问')
+  }
+
+  try {
+    const searchParams = new URL(request.url).searchParams
+    const merchantId = searchParams.get('merchantId')
+    if (!merchantId) {
+      return validationError('缺少必填参数 merchantId')
+    }
+
+    const merchant = await prisma.merchant.findUnique({
+      where: { id: merchantId },
+      select: { id: true }
+    })
+    if (!merchant) {
+      return notFound('商家不存在')
+    }
+
+    const accessible = await hasMerchantAccess(
+      token.sub,
+      merchantId,
+      (token as any).role
+    )
+    if (!accessible) {
+      return notFound('商家不存在或无权访问')
+    }
+
+    const { page, pageSize } = extractPaginationParams(searchParams, {
+      page: 1,
+      pageSize: 20
+    })
+    const statusFilters = parseStatusFilter(searchParams)
+
+    const where: any = {
+      merchantId
+    }
+    if (statusFilters.length) {
+      where.status = { in: statusFilters }
+    }
+
+    const skip = (page - 1) * pageSize
+    const [batches, total] = await Promise.all([
+      prisma.creativeBatch.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: pageSize,
+        include: {
+          parent: { select: { id: true, status: true } },
+          _count: {
+            select: {
+              copies: true,
+              exceptions: true
+            }
+          }
+        }
+      }),
+      prisma.creativeBatch.count({ where })
+    ])
+
+    const items = batches.map(batch => ({
+      id: batch.id,
+      merchantId: batch.merchantId,
+      parentBatchId: batch.parentBatchId,
+      parentStatus: batch.parent?.status ?? null,
+      status: batch.status,
+      statusVersion: batch.statusVersion,
+      modelId: batch.modelId,
+      triggeredBy: batch.triggeredBy,
+      startedAt: batch.startedAt,
+      completedAt: batch.completedAt,
+      createdAt: batch.createdAt,
+      copyCount: batch._count.copies,
+      exceptionCount: batch._count.exceptions,
+      metadata: batch.metadata as unknown
+    }))
+
+    return paginated(
+      items,
+      calculatePaginationMeta(page, pageSize, total)
+    )
+  } catch (error) {
+    return createErrorResponse(error as Error, generateRequestId())
+  }
+}

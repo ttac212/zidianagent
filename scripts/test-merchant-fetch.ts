@@ -225,3 +225,5 @@ async function main() {
 
 // 运行测试
 main()
+
+export {}

@@ -78,13 +78,27 @@ async function exportMerchantData(options: {
   // 转换为导出格式
   const exportData: MerchantExportData[] = merchants.map(merchant => {
     // 统计各类型内容数量
-    const contentStats = merchant.contents.reduce(
-      (acc, content) => {
-        acc[content.contentType.toLowerCase() + 'Count']++
-        return acc
-      },
-      { videoCount: 0, articleCount: 0, imageCount: 0, audioCount: 0, otherCount: 0 }
-    )
+    const baseStats = {
+      videoCount: 0,
+      articleCount: 0,
+      imageCount: 0,
+      audioCount: 0,
+      otherCount: 0
+    }
+
+    const typeKeyMap: Record<string, keyof typeof baseStats> = {
+      video: 'videoCount',
+      article: 'articleCount',
+      image: 'imageCount',
+      audio: 'audioCount'
+    }
+
+    const contentStats = merchant.contents.reduce((acc, content) => {
+      const normalized = content.contentType.toLowerCase()
+      const key = typeKeyMap[normalized] ?? 'otherCount'
+      acc[key] += 1
+      return acc
+    }, { ...baseStats })
 
     return {
       id: merchant.id,

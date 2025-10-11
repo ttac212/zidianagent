@@ -1,4 +1,5 @@
-import { PrismaClient } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
+import '@/lib/config/env-init'
 
 // 全局变量声明（避免开发环境多次实例化）
 const globalForPrisma = globalThis as unknown as {
@@ -68,4 +69,18 @@ if (process.env.NODE_ENV !== 'production') {
 } else {
   // 生产环境延迟初始化
   setTimeout(() => initializeDatabase().catch(console.warn), 1000)
+}
+
+/**
+ * 将任意值安全转换为 Prisma JSON 输入类型
+ * null/undefined -> Prisma.JsonNull
+ */
+export function toJsonInput(
+  value: unknown
+): Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput {
+  if (value === null || value === undefined) {
+    return Prisma.JsonNull
+  }
+
+  return value as Prisma.InputJsonValue
 }

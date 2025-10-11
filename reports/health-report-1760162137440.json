@@ -1,0 +1,158 @@
+{
+  "timestamp": "2025-10-11T05:55:29.691Z",
+  "checks": {
+    "security": {
+      "passed": true,
+      "issues": [],
+      "score": 100
+    },
+    "codeQuality": {
+      "passed": false,
+      "issues": [
+        {
+          "severity": "medium",
+          "message": "发现 40 个待处理标记(TODO/FIXME/HACK)",
+          "fix": "定期清理技术债务"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: app\\creative\\batches\\[batchId]\\page.tsx (532行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: app\\merchants\\[id]\\page.tsx (616行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: app\\settings\\enhanced-page.tsx (577行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: app\\settings\\page.tsx (530行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: app\\workspace\\page.tsx (600行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: components\\chat\\smart-chat-center.tsx (511行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: components\\ui\\sidebar.tsx (731行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: e2e\\extreme-stress.spec.ts (517行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: lib\\workers\\creative-batch-worker.ts (539行)",
+          "fix": "考虑拆分为更小的模块"
+        },
+        {
+          "severity": "low",
+          "message": "文件过大: scripts\\diagnose-usage-stats.ts (546行)",
+          "fix": "考虑拆分为更小的模块"
+        }
+      ],
+      "score": 0
+    },
+    "performance": {
+      "passed": false,
+      "issues": [
+        {
+          "severity": "low",
+          "message": "发现 1 个未优化的大图片",
+          "fix": "使用图片压缩工具或Next.js Image组件"
+        }
+      ],
+      "score": 85
+    },
+    "dependencies": {
+      "passed": true,
+      "issues": [],
+      "score": 100
+    },
+    "testing": {
+      "passed": true,
+      "issues": [],
+      "score": 45.3125
+    }
+  },
+  "score": 66,
+  "issues": [
+    {
+      "severity": "medium",
+      "message": "发现 40 个待处理标记(TODO/FIXME/HACK)",
+      "fix": "定期清理技术债务"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: app\\creative\\batches\\[batchId]\\page.tsx (532行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: app\\merchants\\[id]\\page.tsx (616行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: app\\settings\\enhanced-page.tsx (577行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: app\\settings\\page.tsx (530行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: app\\workspace\\page.tsx (600行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: components\\chat\\smart-chat-center.tsx (511行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: components\\ui\\sidebar.tsx (731行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: e2e\\extreme-stress.spec.ts (517行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: lib\\workers\\creative-batch-worker.ts (539行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "文件过大: scripts\\diagnose-usage-stats.ts (546行)",
+      "fix": "考虑拆分为更小的模块"
+    },
+    {
+      "severity": "low",
+      "message": "发现 1 个未优化的大图片",
+      "fix": "使用图片压缩工具或Next.js Image组件"
+    }
+  ],
+  "suggestions": [
+    "项目健康度中等，建议制定改进计划"
+  ]
+}

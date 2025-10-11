@@ -334,3 +334,5 @@ main().catch((error) => {
   console.error('❌ 执行失败:', error instanceof Error ? error.message : error)
   process.exitCode = 1
 })
+
+export {}

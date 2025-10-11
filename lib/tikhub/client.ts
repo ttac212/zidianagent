@@ -116,13 +116,13 @@ export class TikHubClient {
       }
 
       // 可重试的错误
-      const retryableErrors = [
+      const retryableErrors = new Set<number>([
         TIKHUB_ERROR_CODES.RATE_LIMIT,
         TIKHUB_ERROR_CODES.SERVER_ERROR,
         TIKHUB_ERROR_CODES.SERVICE_UNAVAILABLE,
-      ]
+      ])
 
-      if (retryableErrors.includes(response.status) && retryCount < this.maxRetries) {
+      if (retryableErrors.has(response.status) && retryCount < this.maxRetries) {
         // 计算退避延迟
         const delay = this.retryDelay * Math.pow(2, retryCount)
         await this.sleep(delay)

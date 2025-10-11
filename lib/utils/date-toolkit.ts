@@ -69,6 +69,29 @@ export function parse(dateString: string | Date | null | undefined): Date | null
 }
 
 /**
+ * 安全解析任意日期输入
+ */
+export function safeDate(
+  value: Date | string | number | null | undefined
+): Date | null {
+  if (value === null || value === undefined) {
+    return null
+  }
+
+  if (value instanceof Date) {
+    return isValid(value) ? value : null
+  }
+
+  const timestamp = typeof value === 'number' ? value : Date.parse(String(value))
+  if (!Number.isFinite(timestamp)) {
+    return null
+  }
+
+  const date = new Date(timestamp)
+  return isValid(date) ? date : null
+}
+
+/**
  * 检查日期是否有效
  */
 export function isValid(date: any): date is Date {
@@ -402,6 +425,7 @@ const dateToolkit = {
   toTimeString,
   toLocal,
   parse,
+  safeDate,
   isValid,
   compare,
   sortByDate,

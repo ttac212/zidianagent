@@ -1,4 +1,4 @@
-import { describe, expect, beforeEach, it, vi } from 'vitest'
+import { describe, expect, beforeAll, beforeEach, it, vi } from 'vitest'
 import {
   CreativeAssetRole,
   CreativeBatchStatus,
@@ -8,6 +8,7 @@ import {
 
 const merchantPromptAssetMock = {
   findFirst: vi.fn(),
+  findMany: vi.fn(),
   create: vi.fn(),
   updateMany: vi.fn(),
   update: vi.fn(),
@@ -24,28 +25,41 @@ const creativeBatchAssetMock = {
   createMany: vi.fn()
 }
 
+const referenceAssetMock = {
+  findMany: vi.fn()
+}
+
 const mockPrisma = {
   $transaction: vi.fn(),
   merchantPromptAsset: merchantPromptAssetMock,
   creativeBatch: creativeBatchMock,
-  creativeBatchAsset: creativeBatchAssetMock
+  creativeBatchAsset: creativeBatchAssetMock,
+  referenceAsset: referenceAssetMock
 } as unknown as {
   $transaction: ReturnType<typeof vi.fn>
   merchantPromptAsset: typeof merchantPromptAssetMock
   creativeBatch: typeof creativeBatchMock
   creativeBatchAsset: typeof creativeBatchAssetMock
+  referenceAsset: typeof referenceAssetMock
 }
 
 vi.mock('@/lib/prisma', () => ({
-  prisma: mockPrisma
+  prisma: mockPrisma,
+  toJsonInput: (value: unknown) => value
 }))
 
-const { createPromptAssetVersion } = await import(
-  '@/lib/repositories/prompt-asset-repository'
-)
-const { createBatchWithAssets, updateBatchStatus } = await import(
-  '@/lib/repositories/creative-batch-repository'
-)
+let createPromptAssetVersion: typeof import('@/lib/repositories/prompt-asset-repository')['createPromptAssetVersion']
+let createBatchWithAssets: typeof import('@/lib/repositories/creative-batch-repository')['createBatchWithAssets']
+let updateBatchStatus: typeof import('@/lib/repositories/creative-batch-repository')['updateBatchStatus']
+
+beforeAll(async () => {
+  const promptRepo = await import('@/lib/repositories/prompt-asset-repository')
+  createPromptAssetVersion = promptRepo.createPromptAssetVersion
+
+  const batchRepo = await import('@/lib/repositories/creative-batch-repository')
+  createBatchWithAssets = batchRepo.createBatchWithAssets
+  updateBatchStatus = batchRepo.updateBatchStatus
+})
 
 describe('Batch repositories', () => {
   beforeEach(() => {
@@ -104,10 +118,21 @@ describe('Batch repositories', () => {
     creativeBatchAssetMock.createMany.mockResolvedValue({ count: 3 })
     creativeBatchMock.findUnique.mockResolvedValue(undefined)
 
+    // Mock 资产归属校验
+    merchantPromptAssetMock.findMany.mockResolvedValue([
+      { id: 'report-1', type: PromptAssetType.REPORT },
+      { id: 'prompt-2', type: PromptAssetType.PROMPT }
+    ])
+    referenceAssetMock.findMany.mockResolvedValue([
+      { id: 'ref-3', kind: 'RAW_ATTACHMENT' }
+    ])
+
     mockPrisma.$transaction.mockImplementation(async fn => {
       return fn({
+        merchantPromptAsset: merchantPromptAssetMock,
         creativeBatch: creativeBatchMock,
-        creativeBatchAsset: creativeBatchAssetMock
+        creativeBatchAsset: creativeBatchAssetMock,
+        referenceAsset: referenceAssetMock
       } as any)
     })
 
@@ -176,10 +201,18 @@ describe('Batch repositories', () => {
       status: CreativeBatchStatus.SUCCEEDED
     })
 
+    // Mock 资产归属校验（会先执行）
+    merchantPromptAssetMock.findMany.mockResolvedValue([
+      { id: 'report-1', type: PromptAssetType.REPORT },
+      { id: 'prompt-2', type: PromptAssetType.PROMPT }
+    ])
+
     mockPrisma.$transaction.mockImplementation(async fn => {
       return fn({
+        merchantPromptAsset: merchantPromptAssetMock,
         creativeBatch: creativeBatchMock,
-        creativeBatchAsset: creativeBatchAssetMock
+        creativeBatchAsset: creativeBatchAssetMock,
+        referenceAsset: referenceAssetMock
       } as any)
     })
 
@@ -220,5 +253,103 @@ describe('Batch repositories', () => {
     expect(updateArgs.data.completedAt).toBeNull()
     expect(updateArgs.data.errorCode).toBeNull()
     expect(updateArgs.data.tokenUsage).toEqual({ prompt: 100, completion: 200 })
+  })
+
+  it('rejects when prompt asset does not belong to merchant', async () => {
+    merchantPromptAssetMock.findMany.mockResolvedValue([
+      // 只返回一个资产，另一个不属于该商家
+      { id: 'prompt-1', type: PromptAssetType.PROMPT }
+    ])
+
+    creativeBatchMock.findUnique.mockResolvedValue(undefined)
+
+    mockPrisma.$transaction.mockImplementation(async fn => {
+      return fn({
+        merchantPromptAsset: merchantPromptAssetMock,
+        creativeBatch: creativeBatchMock,
+        creativeBatchAsset: creativeBatchAssetMock,
+        referenceAsset: referenceAssetMock
+      } as any)
+    })
+
+    await expect(
+      createBatchWithAssets({
+        merchantId: 'merchant-A',
+        triggeredBy: 'user-1',
+        assets: [
+          { role: CreativeAssetRole.REPORT, assetId: 'report-from-merchant-B' },
+          { role: CreativeAssetRole.PROMPT, assetId: 'prompt-1' }
+        ]
+      })
+    ).rejects.toThrow(/do not belong to merchant/)
+
+    expect(creativeBatchMock.create).not.toHaveBeenCalled()
+  })
+
+  it('rejects when reference asset does not belong to merchant', async () => {
+    merchantPromptAssetMock.findMany.mockResolvedValue([
+      { id: 'report-1', type: PromptAssetType.REPORT },
+      { id: 'prompt-1', type: PromptAssetType.PROMPT }
+    ])
+
+    referenceAssetMock.findMany.mockResolvedValue([
+      // 缺少一个资产
+    ])
+
+    creativeBatchMock.findUnique.mockResolvedValue(undefined)
+
+    mockPrisma.$transaction.mockImplementation(async fn => {
+      return fn({
+        merchantPromptAsset: merchantPromptAssetMock,
+        creativeBatch: creativeBatchMock,
+        creativeBatchAsset: creativeBatchAssetMock,
+        referenceAsset: referenceAssetMock
+      } as any)
+    })
+
+    await expect(
+      createBatchWithAssets({
+        merchantId: 'merchant-A',
+        triggeredBy: 'user-1',
+        assets: [
+          { role: CreativeAssetRole.REPORT, assetId: 'report-1' },
+          { role: CreativeAssetRole.PROMPT, assetId: 'prompt-1' },
+          { role: CreativeAssetRole.ATTACHMENT, assetId: 'attachment-from-merchant-B' }
+        ]
+      })
+    ).rejects.toThrow(/do not belong to merchant/)
+
+    expect(creativeBatchMock.create).not.toHaveBeenCalled()
+  })
+
+  it('rejects when asset type does not match role', async () => {
+    merchantPromptAssetMock.findMany.mockResolvedValue([
+      { id: 'report-1', type: PromptAssetType.PROMPT },  // 类型错误
+      { id: 'prompt-1', type: PromptAssetType.PROMPT }
+    ])
+
+    creativeBatchMock.findUnique.mockResolvedValue(undefined)
+
+    mockPrisma.$transaction.mockImplementation(async fn => {
+      return fn({
+        merchantPromptAsset: merchantPromptAssetMock,
+        creativeBatch: creativeBatchMock,
+        creativeBatchAsset: creativeBatchAssetMock,
+        referenceAsset: referenceAssetMock
+      } as any)
+    })
+
+    await expect(
+      createBatchWithAssets({
+        merchantId: 'merchant-A',
+        triggeredBy: 'user-1',
+        assets: [
+          { role: CreativeAssetRole.REPORT, assetId: 'report-1' },  // 期望 REPORT 类型
+          { role: CreativeAssetRole.PROMPT, assetId: 'prompt-1' }
+        ]
+      })
+    ).rejects.toThrow(/type mismatch/)
+
+    expect(creativeBatchMock.create).not.toHaveBeenCalled()
   })
 })

@@ -1,6 +1,6 @@
 import { Prisma, PromptAssetType } from '@prisma/client'
 
-import { prisma } from '@/lib/prisma'
+import { prisma, toJsonInput } from '@/lib/prisma'
 
 const MAX_VERSION_RETRIES = 5
 
@@ -11,7 +11,7 @@ export interface CreatePromptAssetInput {
   createdBy: string
   content?: string
   referenceAssetId?: string
-  metadata?: Prisma.JsonValue
+  metadata?: unknown
   parentId?: string | null
   activate?: boolean
   maxRetries?: number
@@ -54,7 +54,7 @@ export async function createPromptAssetVersion(
             version: nextVersion,
             content: content ?? null,
             referenceAssetId: referenceAssetId ?? null,
-            metadata: metadata ?? undefined,
+            metadata: metadata === undefined ? undefined : toJsonInput(metadata),
             parentId: parentId ?? undefined,
             createdBy,
             isActive: false

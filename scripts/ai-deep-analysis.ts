@@ -9,6 +9,180 @@ import type {
   AIDeepAnalysisReport,
 } from '@/types/merchant-analysis'
 
+type NormalizedAnalysisSections = Pick<
+  AIDeepAnalysisReport,
+  | 'basicInfo'
+  | 'contentStrategy'
+  | 'advantages'
+  | 'marketingStrategy'
+  | 'contentTechniques'
+  | 'audience'
+  | 'viralContentPatterns'
+  | 'keyInsights'
+  | 'dataSupport'
+>
+
+const DEFAULT_TEXT = 'N/A'
+const DEFAULT_STRING_ARRAY = ['TBD']
+const DEFAULT_TOP_CONTENT_TAKEAWAYS = ['High engagement']
+
+function ensureString(value: unknown, fallback: string = DEFAULT_TEXT): string {
+  return typeof value === 'string' && value.trim().length > 0 ? value : fallback
+}
+
+function ensureNumber(value: unknown, fallback: number = 0): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function ensureStringArray(
+  value: unknown,
+  fallback: string[] = DEFAULT_STRING_ARRAY
+): string[] {
+  if (Array.isArray(value)) {
+    const sanitized = value
+      .filter((item) => typeof item === 'string')
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0)
+    return sanitized.length > 0 ? sanitized : fallback
+  }
+  return fallback
+}
+
+function normalizeTopPerformingContents(
+  contents: unknown
+): AIDeepAnalysisReport['dataSupport']['topPerformingContents'] {
+  if (!Array.isArray(contents)) return []
+
+  return contents.map((item) => ({
+    title: ensureString((item as any)?.title, 'Unknown content'),
+    engagement: ensureNumber((item as any)?.engagement, 0),
+    keyTakeaways: ensureStringArray(
+      (item as any)?.keyTakeaways,
+      DEFAULT_TOP_CONTENT_TAKEAWAYS
+    ),
+  }))
+}
+
+function normalizeViralPatterns(
+  patterns: unknown
+): AIDeepAnalysisReport['viralContentPatterns'] {
+  if (!Array.isArray(patterns)) {
+    return [
+      {
+        patternType: DEFAULT_TEXT,
+        structure: { hook: DEFAULT_TEXT, coreContent: DEFAULT_TEXT, callToAction: DEFAULT_TEXT },
+        examples: DEFAULT_STRING_ARRAY,
+        effectiveness: DEFAULT_TEXT,
+      },
+    ]
+  }
+
+  const normalized = patterns.map((pattern) => {
+    const structure = (pattern as any)?.structure ?? {}
+    return {
+      patternType: ensureString((pattern as any)?.patternType),
+      structure: {
+        hook: ensureString(structure?.hook),
+        coreContent: ensureString(structure?.coreContent),
+        callToAction: ensureString(structure?.callToAction),
+      },
+      examples: ensureStringArray((pattern as any)?.examples),
+      effectiveness: ensureString((pattern as any)?.effectiveness),
+    }
+  })
+
+  return normalized.length > 0
+    ? normalized
+    : [
+        {
+          patternType: DEFAULT_TEXT,
+          structure: {
+            hook: DEFAULT_TEXT,
+            coreContent: DEFAULT_TEXT,
+            callToAction: DEFAULT_TEXT,
+          },
+          examples: DEFAULT_STRING_ARRAY,
+          effectiveness: DEFAULT_TEXT,
+        },
+      ]
+}
+
+function normalizeAnalysisResult(
+  raw: any,
+  request: AIAnalysisRequest
+): NormalizedAnalysisSections {
+  const basicInfo = raw?.basicInfo ?? {}
+  const contentStrategy = raw?.contentStrategy ?? {}
+  const advantages = raw?.advantages ?? {}
+  const marketingStrategy = raw?.marketingStrategy ?? {}
+  const contentTechniques = raw?.contentTechniques ?? {}
+  const audience = raw?.audience ?? {}
+  const keyInsights = raw?.keyInsights ?? {}
+  const dataSupport = raw?.dataSupport ?? {}
+
+  return {
+    basicInfo: {
+      merchantName: ensureString(basicInfo.merchantName, request.merchantName),
+      mainBusiness: ensureString(basicInfo.mainBusiness),
+      coreProducts: ensureStringArray(basicInfo.coreProducts),
+      businessModel: ensureString(basicInfo.businessModel),
+    },
+    contentStrategy: {
+      videoContentTypes: ensureStringArray(contentStrategy.videoContentTypes),
+      publishFrequency: ensureString(contentStrategy.publishFrequency),
+      presentationStyle: ensureStringArray(contentStrategy.presentationStyle),
+      keyThemes: ensureStringArray(contentStrategy.keyThemes),
+    },
+    advantages: {
+      costAdvantage: ensureString(advantages.costAdvantage),
+      convenience: ensureStringArray(advantages.convenience),
+      customization: ensureString(advantages.customization),
+      qualityAssurance: ensureStringArray(advantages.qualityAssurance),
+    },
+    marketingStrategy: {
+      trustBuilding: ensureStringArray(marketingStrategy.trustBuilding),
+      differentiation: ensureStringArray(marketingStrategy.differentiation),
+      conversionPath: ensureStringArray(marketingStrategy.conversionPath),
+      promotionTactics: ensureStringArray(marketingStrategy.promotionTactics),
+    },
+    contentTechniques: {
+      visualPresentation: ensureStringArray(contentTechniques.visualPresentation),
+      languageStyle: ensureStringArray(contentTechniques.languageStyle),
+      interactionDesign: ensureStringArray(contentTechniques.interactionDesign),
+      emotionalAppeal: ensureStringArray(contentTechniques.emotionalAppeal),
+    },
+    audience: {
+      primaryRegions: ensureStringArray(audience.primaryRegions),
+      coreNeeds: ensureStringArray(audience.coreNeeds),
+      consumerPsychology: ensureStringArray(audience.consumerPsychology),
+      painPoints: ensureStringArray(audience.painPoints),
+    },
+    viralContentPatterns: normalizeViralPatterns(raw?.viralContentPatterns),
+    keyInsights: {
+      strengthsAnalysis: ensureStringArray(keyInsights.strengthsAnalysis),
+      improvementSuggestions: ensureStringArray(keyInsights.improvementSuggestions),
+      contentRecommendations: ensureStringArray(keyInsights.contentRecommendations),
+      competitiveEdge: ensureStringArray(keyInsights.competitiveEdge),
+    },
+    dataSupport: {
+      contentCount: ensureNumber(dataSupport.contentCount, request.transcripts.length),
+      avgEngagement: ensureNumber(dataSupport.avgEngagement, 0),
+      topPerformingContents: normalizeTopPerformingContents(
+        dataSupport.topPerformingContents
+      ),
+    },
+  }
+}
+
+function getTotalEngagement(transcript: AIAnalysisRequest['transcripts'][number]): number {
+  return (
+    transcript.engagement.diggCount +
+    transcript.engagement.commentCount +
+    transcript.engagement.collectCount +
+    transcript.engagement.shareCount
+  )
+}
+
 /**
  * 构建AI分析的Prompt
  */
@@ -240,43 +414,38 @@ export async function performAIDeepAnalysis(
 
     // 4. 解析响应
     console.log('📊 解析AI响应...')
-    const analysisResult = parseLLMResponse(content)
+    const rawAnalysisResult = parseLLMResponse(content)
+    const normalizedResult = normalizeAnalysisResult(rawAnalysisResult, request)
 
     // 5. 计算数据支持
     const totalEngagement = request.transcripts.reduce(
-      (sum, t) =>
-        sum +
-        t.engagement.diggCount +
-        t.engagement.commentCount +
-        t.engagement.collectCount +
-        t.engagement.shareCount,
+      (sum, transcript) => sum + getTotalEngagement(transcript),
       0
     )
     const avgEngagement = Math.round(totalEngagement / request.transcripts.length)
 
     // 找出TOP 3内容
     const topContents = [...request.transcripts]
-      .sort(
-        (a, b) =>
-          b.engagement.diggCount +
-          b.engagement.commentCount -
-          (a.engagement.diggCount + a.engagement.commentCount)
-      )
+      .sort((a, b) => getTotalEngagement(b) - getTotalEngagement(a))
       .slice(0, 3)
 
-    analysisResult.dataSupport.avgEngagement = avgEngagement
-    analysisResult.dataSupport.topPerformingContents = topContents.map((t) => ({
-      title: t.title,
-      engagement:
-        t.engagement.diggCount +
-        t.engagement.commentCount +
-        t.engagement.collectCount +
-        t.engagement.shareCount,
-      keyTakeaways:
-        analysisResult.dataSupport.topPerformingContents?.find(
-          (tc: any) => tc.title === t.title
-        )?.keyTakeaways || ['高互动内容'],
-    }))
+    const existingTakeaways = new Map(
+      normalizedResult.dataSupport.topPerformingContents.map((item) => [
+        item.title,
+        item.keyTakeaways.length > 0 ? item.keyTakeaways : DEFAULT_TOP_CONTENT_TAKEAWAYS,
+      ])
+    )
+
+    const normalizedDataSupport: AIDeepAnalysisReport['dataSupport'] = {
+      contentCount: request.transcripts.length,
+      avgEngagement,
+      topPerformingContents: topContents.map((transcript) => ({
+        title: transcript.title,
+        engagement: getTotalEngagement(transcript),
+        keyTakeaways:
+          existingTakeaways.get(transcript.title) ?? DEFAULT_TOP_CONTENT_TAKEAWAYS,
+      })),
+    }
 
     // 6. 构建完整报告
     const endTime = Date.now()
@@ -286,15 +455,15 @@ export async function performAIDeepAnalysis(
       merchantId: request.merchantId,
       merchantName: request.merchantName,
       analysisDate: new Date().toISOString(),
-      basicInfo: analysisResult.basicInfo,
-      contentStrategy: analysisResult.contentStrategy,
-      advantages: analysisResult.advantages,
-      marketingStrategy: analysisResult.marketingStrategy,
-      contentTechniques: analysisResult.contentTechniques,
-      audience: analysisResult.audience,
-      viralContentPatterns: analysisResult.viralContentPatterns,
-      keyInsights: analysisResult.keyInsights,
-      dataSupport: analysisResult.dataSupport,
+      basicInfo: normalizedResult.basicInfo,
+      contentStrategy: normalizedResult.contentStrategy,
+      advantages: normalizedResult.advantages,
+      marketingStrategy: normalizedResult.marketingStrategy,
+      contentTechniques: normalizedResult.contentTechniques,
+      audience: normalizedResult.audience,
+      viralContentPatterns: normalizedResult.viralContentPatterns,
+      keyInsights: normalizedResult.keyInsights,
+      dataSupport: normalizedDataSupport,
       aiMetadata: {
         model: 'claude-3-5-sonnet-20241022',
         analysisTokens: tokensUsed,
@@ -356,6 +525,7 @@ export async function batchAIAnalysis(options: {
 
   const reports: AIDeepAnalysisReport[] = []
   let skippedCount = 0
+  const failures: Array<{ merchantId: string; merchantName: string; reason: string }> = []
 
   for (let i = 0; i < merchants.length; i++) {
     const merchant = merchants[i]
@@ -376,9 +546,15 @@ export async function batchAIAnalysis(options: {
       }))
 
     if (transcripts.length === 0) {
-      console.log('⚠️  跳过: 没有转录文本')
-      skippedCount++
-      if (skipNoTranscript) continue
+      const reason = '没有可分析的转录文本'
+      if (skipNoTranscript) {
+        console.log('⚠️  跳过: 没有转录文本')
+        skippedCount++
+      } else {
+        console.warn('⚠️  无法分析: 没有转录文本')
+        failures.push({ merchantId: merchant.id, merchantName: merchant.name, reason })
+      }
+      continue
     }
 
     // 构建请求
@@ -387,8 +563,8 @@ export async function batchAIAnalysis(options: {
       merchantName: merchant.name,
       transcripts,
       basicStats: {
-        category: merchant.category,
-        location: merchant.location,
+        category: merchant.category ?? undefined,
+        location: merchant.location ?? undefined,
         businessType: merchant.businessType,
         totalContentCount: merchant.totalContentCount,
         totalEngagement:
@@ -407,6 +583,11 @@ export async function batchAIAnalysis(options: {
       reports.push(response.report)
     } else {
       console.error(`❌ 分析失败: ${response.error}`)
+      failures.push({
+        merchantId: merchant.id,
+        merchantName: merchant.name,
+        reason: response.error || '未知错误',
+      })
     }
 
     // 避免API速率限制，延迟2秒
@@ -419,6 +600,16 @@ export async function batchAIAnalysis(options: {
   console.log(`\n✅ 批量分析完成`)
   console.log(`   - 成功: ${reports.length}`)
   console.log(`   - 跳过: ${skippedCount}`)
+  if (failures.length > 0) {
+    console.log(`   - 失败: ${failures.length}`)
+    failures.forEach((failure) => {
+      console.log(
+        `     • ${failure.merchantName} (${failure.merchantId}): ${failure.reason}`
+      )
+    })
+  } else {
+    console.log('   - 失败: 0')
+  }
 
   return reports
 }

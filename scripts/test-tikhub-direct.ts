@@ -185,3 +185,5 @@ async function testGetUserVideos(secUid: string) {
 
 // 运行测试
 testAPI().catch(console.error)
+
+export {}

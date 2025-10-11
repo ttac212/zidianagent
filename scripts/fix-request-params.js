@@ -27,8 +27,7 @@ const files = [
   'app/api/metrics/route.ts',
   'app/api/users/route.ts',
   'app/api/merchant-analysis/generate/route.ts',
-  'app/api/debug/ai-test/route.ts',
-  'app/api/debug/env/route.ts'
+  'app/api/debug/ai-test/route.ts'
 ]
 
 let fixed = 0

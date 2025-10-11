@@ -91,11 +91,12 @@ async function diagnoseChatMessages(): Promise<DiagnosticResult[]> {
     console.log('\n3️⃣ 检查数据结构一致性...')
 
     // 检查modelId字段映射
-    const messagesWithModelId = await prisma.message.findMany({
-      where: { modelId: { not: null } },
-      take: 3,
+    const rawMessages = await prisma.message.findMany({
+      take: 5,
       select: { id: true, modelId: true, role: true }
     })
+
+    const messagesWithModelId = rawMessages.filter(msg => msg.modelId)
 
     console.log(`   - 有modelId的消息数量: ${messagesWithModelId.length}`)
     if (messagesWithModelId.length > 0) {
@@ -190,7 +191,7 @@ async function main() {
   const results = await diagnoseChatMessages()
 
   console.log('\n📋 诊断结果总结:')
-  console.log('='*50)
+  console.log('='.repeat(50))
 
   results.forEach((result, index) => {
     const emoji = result.severity === 'high' ? '🔴' : result.severity === 'medium' ? '🟡' : '🟢'

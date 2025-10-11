@@ -4,7 +4,6 @@
  * 负责从TikHub API获取数据并同步到数据库
  */
 
-import { PrismaClient } from '@prisma/client'
 import { TikHubClient, getTikHubClient } from './client'
 import {
   mapUserProfileToMerchant,
@@ -20,8 +19,7 @@ import type {
   DouyinVideo,
 } from './types'
 import * as dt from '@/lib/utils/date-toolkit'
-
-const prisma = new PrismaClient()
+import { prisma, toJsonInput } from '@/lib/prisma'
 
 /**
  * 同步单个商家的数据
@@ -68,7 +66,7 @@ export async function syncMerchantData(
         description: merchantData.description,
         location: merchantData.location,
         address: merchantData.address,
-        contactInfo: merchantData.contactInfo,
+        contactInfo: toJsonInput(merchantData.contactInfo),
         businessType: merchantData.businessType,
         isVerified: merchantData.isVerified,
         lastCollectedAt: dt.now(),
@@ -78,7 +76,10 @@ export async function syncMerchantData(
           },
         }),
       },
-      create: merchantData,
+      create: {
+        ...merchantData,
+        contactInfo: toJsonInput(merchantData.contactInfo),
+      },
     })
 
     // 4. 获取视频列表
