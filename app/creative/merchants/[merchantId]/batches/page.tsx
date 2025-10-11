@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useParams, useRouter } from 'next/navigation'
+import { Header } from '@/components/header'
 import { BatchStatusBadge } from '@/components/creative/batch-status-badge'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -75,14 +76,19 @@ export default function MerchantBatchesPage() {
 
   if (!session) {
     return (
-      <div className="container mx-auto p-8">
-        <p>请先登录</p>
-      </div>
+      <>
+        <Header />
+        <div className="container mx-auto p-8">
+          <p>请先登录</p>
+        </div>
+      </>
     )
   }
 
   return (
-    <div className="container mx-auto p-8">
+    <div className="min-h-screen bg-background">
+      <Header />
+      <div className="container mx-auto p-8">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold">批量文案生成</h1>
@@ -212,6 +218,7 @@ export default function MerchantBatchesPage() {
           })}
         </div>
       )}
+      </div>
     </div>
   )
 }

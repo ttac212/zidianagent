@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { Header } from '@/components/header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -141,9 +142,11 @@ export default function MerchantAnalyticsPage() {
   const { merchant, engagementStats, contentStats, topContent, tagStats } = analytics
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* 页面头部 */}
-      <div className="flex items-center gap-4">
+    <div className="min-h-screen bg-background">
+      <Header />
+      <div className="container mx-auto p-6 space-y-6">
+        {/* 页面头部 */}
+        <div className="flex items-center gap-4">
         <Button variant="ghost" size="sm" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
           返回
@@ -400,8 +403,9 @@ export default function MerchantAnalyticsPage() {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   )
 }

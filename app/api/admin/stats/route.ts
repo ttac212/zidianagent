@@ -18,7 +18,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const timeRange = searchParams.get("timeRange") || "7d"
 
-    // 模拟统计数据
+    // FIXME: 当前使用 Mock 数据，真实 API 待开发
+    // TODO: 接入 Prisma 查询真实的系统统计数据
     const stats = generateMockStats(timeRange)
 
     return success(stats)

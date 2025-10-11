@@ -16,7 +16,8 @@ export async function GET(request: NextRequest) {
     if (!token?.sub) return unauthorized('未认证')
     if ((token as any).role !== "ADMIN") return forbidden('无权限')
 
-    // 模拟 API 密钥数据
+    // FIXME: 当前使用 Mock 数据，真实 API 待开发
+    // TODO: 接入 Prisma 模型查询 ApiKey 表
     const keys = generateMockApiKeys()
 
     // 直接返回数据，success函数会添加包装
@@ -34,6 +35,8 @@ export async function POST(request: NextRequest) {
     if (!token?.sub) return unauthorized('未认证')
     if ((token as any).role !== "ADMIN") return forbidden('无权限创建API密钥')
 
+    // FIXME: 当前使用 Mock 数据，真实 API 待开发
+    // TODO: 实现真实的 API Key 创建逻辑
     const { name, permissions, expiresAt, maxUsage } = await request.json()
 
     // 验证输入参数

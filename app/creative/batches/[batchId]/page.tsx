@@ -15,6 +15,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { AuthGuard } from '@/components/creative/auth-guard'
 import { Header } from '@/components/header'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -26,6 +27,7 @@ import { CopyRegenerateDialog } from '@/components/creative/copy-regenerate-dial
 import { CopyVersionHistoryDialog } from '@/components/creative/copy-version-history-dialog'
 import { BatchRegenerateDialog } from '@/components/creative/batch-regenerate-dialog'
 import { BatchActionsDialog } from '@/components/creative/batch-actions-dialog'
+import { RecommendedCopies } from '@/components/creative/recommended-copies'
 import { useBatchStatusSSE } from '@/hooks/use-batch-status-sse'
 import { ArrowLeft, AlertCircle, RefreshCw, Archive, Trash2, Download } from 'lucide-react'
 import {
@@ -330,7 +332,7 @@ export default function BatchDetailPage() {
   }
 
   return (
-    <>
+    <AuthGuard>
       <Header />
       
       <div className="container mx-auto p-4 md:p-8 space-y-6">
@@ -462,19 +464,34 @@ export default function BatchDetailPage() {
                   </AlertDescription>
                 </Alert>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {batch.copies
-                    .sort((a, b) => a.sequence - b.sequence)
-                    .map(copy => (
-                      <CopyCard
-                        key={copy.id}
-                        copy={copy}
-                        onEdit={() => setEditingCopy(copy)}
-                        onRegenerate={() => setRegeneratingCopy(copy)}
-                        onUpdateState={handleUpdateState}
-                        onViewHistory={(copyId) => setHistoryViewingCopyId(copyId)}
-                      />
-                    ))}
+                <div className="space-y-6">
+                  {/* 推荐Top 3 */}
+                  {batch.copies.length >= 3 && (
+                    <RecommendedCopies 
+                      copies={batch.copies}
+                      onScrollToCopy={(copyId) => {
+                        const element = document.getElementById(`copy-${copyId}`)
+                        element?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                      }}
+                    />
+                  )}
+
+                  {/* 文案网格 */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {batch.copies
+                      .sort((a, b) => a.sequence - b.sequence)
+                      .map(copy => (
+                        <div key={copy.id} id={`copy-${copy.id}`}>
+                          <CopyCard
+                            copy={copy}
+                            onEdit={() => setEditingCopy(copy)}
+                            onRegenerate={() => setRegeneratingCopy(copy)}
+                            onUpdateState={handleUpdateState}
+                            onViewHistory={(copyId) => setHistoryViewingCopyId(copyId)}
+                          />
+                        </div>
+                      ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -525,6 +542,6 @@ export default function BatchDetailPage() {
         onClose={() => setBatchAction({ action: null, batchId: null })}
         onConfirm={handleBatchAction}
       />
-    </>
+    </AuthGuard>
   )
 }

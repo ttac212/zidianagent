@@ -12,8 +12,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Search, Plus, Edit, Trash2, Key, Users } from "lucide-react"
+import { Search, Plus, Edit, Trash2, Users } from "lucide-react"
 import { toast } from "@/lib/toast/toast"
+import { useSession } from "next-auth/react"
 
 interface User {
   id: string
@@ -29,66 +30,123 @@ interface User {
 }
 
 export function UserManagement() {
+  const { data: session } = useSession()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [editingUser, setEditingUser] = useState<User | null>(null)
   // 使用统一的toast API
 
   const fetchUsers = async () => {
     try {
       setLoading(true)
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      
+      const params = new URLSearchParams({
+        page: '1',
+        limit: '100',
+        status: statusFilter,
+        search: searchTerm
+      })
 
-      const mockUsers: User[] = [
-        {
-          id: "1",
-          username: "admin",
-          email: "admin@example.com",
-          role: "admin",
-          status: "active",
-          permissions: ["chat", "documents", "trending", "admin"],
-          createdAt: "2024-01-01T00:00:00Z",
-          lastLoginAt: "2024-01-15T10:30:00Z",
-          totalSessions: 156,
-          totalTokensUsed: 45000,
-        },
-        {
-          id: "2",
-          username: "user1",
-          email: "user1@example.com",
-          role: "user",
-          status: "active",
-          permissions: ["chat", "documents"],
-          createdAt: "2024-01-05T00:00:00Z",
-          lastLoginAt: "2024-01-14T15:20:00Z",
-          totalSessions: 89,
-          totalTokensUsed: 12000,
-        },
-      ]
+      const response = await fetch(`/api/admin/users?${params.toString()}`)
+      
+      if (!response.ok) {
+        throw new Error(`API 错误: ${response.status}`)
+      }
 
-      setUsers(mockUsers)
-    } catch (_error) {
+      const data = await response.json()
+      
+      if (data.success && Array.isArray(data.data?.users)) {
+        setUsers(data.data.users)
+      } else {
+        throw new Error('响应格式异常')
+      }
+    } catch (error: any) {
+      console.error('获取用户列表失败:', error)
       toast.error("获取用户列表失败", {
-        description: "请稍后重试"
+        description: error.message || "请稍后重试"
       })
     } finally {
       setLoading(false)
     }
   }
 
+  // 编辑用户
+  const handleEdit = (user: User) => {
+    setEditingUser(user)
+  }
+
+  // 保存编辑
+  const handleSaveEdit = async (updates: Partial<User>) => {
+    if (!editingUser) return
+
+    try {
+      const response = await fetch(`/api/admin/users/${editingUser.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || '更新失败')
+      }
+
+      toast.success("更新成功", {
+        description: "用户信息已更新"
+      })
+      setEditingUser(null)
+      fetchUsers()
+    } catch (error: any) {
+      toast.error("更新失败", {
+        description: error.message || "请稍后重试"
+      })
+    }
+  }
+
+  // 删除用户
+  const handleDelete = async (userId: string) => {
+    // 防止删除自己
+    if (session?.user && (session.user as any).id === userId) {
+      toast.error("操作失败", {
+        description: "不能删除自己的账号"
+      })
+      return
+    }
+
+    if (!confirm('确定要删除此用户吗？此操作不可恢复。')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/admin/users/${userId}`, {
+        method: 'DELETE'
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || '删除失败')
+      }
+
+      toast.success("删除成功", {
+        description: "用户已删除"
+      })
+      fetchUsers()
+    } catch (error: any) {
+      toast.error("删除失败", {
+        description: error.message || "请稍后重试"
+      })
+    }
+  }
+
   useEffect(() => {
     fetchUsers()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, searchTerm])
 
-  const filteredUsers = users.filter((user) => {
-    const matchesSearch =
-      user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === "all" || user.status === statusFilter
-    return matchesSearch && matchesStatus
-  })
+  const filteredUsers = users  // 已在 API 层过滤，前端不需要再过滤
 
   const formatDate = (dateString: string | null): string => {
     if (!dateString) return "从未登录"
@@ -239,13 +297,21 @@ export function UserManagement() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="sm">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => handleEdit(user)}
+                          title="编辑用户"
+                        >
                           <Edit className="h-3 w-3" />
                         </Button>
-                        <Button variant="ghost" size="sm">
-                          <Key className="h-3 w-3" />
-                        </Button>
-                        <Button variant="ghost" size="sm">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => handleDelete(user.id)}
+                          title="删除用户"
+                          disabled={user.id === (token as any)?.sub}
+                        >
                           <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
@@ -259,7 +325,107 @@ export function UserManagement() {
 
         <div className="text-sm text-muted-foreground">显示 {filteredUsers.length} 个用户</div>
       </CardContent>
+
+      {/* 编辑用户对话框 */}
+      {editingUser && (
+        <Dialog open={!!editingUser} onOpenChange={() => setEditingUser(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>编辑用户</DialogTitle>
+            </DialogHeader>
+            <EditUserForm
+              user={editingUser}
+              onSave={handleSaveEdit}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </Card>
+  )
+}
+
+function EditUserForm({ 
+  user, 
+  onSave 
+}: { 
+  user: User
+  onSave: (updates: Partial<User>) => Promise<void>
+}) {
+  const [formData, setFormData] = useState({
+    role: user.role,
+    status: user.status,
+    monthlyTokenLimit: user.monthlyTokenLimit || 100000,
+  })
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+
+    try {
+      await onSave(formData)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label>用户名（不可修改）</Label>
+        <Input value={user.username} disabled />
+      </div>
+
+      <div className="space-y-2">
+        <Label>邮箱（不可修改）</Label>
+        <Input value={user.email} disabled />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="role">角色</Label>
+        <Select value={formData.role} onValueChange={(value) => setFormData((prev) => ({ ...prev, role: value }))}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="user">普通用户</SelectItem>
+            <SelectItem value="premium">高级用户</SelectItem>
+            <SelectItem value="admin">管理员</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="status">状态</Label>
+        <Select value={formData.status} onValueChange={(value) => setFormData((prev) => ({ ...prev, status: value }))}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="active">活跃</SelectItem>
+            <SelectItem value="inactive">非活跃</SelectItem>
+            <SelectItem value="suspended">已暂停</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="monthlyTokenLimit">月度Token限额</Label>
+        <Input
+          id="monthlyTokenLimit"
+          type="number"
+          value={formData.monthlyTokenLimit}
+          onChange={(e) => setFormData((prev) => ({ ...prev, monthlyTokenLimit: Number(e.target.value) }))}
+          min={0}
+        />
+      </div>
+
+      <div className="flex justify-end gap-2">
+        <Button type="submit" disabled={loading}>
+          {loading ? "保存中..." : "保存更改"}
+        </Button>
+      </div>
+    </form>
   )
 }
 
@@ -286,15 +452,29 @@ function CreateUserForm({ onSuccess }: { onSuccess: () => void }) {
     setLoading(true)
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      const response = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: formData.username,
+          email: formData.email,
+          role: formData.role,
+          displayName: formData.username,
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || '创建失败')
+      }
 
       toast.success("创建成功", {
         description: "用户已创建"
       })
       onSuccess()
-    } catch (_error) {
+    } catch (error: any) {
       toast.error("创建失败", {
-        description: "请稍后重试"
+        description: error.message || "请稍后重试"
       })
     } finally {
       setLoading(false)

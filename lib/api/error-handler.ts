@@ -181,6 +181,30 @@ export function requireAuth(token: any, role?: string): ApiError | null {
 }
 
 /**
+ * 中间件工具：商家访问权限检查
+ * 检查用户是否有权访问指定商家的数据
+ */
+export async function checkMerchantAccess(_userId: string, _merchantId: string): Promise<boolean> {
+  // FIXME: 当前简化实现，允许所有登录用户访问
+  // TODO: 实现真实的商家-用户关联检查
+  // 1. 检查用户是否是商家所有者
+  // 2. 检查用户是否在商家的协作者列表中
+  // 3. ADMIN 角色可以访问所有商家
+  
+  // const prisma = require('@/lib/prisma').prisma
+  // const merchant = await prisma.merchant.findUnique({
+  //   where: { id: merchantId },
+  //   include: { owner: true, collaborators: true }
+  // })
+  // 
+  // if (!merchant) return false
+  // if (merchant.ownerId === userId) return true
+  // if (merchant.collaborators.some(c => c.userId === userId)) return true
+  
+  return true  // 临时：允许所有登录用户
+}
+
+/**
  * 中间件工具：输入验证
  */
 export function validateInput(data: any, required: string[]): ApiError | null {

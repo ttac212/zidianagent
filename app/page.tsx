@@ -85,10 +85,10 @@ export default function HomePage() {
                 <Link href={workspaceTarget}>开始创作</Link>
               </Button>
               <Button asChild variant="outline" size="lg" className="px-12 py-3 text-lg bg-transparent">
-                <Link href="/inspiration">浏览灵感库</Link>
+                <Link href="/merchants">商家中心</Link>
               </Button>
               <Button asChild variant="ghost" size="lg" className="px-10 py-3 text-lg hidden sm:inline-flex">
-                <Link href="/help">了解平台</Link>
+                <Link href="/creative">创意中心</Link>
               </Button>
             </div>
           </div>
@@ -242,7 +242,7 @@ export default function HomePage() {
               <Link href={workspaceTarget}>立即开始</Link>
             </Button>
             <Button asChild variant="outline" size="lg" className="px-12 py-3 text-lg bg-transparent">
-              <Link href="/inspiration">浏览灵感库</Link>
+              <Link href="/merchants">商家中心</Link>
             </Button>
           </div>
         </div>
@@ -265,11 +265,11 @@ export default function HomePage() {
                 <Link href={workspaceTarget} className="block text-muted-foreground hover:text-primary transition-colors">
                   创作工作台
                 </Link>
-                <Link href="/inspiration" className="block text-muted-foreground hover:text-primary transition-colors">
-                  灵感库
+                <Link href="/merchants" className="block text-muted-foreground hover:text-primary transition-colors">
+                  商家中心
                 </Link>
-                <Link href="/documents" className="block text-muted-foreground hover:text-primary transition-colors">
-                  文档管理
+                <Link href="/creative" className="block text-muted-foreground hover:text-primary transition-colors">
+                  创意中心
                 </Link>
               </div>
             </div>
@@ -277,14 +277,11 @@ export default function HomePage() {
             <div>
               <h4 className="font-semibold text-foreground mb-6 text-lg">支持</h4>
               <div className="space-y-3">
-                <Link href="/help" className="block text-muted-foreground hover:text-primary transition-colors">
-                  帮助中心
-                </Link>
-                <Link href="/feedback" className="block text-muted-foreground hover:text-primary transition-colors">
-                  意见反馈
-                </Link>
                 <Link href="/settings" className="block text-muted-foreground hover:text-primary transition-colors">
                   设置
+                </Link>
+                <Link href="/admin" className="block text-muted-foreground hover:text-primary transition-colors">
+                  管理后台
                 </Link>
               </div>
             </div>

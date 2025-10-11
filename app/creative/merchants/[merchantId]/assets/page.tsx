@@ -13,6 +13,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { AuthGuard } from '@/components/creative/auth-guard'
 import { Header } from '@/components/header'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -204,7 +205,7 @@ export default function MerchantAssetsPage() {
   }
 
   return (
-    <>
+    <AuthGuard>
       <Header />
       
       <div className="container mx-auto p-4 md:p-8 space-y-6">
@@ -355,6 +356,6 @@ export default function MerchantAssetsPage() {
         asset={viewingAsset}
         onClose={() => setViewingAsset(null)}
       />
-    </>
+    </AuthGuard>
   )
 }
