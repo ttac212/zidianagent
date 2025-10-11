@@ -97,7 +97,8 @@ function SmartChatCenterInternal({
       // 显式处理空消息情况
       dispatch({ type: 'SET_MESSAGES', payload: [] })
     }
-  }, [conversation?.messages, conversation?.id, conversationId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversation?.messages, conversationId]) // conversation.id 变化时 conversationId 也会变，无需重复依赖。conversation 对象每次都是新引用，会导致无限循环
 
   // 同步对话模型状态 - 只在对话切换或首次加载时生效，避免覆盖用户手动选择
   React.useEffect(() => {
@@ -402,7 +403,7 @@ function SmartChatCenterInternal({
         }
       }
     }
-  }, [setSelectedModel, conversationId, onUpdateConversation])
+  }, [setSelectedModel, conversationId, onUpdateConversation, conversation?.model])
 
   // 滚动管理
   const { scrollAreaRef, scrollToBottom: _scrollToBottom } = useChatScroll({
