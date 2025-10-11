@@ -44,7 +44,7 @@ export function BatchRegenerateDialog({
       setLoading(true)
       await onRegenerate(appendPrompt || undefined)
       handleClose()
-    } catch (error) {
+    } catch {
       // 错误由父组件处理
     } finally {
       setLoading(false)

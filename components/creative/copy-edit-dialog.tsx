@@ -51,7 +51,7 @@ export function CopyEditDialog({ open, copy, onClose, onSave }: CopyEditDialogPr
       setLoading(true)
       await onSave(copy.id, editContent, note || undefined)
       onClose()
-    } catch (error) {
+    } catch {
       // 错误由父组件处理
     } finally {
       setLoading(false)

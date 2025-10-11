@@ -5,13 +5,12 @@
  * 检查TikHub API连接状态和用户配额
  */
 
-import { NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/auth'
 import { getTikHubClient } from '@/lib/tikhub'
 import * as HttpResponse from '@/lib/api/http-response'
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // 1. 验证用户权限
     const session = await getServerSession(authOptions)

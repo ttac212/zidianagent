@@ -12,8 +12,8 @@ interface BatchStatusBadgeProps {
   className?: string
 }
 
-export function BatchStatusBadge({ status, copyCount, className }: BatchStatusBadgeProps) {
-  const config = getStatusConfig(status, copyCount)
+export function BatchStatusBadge({ status, copyCount: _copyCount, className }: BatchStatusBadgeProps) {
+  const config = getStatusConfig(status, _copyCount)
 
   return (
     <Badge 
@@ -22,14 +22,14 @@ export function BatchStatusBadge({ status, copyCount, className }: BatchStatusBa
     >
       {config.icon && <config.icon className="mr-1 h-3 w-3" />}
       {config.label}
-      {status === 'PARTIAL_SUCCESS' && copyCount !== undefined && (
-        <span className="ml-1 text-xs">({copyCount}/5)</span>
+      {status === 'PARTIAL_SUCCESS' && _copyCount !== undefined && (
+        <span className="ml-1 text-xs">({_copyCount}/5)</span>
       )}
     </Badge>
   )
 }
 
-function getStatusConfig(status: CreativeBatchStatus, copyCount?: number) {
+function getStatusConfig(status: CreativeBatchStatus, _copyCount?: number) {
   switch (status) {
     case 'QUEUED':
       return {

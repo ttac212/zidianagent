@@ -54,7 +54,7 @@ export function BatchActionsDialog({
       setLoading(true)
       await onConfirm(batchId, action)
       onClose()
-    } catch (error) {
+    } catch {
       // 错误由父组件处理
     } finally {
       setLoading(false)

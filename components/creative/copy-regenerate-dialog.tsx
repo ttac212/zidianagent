@@ -46,7 +46,7 @@ export function CopyRegenerateDialog({
       setLoading(true)
       await onRegenerate(copy.id, mode, appendPrompt || undefined)
       onClose()
-    } catch (error) {
+    } catch {
       // 错误由父组件处理
     } finally {
       setLoading(false)

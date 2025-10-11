@@ -259,8 +259,8 @@ function SmartChatCenterInternal({
           }
         }
       )
-    } catch (error) {
-      console.error('Failed to load older messages:', error)
+    } catch (_error) {
+      console.error('Failed to load older messages:', _error)
       toast.error('加载历史消息失败', { description: '请稍后重试' })
     } finally {
       setIsHistoryLoading(false)
@@ -309,7 +309,7 @@ function SmartChatCenterInternal({
         if (onSelectConversation && activeConversationId) {
           onSelectConversation(activeConversationId)
         }
-      } catch (error) {
+      } catch {
         toast.error('创建对话失败，请重试')
         return
       }
@@ -349,8 +349,8 @@ function SmartChatCenterInternal({
         // 成功后才关闭编辑状态
         dispatch({ type: 'SET_EDITING_TITLE', payload: false })
         dispatch({ type: 'SET_TEMP_TITLE', payload: '' })
-      } catch (error) {
-        console.error('Failed to update conversation title:', error)
+      } catch (_error) {
+        console.error('Failed to update conversation title:', _error)
         toast.error('标题更新失败，请重试')
         // 发生错误时不关闭编辑状态，让用户可以重试
       }
@@ -392,8 +392,8 @@ function SmartChatCenterInternal({
           })
           // 标记为已持久化，防止后续effect覆盖用户选择
           setIsModelSynced(true)
-        } catch (error) {
-          console.error('Failed to update conversation model:', error)
+        } catch (_error) {
+          console.error('Failed to update conversation model:', _error)
           toast.error('模型切换失败，设置未保存')
           // 失败时重置模型选择到原来的值
           if (conversation?.model) {

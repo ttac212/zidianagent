@@ -15,7 +15,6 @@ import {
 import type {
   MerchantSyncTask,
   BatchSyncConfig,
-  DouyinUserProfile,
   DouyinVideo,
 } from './types'
 import * as dt from '@/lib/utils/date-toolkit'

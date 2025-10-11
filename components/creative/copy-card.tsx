@@ -52,7 +52,7 @@ export function CopyCard({ copy, onEdit, onRegenerate, onUpdateState, onViewHist
       setCopying(true)
       await navigator.clipboard.writeText(copy.markdownContent)
       toast.success('已复制到剪贴板')
-    } catch (error) {
+    } catch {
       toast.error('复制失败')
     } finally {
       setCopying(false)

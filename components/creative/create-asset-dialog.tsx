@@ -40,7 +40,6 @@ interface CreateAssetDialogProps {
 export function CreateAssetDialog({ 
   open, 
   mode,
-  assetType,
   assetTypeLabel,
   initialData,
   onClose, 
@@ -72,7 +71,7 @@ export function CreateAssetDialog({
       setLoading(true)
       await onSave({ title, content, setAsActive })
       handleClose()
-    } catch (error) {
+    } catch {
       // 错误由父组件处理
     } finally {
       setLoading(false)
