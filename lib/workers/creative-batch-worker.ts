@@ -32,7 +32,7 @@ export async function processBatch(input: BatchWorkerInput): Promise<void> {
 
   // 结构化日志，生产环境可通过日志级别控制
   if (process.env.NODE_ENV === 'development') {
-    console.log(`[BatchWorker] Processing batch ${batchId}`)
+    console.info(`[BatchWorker] Processing batch ${batchId}`)
   }
 
   try {
@@ -74,7 +74,7 @@ export async function processBatch(input: BatchWorkerInput): Promise<void> {
       await recordGenerationException(batchId, result.copies.length, result.error)
     }
 
-    console.log(`[BatchWorker] Batch ${batchId} completed with ${finalStatus}`)
+    console.info(`[BatchWorker] Batch ${batchId} completed with ${finalStatus}`)
 
   } catch (error: any) {
     console.error(`[BatchWorker] Batch ${batchId} failed:`, error)
@@ -189,9 +189,9 @@ async function generateCopies(materials: any): Promise<{
     ? (metadata.editedContent as string | undefined)
     : undefined
 
-  console.log('[BatchWorker] Generating copies with model:', modelId)
+  console.info('[BatchWorker] Generating copies with model:', modelId)
   if (targetSequence !== undefined) {
-    console.log(`[BatchWorker] Single copy regeneration mode: sequence ${targetSequence}`)
+    console.info(`[BatchWorker] Single copy regeneration mode: sequence ${targetSequence}`)
   }
 
   // 1. 构建提示词
@@ -218,7 +218,7 @@ async function generateCopies(materials: any): Promise<{
     stream: false // Worker 不需要流式响应
   }
 
-  console.log('[BatchWorker] Calling AI API...')
+  console.info('[BatchWorker] Calling AI API...')
 
   const response = await fetch(`${API_BASE}/chat/completions`, {
     method: 'POST',
@@ -254,7 +254,7 @@ async function generateCopies(materials: any): Promise<{
   const parseResult = parseCopiesFromContent(content, targetSequence)
 
   const expectedCount = targetSequence !== undefined ? 1 : 5
-  console.log(`[BatchWorker] Generated ${parseResult.copies.length}/${expectedCount} copies`)
+  console.info(`[BatchWorker] Generated ${parseResult.copies.length}/${expectedCount} copies`)
 
   // Linus: "用户需要知道为什么失败，而不是看到 '0 条文案'"
   if (parseResult.copies.length === 0) {
@@ -282,7 +282,7 @@ async function generateCopies(materials: any): Promise<{
  * 保存文案到数据库
  */
 async function saveCopies(batchId: string, copies: GeneratedCopy[]): Promise<void> {
-  console.log(`[BatchWorker] Saving ${copies.length} copies for batch ${batchId}`)
+  console.info(`[BatchWorker] Saving ${copies.length} copies for batch ${batchId}`)
 
   await prisma.$transaction(async tx => {
     for (const copy of copies) {
