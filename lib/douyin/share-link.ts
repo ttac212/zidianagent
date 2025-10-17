@@ -14,6 +14,9 @@ export interface ShareLinkParseResult {
 
 /**
  * 解析抖音作品分享文案，返回作品ID及相关信息
+ *
+ * 注意: 只支持包含 v.douyin.com URL 的分享链接
+ * 纯短代码格式(如"2.84 dan:/ 12/24...")无法解析,因为短代码需要在抖音APP内打开
  */
 export async function parseDouyinVideoShare(
   text: string
@@ -55,13 +58,28 @@ export async function parseDouyinUserShare(
 }
 
 function extractFirstUrl(text: string): string {
-  const match = text.match(/https?:\/\/[^\s]+/);
-  if (!match) {
-    throw new Error('文本中未找到有效的抖音链接');
+  // 优先匹配 v.douyin.com 链接 (支持字母、数字、下划线)
+  const urlMatch = text.match(/https?:\/\/v\.douyin\.com\/[A-Za-z0-9_]+/);
+  if (urlMatch) {
+    return urlMatch[0].replace(/[)"\u3002\uff01\uff1f\uff0c\uff1b\uff1a\uff09]+$/, '');
   }
 
-  // 去除末尾可能的标点
-  return match[0].replace(/[)"\u3002\uff01\uff1f\uff0c\uff1b\uff1a\uff09]+$/, '');
+  // 尝试匹配其他抖音域名链接
+  const anyDouyinUrlMatch = text.match(/https?:\/\/[^\s]*douyin[^\s]*/);
+  if (anyDouyinUrlMatch) {
+    return anyDouyinUrlMatch[0].replace(/[)"\u3002\uff01\uff1f\uff0c\uff1b\uff1a\uff09]+$/, '');
+  }
+
+  throw new Error(
+    '文本中未找到有效的抖音链接。\n\n' +
+      '提示: 纯短代码格式(如"2.84 dan:/ 12/24...")无法解析,因为短代码需要在抖音APP内打开。\n' +
+      '请使用包含 v.douyin.com URL 的完整分享链接。\n\n' +
+      '如何获取可用的链接:\n' +
+      '1. 在抖音APP中打开视频\n' +
+      '2. 点击"分享"按钮\n' +
+      '3. 选择"复制链接"(不是"复制文案")\n' +
+      '4. 粘贴包含 https://v.douyin.com/xxx 的完整文本'
+  );
 }
 
 async function resolveRedirect(url: string): Promise<string> {

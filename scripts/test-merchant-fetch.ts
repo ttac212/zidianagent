@@ -111,7 +111,7 @@ async function main() {
       videos.aweme_list.forEach((video, index) => {
         console.log(`${index + 1}. ${video.desc || '无标题'}`)
         console.log(`   视频ID: ${video.aweme_id}`)
-        console.log(`   发布时间: ${dt.safeDate(video.create_time * 1000)?.toLocaleString('zh-CN')}`)
+        console.log(`   发布时间: ${dt.parse(new Date(video.create_time * 1000).toISOString())?.toLocaleString('zh-CN')}`)
         console.log(`   👍 点赞: ${video.statistics.digg_count.toLocaleString()}`)
         console.log(`   💬 评论: ${video.statistics.comment_count.toLocaleString()}`)
         console.log(`   ⭐ 收藏: ${video.statistics.collect_count.toLocaleString()}`)
@@ -161,7 +161,7 @@ async function main() {
         console.log('=== 视频详情 ===')
         console.log('标题:', videoDetail.aweme_detail.desc || '无')
         console.log('作者:', videoDetail.aweme_detail.author.nickname)
-        console.log('创建时间:', dt.safeDate(videoDetail.aweme_detail.create_time * 1000)?.toLocaleString('zh-CN'))
+        console.log('创建时间:', dt.parse(new Date(videoDetail.aweme_detail.create_time * 1000).toISOString())?.toLocaleString('zh-CN'))
 
         if (videoDetail.aweme_detail.music) {
           console.log('音乐:', videoDetail.aweme_detail.music.title)

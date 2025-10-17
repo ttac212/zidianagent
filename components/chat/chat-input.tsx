@@ -17,6 +17,7 @@ import { Send, Square, X, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ChatInputProps } from '@/types/chat'
 import { ModelSelectorAnimated } from './model-selector-animated'
+import { CHAT_CONTAINER_MAX_WIDTH } from '@/lib/config/layout-config'
 
 const MAX_LENGTH = 100_000
 const MIN_HEIGHT = 56
@@ -152,7 +153,7 @@ const ChatInputComponent = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
   return (
     <div className="sticky bottom-0 bg-background/80 backdrop-blur-xl border-t border-border/40 pb-safe z-10">
       <div className="px-4 py-3 sm:py-4">
-        <div className="max-w-[720px] mx-auto">
+        <div className={CHAT_CONTAINER_MAX_WIDTH}>
           <form onSubmit={handleSubmit} className={cardClassName} aria-busy={isLoading}>
             <div className="flex items-end gap-2 p-4">
               <div className="flex-1 min-w-0">

@@ -18,8 +18,7 @@ vi.mock('@/lib/toast/toast', () => ({
 vi.mock('@/hooks/use-chat-actions', () => ({
   useChatActions: () => ({
     sendMessage: vi.fn(),
-    stopGeneration: vi.fn(),
-    isStreaming: false
+    stopGeneration: vi.fn()
   })
 }))
 

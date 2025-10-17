@@ -208,8 +208,8 @@ export function DouyinExtractor() {
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>1. 在抖音APP中找到想要提取文案的视频</p>
-          <p>2. 点击分享按钮，选择"复制链接"</p>
-          <p>3. 粘贴链接到上方输入框，点击"提取文案"</p>
+          <p>2. 点击分享按钮，选择&ldquo;复制链接&rdquo;</p>
+          <p>3. 粘贴链接到上方输入框，点击&ldquo;提取文案&rdquo;</p>
           <p>4. 等待处理完成，即可复制或下载文案</p>
           <p className="mt-4 rounded bg-yellow-500/10 p-2 text-yellow-700">
             💡 提示：支持2小时以内的视频，处理速度比传统方式快30-50%

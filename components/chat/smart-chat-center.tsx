@@ -1,16 +1,15 @@
 /**
- * 聊天中心组件 - Linus 简化版
+ * 聊天中心组件
  * 直接使用 React Query，没有过度包装
  */
 
 "use client"
 
-import React, { useReducer, useCallback } from 'react'
+import React, { useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { ChatHeader } from './chat-header'
 import { ChatMessages } from './chat-messages'
 import { ChatInput } from './chat-input'
-import { chatReducer } from './chat-reducer'
 import { useChatActions } from '@/hooks/use-chat-actions'
 import { useConversationQuery, conversationApi, matchesConversationDetailKey } from '@/hooks/api/use-conversations-query'
 import { useModelState } from '@/hooks/use-model-state'
@@ -19,7 +18,20 @@ import { useChatKeyboard } from '@/hooks/use-chat-keyboard'
 import { useChatFocus } from '@/hooks/use-chat-focus'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import type { Conversation, ChatEvent, ChatSettings, ChatMessage } from '@/types/chat'
-import { DEFAULT_CHAT_STATE } from '@/types/chat'
+import { useChatState } from '@/hooks/use-chat-state'
+import {
+  selectSessionError,
+  selectIsSessionBusy,
+  selectMessages,
+  selectComposerInput,
+  selectComposerSettings,
+  selectComposerEditingTitle,
+  selectComposerTempTitle,
+  selectHistoryHasMoreBefore,
+  selectSyncStatus,
+  selectSyncedConversationId,
+  selectActiveConversationId
+} from '@/lib/chat/chat-state-selectors'
 import { toast } from '@/lib/toast/toast'
 import * as dt from '@/lib/utils/date-toolkit'
 import { CHAT_HISTORY_CONFIG } from '@/lib/config/chat-config'
@@ -73,12 +85,22 @@ function SmartChatCenterInternal({
   onDeleteConversation
 }: Props) {
   const queryClient = useQueryClient()
-  const [state, dispatch] = useReducer(chatReducer, DEFAULT_CHAT_STATE)
+  const { state, dispatch } = useChatState()
   const { selectedModel: currentModel, setSelectedModel } = useModelState()
-  // 添加标志跟踪对话模型是否已经同步过，防止用户选择被历史对话覆盖
-  const [isModelSynced, setIsModelSynced] = React.useState(false)
   const detailParams = React.useMemo(() => ({ take: CHAT_HISTORY_CONFIG.initialWindow }), [])
-  const [isHistoryLoading, setIsHistoryLoading] = React.useState(false)
+
+  const sessionError = selectSessionError(state)
+  const isSessionBusy = selectIsSessionBusy(state)
+  const messages = selectMessages(state)
+  const composerInput = selectComposerInput(state)
+  const composerSettings = selectComposerSettings(state)
+  const editingTitle = selectComposerEditingTitle(state)
+  const tempTitle = selectComposerTempTitle(state)
+  const hasMoreBefore = selectHistoryHasMoreBefore(state)
+  const syncStatus = selectSyncStatus(state)
+  const syncedConversationId = selectSyncedConversationId(state)
+  const activeConversation = selectActiveConversationId(state)
+  const isHistoryLoading = syncStatus === 'loading' && messages.length > 0
 
   // 获取对话数据 - 只在有有效conversationId时启用
   const { data: conversation, isLoading: isConversationLoading, error: conversationError } = useConversationQuery(
@@ -89,44 +111,82 @@ function SmartChatCenterInternal({
     }
   )
 
-  // 同步消息状态 - 修复历史消息不显示问题
+  // 对话切换时重置本地状态，等待最新数据同步
   React.useEffect(() => {
-    if (conversation?.messages) {
-      dispatch({ type: 'SET_MESSAGES', payload: conversation.messages })
-    } else if (conversation && (!conversation.messages || conversation.messages.length === 0)) {
-      // 显式处理空消息情况
-      dispatch({ type: 'SET_MESSAGES', payload: [] })
-    }
-  }, [conversation?.messages, conversation?.id, conversationId])
+    dispatch({
+      type: 'SESSION_SET_CONVERSATION',
+      payload: { conversationId: conversationId ?? null }
+    })
 
-  // 同步对话模型状态 - 只在对话切换或首次加载时生效，避免覆盖用户手动选择
+    dispatch({
+      type: 'SESSION_SYNC_STATE',
+      payload: {
+        conversationId: null,
+        status: conversationId ? 'loading' : 'synced'
+      }
+    })
+
+    if (!conversationId) {
+      dispatch({ type: 'SESSION_SET_ERROR', payload: null })
+    }
+  }, [conversationId, dispatch])
+
+  // 当远端对话数据就绪时同步到本地状态
   React.useEffect(() => {
-    if (conversation?.model && conversationId && !isModelSynced) {
+    if (!conversationId || !conversation) {
+      return
+    }
+
+    const alreadySynced =
+      syncStatus === 'synced' && syncedConversationId === conversation.id
+
+    if (alreadySynced) {
+      return
+    }
+
+    const nextMessages = Array.isArray(conversation.messages) ? conversation.messages : []
+    dispatch({ type: 'SET_MESSAGES', payload: nextMessages })
+
+    const hasMore = conversation.messagesWindow?.hasMoreBefore ?? false
+    const oldestBeforeId = conversation.messagesWindow?.oldestMessageId ?? null
+    dispatch({
+      type: 'SET_HISTORY_PAGINATION',
+      payload: {
+        hasMoreBefore: hasMore,
+        cursor: oldestBeforeId ? { beforeId: oldestBeforeId } : null
+      }
+    })
+
+    dispatch({
+      type: 'SESSION_SYNC_STATE',
+      payload: {
+        conversationId: conversation.id,
+        status: 'synced'
+      }
+    })
+
+    if (conversation.model) {
       dispatch({
         type: 'SET_SETTINGS',
         payload: { modelId: conversation.model }
       })
-      // 同步到 useModelState
       setSelectedModel(conversation.model)
-      setIsModelSynced(true)
     }
-  }, [conversation?.model, conversationId, setSelectedModel, isModelSynced])
-
-  // 重置同步标志，当对话切换时允许重新同步
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  React.useEffect(() => {
-    setIsModelSynced(false)
-  }, [conversationId])
+  }, [
+    conversationId,
+    conversation,
+    syncStatus,
+    syncedConversationId,
+    dispatch,
+    setSelectedModel
+  ])
 
   // 事件处理函数 - 简化版本，使用统一的UPDATE_MESSAGE_STREAM
   const handleChatEvent = useCallback((event: ChatEvent) => {
     switch (event.type) {
-      case 'started':
-        // 发送用户消息并添加占位助手消息
+      case 'started': {
         dispatch({ type: 'SEND_USER_MESSAGE', payload: event.userMessage })
 
-        // 添加pending状态的助手消息
         const pendingMessage: ChatMessage = {
           id: event.pendingAssistantId,
           role: 'assistant',
@@ -135,10 +195,16 @@ function SmartChatCenterInternal({
           status: 'pending'
         }
         dispatch({ type: 'ADD_MESSAGE', payload: pendingMessage })
+        // 保持 requesting 阶段，等待首个chunk
         break
+      }
 
       case 'chunk':
-        // 使用统一的UPDATE_MESSAGE_STREAM处理流式更新
+        // 【阶段4: responding】首个chunk到达，开始流式响应
+        dispatch({
+          type: 'SESSION_TRANSITION',
+          payload: { status: 'streaming' }
+        })
         dispatch({
           type: 'UPDATE_MESSAGE_STREAM',
           payload: {
@@ -149,26 +215,44 @@ function SmartChatCenterInternal({
         })
         break
 
-      case 'done':
-        // 完成消息 - 使用统一的UPDATE_MESSAGE_STREAM设置最终状态
-        dispatch({
-          type: 'UPDATE_MESSAGE_STREAM',
-          payload: {
-            messageId: event.assistantMessage.id,
-            content: event.assistantMessage.content,
-            status: 'completed',
-            metadata: event.assistantMessage.metadata
-          }
-        })
-        // 重置全局聊天状态
-        dispatch({ type: 'SET_LOADING', payload: false })
-        dispatch({ type: 'SET_RESPONSE_PHASE', payload: 'idle' })
-        break
+      case 'done': {
+        const linkedProgressId = event.assistantMessage.metadata?.douyinProgressMessageId
+        const linkedResult = event.assistantMessage.metadata?.douyinResult
 
-      case 'error':
-        // 处理错误
+        if (linkedProgressId && linkedResult) {
+          dispatch({
+            type: 'UPDATE_DOUYIN_DONE',
+            payload: {
+              messageId: linkedProgressId,
+              result: linkedResult
+            }
+          })
+        }
+
+        if (messages.some(message => message.id === event.assistantMessage.id)) {
+          dispatch({
+            type: 'UPDATE_MESSAGE_STREAM',
+            payload: {
+              messageId: event.assistantMessage.id,
+              content: event.assistantMessage.content,
+              status: 'completed',
+              metadata: event.assistantMessage.metadata
+            }
+          })
+        } else {
+          dispatch({ type: 'ADD_MESSAGE', payload: event.assistantMessage })
+        }
+
+        dispatch({
+          type: 'SESSION_TRANSITION',
+          payload: { status: 'done' }
+        })
+        dispatch({ type: 'SESSION_SET_ERROR', payload: null })
+        break
+      }
+
+      case 'error': {
         if (event.fallbackMessage) {
-          // 如果有备用消息，设置为已完成但带错误标记
           dispatch({
             type: 'UPDATE_MESSAGE_STREAM',
             payload: {
@@ -179,40 +263,101 @@ function SmartChatCenterInternal({
             }
           })
         } else {
-          // 否则移除pending消息并显示错误
-          dispatch({
-            type: 'REMOVE_MESSAGE',
-            payload: { messageId: event.pendingAssistantId }
-          })
+          const targetMessage = messages.find(msg => msg.id === event.pendingAssistantId)
+          const isDouyinProgress = Boolean(targetMessage?.metadata?.douyinProgress)
+
+          if (!isDouyinProgress) {
+            dispatch({
+              type: 'REMOVE_MESSAGE',
+              payload: { messageId: event.pendingAssistantId }
+            })
+          }
         }
-        dispatch({ type: 'SET_ERROR', payload: event.error })
-        // 重置全局聊天状态 - 确保错误后可以继续对话
-        dispatch({ type: 'SET_LOADING', payload: false })
-        dispatch({ type: 'SET_RESPONSE_PHASE', payload: 'idle' })
+
+        dispatch({ type: 'SESSION_SET_ERROR', payload: event.error })
         break
+      }
 
       case 'warn':
-        // 处理警告事件，显示toast提示但不影响UI流程
         toast.warning(event.message, {
           duration: 6000,
           description: '消息生成成功，但保存时遇到问题'
         })
         break
+
+      case 'douyin-progress':
+        dispatch({
+          type: 'UPDATE_DOUYIN_PROGRESS',
+          payload: {
+            messageId: event.pendingAssistantId,
+            progress: event.progress
+          }
+        })
+        break
+
+      case 'douyin-info':
+        dispatch({
+          type: 'UPDATE_DOUYIN_INFO',
+          payload: {
+            messageId: event.pendingAssistantId,
+            info: event.info
+          }
+        })
+        break
+
+      case 'douyin-partial':
+        dispatch({
+          type: 'UPDATE_DOUYIN_PARTIAL',
+          payload: {
+            messageId: event.pendingAssistantId,
+            data: event.data
+          }
+        })
+        break
+
+      case 'douyin-done':
+        dispatch({
+          type: 'UPDATE_DOUYIN_DONE',
+          payload: {
+            messageId: event.pendingAssistantId,
+            result: event.result
+          }
+        })
+        break
+
+      case 'douyin-error':
+        dispatch({
+          type: 'UPDATE_DOUYIN_ERROR',
+          payload: {
+            messageId: event.pendingAssistantId,
+            error: event.error,
+            step: event.step
+          }
+        })
+        break
     }
-  }, [])
+  }, [dispatch, messages])
 
   const handleLoadOlderMessages = useCallback(async () => {
     if (!conversation?.id) return
-    if (isHistoryLoading) return
-    if (!conversation.messagesWindow?.hasMoreBefore) return
+    if (syncStatus === 'loading') return
+    if (!conversation.messagesWindow?.hasMoreBefore && !hasMoreBefore) return
 
-    const oldestMessage = state.messages[0]
+    const oldestMessage = messages[0]
     if (!oldestMessage) return
 
-    setIsHistoryLoading(true)
+    const targetConversationId = conversation.id
+
+    dispatch({
+      type: 'SESSION_SYNC_STATE',
+      payload: {
+        conversationId: syncedConversationId ?? targetConversationId,
+        status: 'loading'
+      }
+    })
 
     try {
-      const older = await conversationApi.fetchConversation(conversation.id, {
+      const older = await conversationApi.fetchConversation(targetConversationId, {
         take: CHAT_HISTORY_CONFIG.initialWindow,
         beforeId: oldestMessage.id
       })
@@ -221,9 +366,20 @@ function SmartChatCenterInternal({
         dispatch({ type: 'PREPEND_MESSAGES', payload: older.messages })
       }
 
+      if (older?.messagesWindow) {
+        const { hasMoreBefore: moreBefore = false, oldestMessageId = null } = older.messagesWindow
+        dispatch({
+          type: 'SET_HISTORY_PAGINATION',
+          payload: {
+            hasMoreBefore: moreBefore,
+            cursor: oldestMessageId ? { beforeId: oldestMessageId } : null
+          }
+        })
+      }
+
       queryClient.setQueriesData(
         {
-          predicate: (query) => matchesConversationDetailKey(query.queryKey, conversation.id)
+          predicate: (query) => matchesConversationDetailKey(query.queryKey, targetConversationId)
         },
         (oldData: Conversation | null | undefined) => {
           if (!oldData) return oldData
@@ -258,76 +414,130 @@ function SmartChatCenterInternal({
           }
         }
       )
-    } catch (error) {
-      console.error('Failed to load older messages:', error)
+
+      if (conversation?.id === targetConversationId) {
+        dispatch({
+          type: 'SESSION_SYNC_STATE',
+          payload: {
+            conversationId: targetConversationId,
+            status: 'synced'
+          }
+        })
+      }
+    } catch (_error) {
+      console.error('Failed to load older messages:', _error)
       toast.error('加载历史消息失败', { description: '请稍后重试' })
-    } finally {
-      setIsHistoryLoading(false)
+      if (conversation?.id === targetConversationId) {
+        dispatch({
+          type: 'SESSION_SYNC_STATE',
+          payload: {
+            conversationId: targetConversationId,
+            status: 'error'
+          }
+        })
+      }
     }
-  }, [conversation?.id, conversation?.messagesWindow?.hasMoreBefore, isHistoryLoading, state.messages, queryClient])
+  }, [
+    conversation,
+    syncStatus,
+    hasMoreBefore,
+    messages,
+    syncedConversationId,
+    dispatch,
+    queryClient
+  ])
 
   // 聊天操作 - 使用事件协议，优先使用用户选择的模型
   // 动态获取conversationId，避免新创建的对话消息丢失
   const { sendMessage, stopGeneration } = useChatActions({
     conversationId: conversation?.id,
     onEvent: handleChatEvent,
-    messages: state.messages,
-    model: state.settings.modelId || currentModel
+    messages,
+    model: composerSettings.modelId || currentModel
   })
 
   // 停止生成的处理 - 确保重置全局状态
   const handleStopGeneration = useCallback(() => {
     stopGeneration()
     // 立即重置全局聊天状态，确保用户可以继续对话
-    dispatch({ type: 'SET_LOADING', payload: false })
-    dispatch({ type: 'SET_RESPONSE_PHASE', payload: 'idle' })
-    dispatch({ type: 'SET_ERROR', payload: null })
-  }, [stopGeneration])
+    dispatch({
+      type: 'SESSION_TRANSITION',
+      payload: { status: 'done' }
+    })
+    dispatch({ type: 'SESSION_SET_ERROR', payload: null })
+  }, [stopGeneration, dispatch])
 
   const handleSend = useCallback(async () => {
-    if (state.isLoading) return
+    if (isSessionBusy) return
 
-    const trimmedInput = state.input.trim()
-
-    // 静默处理空输入，不显示提示
+    const trimmedInput = composerInput.trim()
     if (!trimmedInput) {
       return
     }
 
-    // 【关键修复】确保会话存在，否则消息会丢失
-    let activeConversationId = conversation?.id
-    if (!activeConversationId && onCreateConversation) {
+    dispatch({
+      type: 'SESSION_TRANSITION',
+      payload: { status: 'preparing' }
+    })
+
+    let targetConversationId = conversation?.id ?? activeConversation
+    if (!targetConversationId && onCreateConversation) {
       try {
-        const newConversation = await onCreateConversation(state.settings.modelId || currentModel)
-        activeConversationId = newConversation?.id
-        if (!activeConversationId) {
+        const newConversation = await onCreateConversation(composerSettings.modelId || currentModel)
+        targetConversationId = newConversation?.id ?? null
+        if (!targetConversationId) {
           toast.error('创建对话失败，请重试')
+          dispatch({
+            type: 'SESSION_TRANSITION',
+            payload: { status: 'idle' }
+          })
           return
         }
-        // 【关键修复】立即更新父组件状态，确保后续消息使用正确的conversationId
-        if (onSelectConversation && activeConversationId) {
-          onSelectConversation(activeConversationId)
+        if (onSelectConversation) {
+          onSelectConversation(targetConversationId)
         }
-      } catch (error) {
+      } catch (_error) {
         toast.error('创建对话失败，请重试')
+        dispatch({
+          type: 'SESSION_TRANSITION',
+          payload: { status: 'idle' }
+        })
         return
       }
     }
 
-    if (!activeConversationId) {
+    if (!targetConversationId) {
       toast.error('无法发送消息：对话未就绪')
+      dispatch({
+        type: 'SESSION_TRANSITION',
+        payload: { status: 'idle' }
+      })
       return
     }
 
-    // 清除之前的错误
-    if (state.error) {
-      dispatch({ type: 'SET_ERROR', payload: null })
-    }
+    dispatch({ type: 'SESSION_SET_ERROR', payload: null })
 
-    const message = trimmedInput // 使用trim后的内容
+    const message = trimmedInput
     dispatch({ type: 'SET_INPUT', payload: '' })
-    sendMessage(message, activeConversationId)
-  }, [state.input, state.isLoading, state.error, sendMessage, conversation?.id, onCreateConversation, onSelectConversation, state.settings.modelId, currentModel])
+
+    dispatch({
+      type: 'SESSION_TRANSITION',
+      payload: { status: 'requesting' }
+    })
+
+    sendMessage(message, targetConversationId)
+  }, [
+    composerInput,
+    isSessionBusy,
+    composerSettings.modelId,
+    conversation?.id,
+    activeConversation,
+    onCreateConversation,
+    onSelectConversation,
+    currentModel,
+    sendMessage,
+    dispatch
+  ])
 
   // 标题编辑相关处理
   const handleEditTitle = useCallback(() => {
@@ -335,16 +545,16 @@ function SmartChatCenterInternal({
       dispatch({ type: 'SET_EDITING_TITLE', payload: true })
       dispatch({ type: 'SET_TEMP_TITLE', payload: conversation.title })
     }
-  }, [conversation?.title])
+  }, [conversation?.title, dispatch])
 
   const handleTitleChange = useCallback((title: string) => {
     dispatch({ type: 'SET_TEMP_TITLE', payload: title })
-  }, [])
+  }, [dispatch])
 
   const handleTitleSubmit = useCallback(async () => {
-    if (state.tempTitle.trim() && conversation?.id && onUpdateConversation) {
+    if (tempTitle.trim() && conversation?.id && onUpdateConversation) {
       try {
-        await onUpdateConversation(conversation.id, { title: state.tempTitle.trim() })
+        await onUpdateConversation(conversation.id, { title: tempTitle.trim() })
         // 成功后才关闭编辑状态
         dispatch({ type: 'SET_EDITING_TITLE', payload: false })
         dispatch({ type: 'SET_TEMP_TITLE', payload: '' })
@@ -358,15 +568,13 @@ function SmartChatCenterInternal({
       dispatch({ type: 'SET_EDITING_TITLE', payload: false })
       dispatch({ type: 'SET_TEMP_TITLE', payload: '' })
     }
-  }, [state.tempTitle, conversation?.id, onUpdateConversation])
+  }, [tempTitle, conversation?.id, onUpdateConversation, dispatch])
 
   const handleCancelEdit = useCallback(() => {
     // 取消编辑，不保存更改
     dispatch({ type: 'SET_EDITING_TITLE', payload: false })
     dispatch({ type: 'SET_TEMP_TITLE', payload: '' })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [dispatch])
 
   // 删除对话处理 - 传递整个对话对象给父组件
   const handleDeleteConversation = useCallback(() => {
@@ -389,30 +597,35 @@ function SmartChatCenterInternal({
           await onUpdateConversation(conversationId, {
             model: settings.modelId
           })
-          // 标记为已持久化，防止后续effect覆盖用户选择
-          setIsModelSynced(true)
         } catch (error) {
           console.error('Failed to update conversation model:', error)
           toast.error('模型切换失败，设置未保存')
-          // 失败时重置模型选择到原来的值
-          if (conversation?.model) {
-            setSelectedModel(conversation.model)
-            dispatch({ type: 'SET_SETTINGS', payload: { modelId: conversation.model } })
+
+          // 【关键修复】失败时读取最新的React Query缓存或当前conversation
+          // 避免使用闭包中的陈年快照导致回滚到旧会话模型
+          const latestConversation = queryClient.getQueryData<Conversation>(
+            ['conversations', 'detail', conversationId]
+          )
+          const fallbackModel = latestConversation?.model || conversation?.model
+
+          if (fallbackModel) {
+            setSelectedModel(fallbackModel)
+            dispatch({ type: 'SET_SETTINGS', payload: { modelId: fallbackModel } })
           }
         }
       }
     }
-  }, [setSelectedModel, conversationId, onUpdateConversation])
+  }, [setSelectedModel, conversationId, onUpdateConversation, conversation, queryClient, dispatch])
 
   // 滚动管理
   const { scrollAreaRef, scrollToBottom: _scrollToBottom } = useChatScroll({
-    messages: state.messages,
-    isLoading: state.isLoading
+    messages,
+    isLoading: isSessionBusy
   })
 
   // 焦点管理
   const { textareaRef, focusInput } = useChatFocus({
-    isLoading: state.isLoading,
+    isLoading: isSessionBusy,
     autoFocus: true
   })
 
@@ -468,9 +681,9 @@ function SmartChatCenterInternal({
     <div className="flex flex-col h-full">
       <ChatHeader
         conversation={conversation || undefined}
-        editingTitle={state.editingTitle}
-        tempTitle={state.tempTitle}
-        isLoading={state.isLoading}
+        editingTitle={editingTitle}
+        tempTitle={tempTitle}
+        isLoading={isSessionBusy}
         onCreateConversation={onCreateConversation}
         onEditTitle={handleEditTitle}
         onTitleChange={handleTitleChange}
@@ -483,20 +696,20 @@ function SmartChatCenterInternal({
       <div className="flex-1 min-h-0">
         <ChatMessages
           ref={scrollAreaRef}
-          messages={state.messages}
-          isLoading={state.isLoading}
-          error={state.error}
-          onLoadMore={conversation?.messagesWindow?.hasMoreBefore ? handleLoadOlderMessages : undefined}
-          hasMoreBefore={conversation?.messagesWindow?.hasMoreBefore}
+          messages={messages}
+          isLoading={isSessionBusy && messages.length === 0}
+          error={sessionError}
+          onLoadMore={hasMoreBefore ? handleLoadOlderMessages : undefined}
+          hasMoreBefore={hasMoreBefore}
           isLoadingMore={isHistoryLoading}
         />
       </div>
 
       <ChatInput
         ref={textareaRef}
-        input={state.input}
-        isLoading={state.isLoading}
-        settings={state.settings}
+        input={composerInput}
+        isLoading={isSessionBusy}
+        settings={composerSettings}
         onInputChange={(value) => dispatch({ type: 'SET_INPUT', payload: value })}
         onSubmit={(e) => {
           e.preventDefault()

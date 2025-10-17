@@ -6,6 +6,8 @@
  */
 
 export interface SSEMessage {
+  event?: string
+  payload?: unknown
   content?: string
   error?: string
   usage?: {
@@ -84,6 +86,74 @@ function normalizePayload(raw: unknown): SSEMessage | null {
   return Object.keys(message).length > 0 ? message : null
 }
 
+function safeParseData(data: string): unknown {
+  const trimmed = data.trim()
+  if (!trimmed) {
+    return ''
+  }
+
+  try {
+    return JSON.parse(trimmed)
+  } catch {
+    return trimmed
+  }
+}
+
+function parseEventBlock(block: string): SSEMessage | null {
+  const lines = block.split('\n')
+  let eventType: string | undefined
+  const dataLines: string[] = []
+
+  for (const rawLine of lines) {
+    if (!rawLine) continue
+    if (rawLine.startsWith(':')) continue
+
+    if (rawLine.startsWith('event:')) {
+      eventType = rawLine.slice(6).trim()
+      continue
+    }
+
+    if (rawLine.startsWith('data:')) {
+      const value = rawLine.slice(5).replace(/^ /, '')
+      dataLines.push(value)
+      continue
+    }
+  }
+
+  const dataString = dataLines.join('\n')
+
+  if (!eventType) {
+    if (dataString === '[DONE]') {
+      return { finished: true }
+    }
+
+    if (!dataString) {
+      return null
+    }
+
+    const parsed = safeParseData(dataString)
+    const normalized = normalizePayload(parsed)
+    if (normalized) {
+      return normalized
+    }
+
+    return { payload: parsed }
+  }
+
+  const message: SSEMessage = { event: eventType }
+
+  if (dataString === '[DONE]') {
+    message.finished = true
+    return message
+  }
+
+  if (dataString) {
+    message.payload = safeParseData(dataString)
+  }
+
+  return message
+}
+
 /**
  * 解析SSE数据块
  * 处理跨chunk的不完整行，返回解析的消息和剩余缓冲区
@@ -91,42 +161,29 @@ function normalizePayload(raw: unknown): SSEMessage | null {
 export function parseSSEChunk(chunk: string, buffer: string = ''): SSEParseResult {
   const messages: SSEMessage[] = []
 
-  // 将新数据添加到缓冲区
-  let workingBuffer = buffer + chunk
-
-  // 按行分割，但保留最后的不完整行
-  const lines = workingBuffer.split('\n')
-
-  // 如果最后一个元素不是空字符串，说明可能是不完整的行
-  let remainingBuffer = ''
-  if (lines[lines.length - 1] !== '') {
-    remainingBuffer = lines.pop() || ''
-  } else {
-    lines.pop() // 移除最后的空字符串
+  if (!chunk && !buffer) {
+    return { messages, remainingBuffer: '' }
   }
 
-  // 处理每一行
-  for (const line of lines) {
-    if (!line.startsWith('data: ')) continue
+  const workingBuffer = (buffer + chunk).replace(/\r\n/g, '\n')
+  let cursor = 0
 
-    const data = line.slice(6).trim()
-    if (data === '[DONE]') {
-      messages.push({ finished: true })
-      continue
-    }
+  while (true) {
+    const separatorIndex = workingBuffer.indexOf('\n\n', cursor)
+    if (separatorIndex === -1) break
 
-    try {
-      const parsed = JSON.parse(data)
-      const message = normalizePayload(parsed)
-
+    const block = workingBuffer.slice(cursor, separatorIndex)
+    if (block.trim()) {
+      const message = parseEventBlock(block)
       if (message) {
         messages.push(message)
       }
-    } catch (_e) {
-      // 解析错误，忽略这行
     }
+
+    cursor = separatorIndex + 2
   }
 
+  const remainingBuffer = workingBuffer.slice(cursor)
   return { messages, remainingBuffer }
 }
 
@@ -182,13 +239,56 @@ export async function processSSEStream(
       }
     }
 
-    // 处理缓冲区中剩余的数据
-    if (buffer.trim()) {
-      const { messages } = parseSSEChunk('', buffer + '\n')
-      for (const message of messages) {
+    // 修复P0: flush decoder以输出剩余的不完整多字节字符
+    // 必须在stream结束后调用,否则会丢失chunk边界的UTF-8字节
+    const finalChunk = decoder.decode()
+    if (finalChunk) {
+      const { messages: finalMessages, remainingBuffer: finalBuffer } = parseSSEChunk(finalChunk, buffer)
+      buffer = finalBuffer
+
+      for (const message of finalMessages) {
+        callbacks.onMessage?.(message)
+
         if (message.content) {
           fullContent += message.content
           callbacks.onContent?.(message.content, fullContent)
+        }
+
+        if (message.error) {
+          callbacks.onError?.(message.error)
+        }
+
+        if (message.usage) {
+          callbacks.onUsage?.(message.usage)
+        }
+
+        if (message.finished) {
+          callbacks.onFinish?.()
+        }
+      }
+    }
+
+    // 处理缓冲区中剩余的数据
+    if (buffer.length > 0) {
+      const { messages } = parseSSEChunk('\n\n', buffer)
+      for (const message of messages) {
+        callbacks.onMessage?.(message)
+
+        if (message.content) {
+          fullContent += message.content
+          callbacks.onContent?.(message.content, fullContent)
+        }
+
+        if (message.error) {
+          callbacks.onError?.(message.error)
+        }
+
+        if (message.usage) {
+          callbacks.onUsage?.(message.usage)
+        }
+
+        if (message.finished) {
+          callbacks.onFinish?.()
         }
       }
     }
@@ -206,7 +306,8 @@ export async function processSSEStream(
 }
 
 /**
- * 创建Transform流用于SSE处理（用于API route）
+ * 创建Transform流用于SSE处理(用于API route)
+ * 修复: 使用持久化 TextDecoder 并启用流模式,避免多字节字符截断
  */
 export function createSSETransformStream(
   onContent?: (_content: string) => void,
@@ -215,10 +316,13 @@ export function createSSETransformStream(
   let buffer = ''
   let assistantContent = ''
   let tokenUsage: SSEMessage['usage'] | undefined
+  // 修复P0: 持久化TextDecoder并启用流模式,防止多字节字符截断
+  const decoder = new TextDecoder()
 
   return new TransformStream({
     transform(chunk, controller) {
-      const text = new TextDecoder().decode(chunk)
+      // 修复P0: 使用{ stream: true }确保多字节字符正确处理
+      const text = decoder.decode(chunk, { stream: true })
       const { messages, remainingBuffer } = parseSSEChunk(text, buffer)
       buffer = remainingBuffer
 
@@ -237,9 +341,26 @@ export function createSSETransformStream(
     },
 
     async flush() {
+      // 修复P0: flush decoder以输出剩余的不完整多字节字符
+      const finalChunk = decoder.decode()
+      if (finalChunk) {
+        const { messages: finalMessages, remainingBuffer: finalBuffer } = parseSSEChunk(finalChunk, buffer)
+        buffer = finalBuffer
+
+        for (const message of finalMessages) {
+          if (message.content) {
+            assistantContent += message.content
+            onContent?.(message.content)
+          }
+          if (message.usage) {
+            tokenUsage = message.usage
+          }
+        }
+      }
+
       // 处理缓冲区中剩余的数据
-      if (buffer.trim()) {
-        const { messages } = parseSSEChunk('', buffer + '\n')
+      if (buffer.length > 0) {
+        const { messages } = parseSSEChunk('\n\n', buffer)
         for (const message of messages) {
           if (message.content) {
             assistantContent += message.content

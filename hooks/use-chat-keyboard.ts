@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect } from 'react'
 import type { ChatState } from '@/types/chat'
+import { selectComposerInput, selectIsSessionBusy } from '@/lib/chat/chat-state-selectors'
 
 interface UseChatKeyboardProps {
   state: ChatState
@@ -34,6 +35,9 @@ export function useChatKeyboard({
   onFocusInput,
   textareaRef
 }: UseChatKeyboardProps) {
+  const inputValue = selectComposerInput(state)
+  const isBusy = selectIsSessionBusy(state)
+
   /**
    * 处理键盘快捷键
    */
@@ -49,7 +53,7 @@ export function useChatKeyboard({
         action: () => {
           // 通过表单提交，避免重复发送
           const form = textareaRef?.current?.closest('form')
-          if (form && state.input.trim() && !state.isLoading) {
+          if (form && inputValue.trim() && !isBusy) {
             form.requestSubmit()
           }
         }
@@ -58,7 +62,7 @@ export function useChatKeyboard({
         key: 'Escape',
         description: '停止生成',
         action: () => {
-          if (state.isLoading && onStopGeneration) {
+          if (isBusy && onStopGeneration) {
             onStopGeneration()
           }
         }
@@ -101,8 +105,8 @@ export function useChatKeyboard({
       shortcut.action()
     }
   }, [
-    state.input,
-    state.isLoading,
+    inputValue,
+    isBusy,
     onSendMessage,
     onStopGeneration,
     onCreateConversation,

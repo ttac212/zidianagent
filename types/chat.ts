@@ -3,6 +3,12 @@
  * 用于 SmartChatCenter 组件及其子组件
  */
 
+import type {
+  DouyinPipelineProgress,
+  DouyinPipelineStep,
+  DouyinVideoInfo
+} from '@/lib/douyin/pipeline-steps'
+
 // 消息状态类型
 export type MessageStatus = 'pending' | 'streaming' | 'completed' | 'error'
 
@@ -23,6 +29,9 @@ export interface MessageMetadata {
   temperature?: number
   processingTime?: number
   error?: string
+  douyinProgress?: DouyinProgressState
+  douyinResult?: DouyinDoneEventPayload
+  douyinProgressMessageId?: string
 }
 
 // 对话类型
@@ -73,44 +82,71 @@ export interface ChatSettings {
   creativeMode?: boolean  // 创作模式：启用长文本优化，使用90%的模型上下文容量
 }
 
-// 聊天状态
-export type ResponsePhase = 'idle' | 'queueing' | 'organizing' | 'responding'
+// 新版聊天状态
+export type ChatSessionStatus = 'idle' | 'preparing' | 'requesting' | 'streaming' | 'done' | 'error'
+export type ChatHistorySyncStatus = 'idle' | 'loading' | 'synced' | 'error'
 
-export interface ChatState {
-  // 消息相关
-  messages: ChatMessage[]
-  input: string
-  isLoading: boolean
+export interface ChatSessionState {
+  conversationId: string | null
+  status: ChatSessionStatus
   error: string | null
+  sync: {
+    conversationId: string | null
+    status: ChatHistorySyncStatus
+  }
+  updatedAt: number | null
+}
 
-  // 设置相关
+export interface ChatHistoryState {
+  messages: ChatMessage[]
+  pagination: {
+    hasMoreBefore: boolean
+    cursor: {
+      beforeId: string | null
+    } | null
+  }
+}
+
+export interface ChatComposerState {
+  input: string
   settings: ChatSettings
-
-  // UI 状态
   editingTitle: boolean
   tempTitle: string
+}
 
-  // 生成流程阶段
-  responsePhase: ResponsePhase
-  // 移除 previewContent，状态直接存储在 message.status 中
+export interface ChatState {
+  session: ChatSessionState
+  history: ChatHistoryState
+  composer: ChatComposerState
 }
 
 // 聊天操作类型
 export type ChatAction =
+  // 新 session 状态机
+  | { type: 'SESSION_SET_CONVERSATION'; payload: { conversationId: string | null } }
+  | { type: 'SESSION_TRANSITION'; payload: { status: ChatSessionStatus; error?: string | null; updatedAt?: number | null; conversationId?: string | null } }
+  | { type: 'SESSION_SET_ERROR'; payload: string | null }
+  | { type: 'SESSION_SYNC_STATE'; payload: { conversationId: string | null; status: ChatHistorySyncStatus } }
+  | { type: 'SESSION_RESET'; payload?: { keepConversation?: boolean; keepComposer?: boolean } }
+  // composer 区域
   | { type: 'SET_INPUT'; payload: string }
-  | { type: 'SET_LOADING'; payload: boolean }
-  | { type: 'SET_ERROR'; payload: string | null }
+  | { type: 'SET_SETTINGS'; payload: Partial<ChatSettings> }
+  | { type: 'SET_EDITING_TITLE'; payload: boolean }
+  | { type: 'SET_TEMP_TITLE'; payload: string }
+  // history 区域
   | { type: 'ADD_MESSAGE'; payload: ChatMessage }
   | { type: 'UPDATE_MESSAGE'; payload: { id: string; updates: Partial<ChatMessage> } }
   | { type: 'SET_MESSAGES'; payload: ChatMessage[] }
   | { type: 'PREPEND_MESSAGES'; payload: ChatMessage[] }
   | { type: 'CLEAR_MESSAGES' }
-  | { type: 'SET_SETTINGS'; payload: Partial<ChatSettings> }
-  | { type: 'SET_EDITING_TITLE'; payload: boolean }
-  | { type: 'SET_TEMP_TITLE'; payload: string }
-  | { type: 'SET_RESPONSE_PHASE'; payload: ResponsePhase }
+  | { type: 'REMOVE_MESSAGE'; payload: { messageId: string } }
+  | { type: 'SET_HISTORY_PAGINATION'; payload: { hasMoreBefore: boolean; cursor?: { beforeId?: string | null } | null } }
+  // 兼容旧标志
+  | { type: 'SET_LOADING'; payload: boolean }
+  | { type: 'SET_ERROR'; payload: string | null }
+  | { type: 'SET_RESPONSE_PHASE'; payload: 'idle' | 'queueing' | 'organizing' | 'requesting' | 'responding' }
   | { type: 'RESET_STATE' }
-  // 新的统一流式更新 action，替代原来的多个 action
+  // 流式与 Douyin 事件
   | {
       type: 'UPDATE_MESSAGE_STREAM';
       payload: {
@@ -121,9 +157,13 @@ export type ChatAction =
         metadata?: Partial<MessageMetadata>
       }
     }
+  | { type: 'UPDATE_DOUYIN_PROGRESS'; payload: { messageId: string; progress: DouyinProgressEventPayload } }
+  | { type: 'UPDATE_DOUYIN_INFO'; payload: { messageId: string; info: DouyinInfoEventPayload } }
+  | { type: 'UPDATE_DOUYIN_PARTIAL'; payload: { messageId: string; data: DouyinPartialEventPayload } }
+  | { type: 'UPDATE_DOUYIN_DONE'; payload: { messageId: string; result: DouyinDoneEventPayload } }
+  | { type: 'UPDATE_DOUYIN_ERROR'; payload: { messageId: string; error: string; step?: DouyinPipelineStep } }
   // 保留向后兼容的 action（逐步废弃）
   | { type: 'SEND_USER_MESSAGE'; payload: ChatMessage }
-  | { type: 'REMOVE_MESSAGE'; payload: { messageId: string } }
 
 // 组件 Props 类型
 export interface SmartChatCenterProps {
@@ -199,6 +239,44 @@ export interface ChatError {
   timestamp: number
 }
 
+// Douyin 流水线事件载荷
+export type DouyinProgressEventPayload = DouyinPipelineProgress
+
+export interface DouyinInfoEventPayload {
+  videoInfo: DouyinVideoInfo
+}
+
+export interface DouyinPartialEventPayload {
+  key: 'transcript'
+  data: string
+}
+
+export interface DouyinDoneEventPayload {
+  markdown: string
+  videoInfo: DouyinVideoInfo
+  transcript: string
+}
+
+export type DouyinProgressStepStatus = 'pending' | 'active' | 'completed' | 'error'
+
+export interface DouyinProgressStep {
+  key: DouyinPipelineStep
+  label: string
+  description: string
+  status: DouyinProgressStepStatus
+  detail?: string
+}
+
+export interface DouyinProgressState {
+  steps: DouyinProgressStep[]
+  percentage: number
+  status: 'running' | 'completed' | 'failed'
+  error?: string
+  updatedAt: number
+  videoInfo?: DouyinVideoInfo
+  transcript?: string
+}
+
 // 事件协议类型
 export interface ChatEventProtocol {
   started: {
@@ -234,6 +312,37 @@ export interface ChatEventProtocol {
     type: 'warn'
     requestId?: string
     message: string
+  }
+  'douyin-progress': {
+    type: 'douyin-progress'
+    requestId: string
+    pendingAssistantId: string
+    progress: DouyinProgressEventPayload
+  }
+  'douyin-info': {
+    type: 'douyin-info'
+    requestId: string
+    pendingAssistantId: string
+    info: DouyinInfoEventPayload
+  }
+  'douyin-partial': {
+    type: 'douyin-partial'
+    requestId: string
+    pendingAssistantId: string
+    data: DouyinPartialEventPayload
+  }
+  'douyin-done': {
+    type: 'douyin-done'
+    requestId: string
+    pendingAssistantId: string
+    result: DouyinDoneEventPayload
+  }
+  'douyin-error': {
+    type: 'douyin-error'
+    requestId: string
+    pendingAssistantId: string
+    error: string
+    step?: DouyinPipelineStep
   }
 }
 
@@ -325,12 +434,27 @@ export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
 }
 
 export const DEFAULT_CHAT_STATE: ChatState = {
-  messages: [],
-  input: '',
-  isLoading: false,
-  error: null,
-  settings: DEFAULT_CHAT_SETTINGS,
-  editingTitle: false,
-  tempTitle: '',
-  responsePhase: 'idle',
+  session: {
+    conversationId: null,
+    status: 'idle',
+    error: null,
+    sync: {
+      conversationId: null,
+      status: 'idle'
+    },
+    updatedAt: null
+  },
+  history: {
+    messages: [],
+    pagination: {
+      hasMoreBefore: false,
+      cursor: null
+    }
+  },
+  composer: {
+    input: '',
+    settings: { ...DEFAULT_CHAT_SETTINGS },
+    editingTitle: false,
+    tempTitle: ''
+  }
 }

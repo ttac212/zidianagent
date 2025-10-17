@@ -43,6 +43,7 @@ import { ConversationItem } from "@/components/conversation/conversation-item"
 import type { Conversation } from '@/types/chat'
 import * as dt from '@/lib/utils/date-toolkit'
 import { CHAT_HISTORY_CONFIG } from '@/lib/config/chat-config'
+import { STORAGE_KEYS } from "@/lib/storage"
 
 export default function WorkspacePage() {
   const searchParams = useSearchParams()
@@ -71,7 +72,7 @@ export default function WorkspacePage() {
 
 
   // 管理当前对话ID状态 - 使用统一前缀确保"清空数据"能完整清除
-  const [currentConversationId, setCurrentConversationId] = useSafeLocalStorage<string | null>('zhidian_currentConversationId', null)
+  const [currentConversationId, setCurrentConversationId] = useSafeLocalStorage<string | null>(STORAGE_KEYS.CURRENT_CONVERSATION_ID, null)
 
   // 解析 URL 参数，支持复制对话链接功能
   useEffect(() => {

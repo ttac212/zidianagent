@@ -140,7 +140,13 @@ export async function GET(
       messages: messages ? messages.map((msg: any) => ({
         ...msg,
         model: msg.modelId, // 映射消息中的 modelId 到 model 字段
-        totalTokens: (msg.promptTokens || 0) + (msg.completionTokens || 0) // 修复字段名匹配
+        timestamp: msg.createdAt ? new Date(msg.createdAt).getTime() : dt.timestamp(), // 映射 createdAt 到 timestamp (number)
+        status: 'completed' as const, // 默认状态为已完成（历史消息都是完成状态）
+        totalTokens: (msg.promptTokens || 0) + (msg.completionTokens || 0), // 修复字段名匹配
+        metadata: {
+          ...(typeof msg.metadata === 'object' && msg.metadata !== null ? msg.metadata : {}),
+          model: msg.modelId // 确保 metadata 中也有 model
+        }
       })) : conversation.messages,
       messageCount: conversation._count.messages,
       messagesWindow: includeMessages ? {
@@ -237,14 +243,53 @@ export async function PATCH(
             displayName: true,
             email: true,
           }
+        },
+        // 【关键修复】返回完整对话数据，包括最后一条消息用于侧栏显示
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            role: true,
+            content: true,
+            createdAt: true,
+          }
+        },
+        _count: {
+          select: {
+            messages: true
+          }
         }
       }
     })
 
-    // 映射响应数据字段 - 修复模型字段映射问题
+    // 计算总token数（简单求和，避免全表扫描）
+    const totalTokensResult = await prisma.message.aggregate({
+      where: { conversationId: id },
+      _sum: {
+        promptTokens: true,
+        completionTokens: true,
+      }
+    })
+
+    const totalTokens = (totalTokensResult._sum.promptTokens || 0) + (totalTokensResult._sum.completionTokens || 0)
+    const lastMessage = updatedConversation.messages[0]
+
+    // 映射响应数据字段 - 返回完整对话契约，防止缓存污染
     const mappedConversation = {
       ...updatedConversation,
-      model: updatedConversation.modelId, // 映射 modelId 到 model 字段以匹配 TypeScript 类型
+      modelId: updatedConversation.modelId, // 保留原始字段
+      messageCount: updatedConversation._count.messages,
+      totalTokens,
+      lastMessage: lastMessage ? {
+        id: lastMessage.id,
+        role: lastMessage.role,
+        content: lastMessage.content,
+        createdAt: lastMessage.createdAt.toISOString()
+      } : null,
+      messages: undefined, // 移除消息列表，PATCH只返回元数据
+      _count: undefined,   // 清理内部字段
+      user: undefined      // 清理敏感字段
     }
 
     return success(mappedConversation)

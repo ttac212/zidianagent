@@ -3,14 +3,26 @@
  * 实现 started/chunk/done/error 事件流
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { toast } from '@/lib/toast/toast'
-import type { ChatMessage, ChatEvent, Conversation } from '@/types/chat'
+import type {
+  ChatMessage,
+  ChatEvent,
+  Conversation,
+  DouyinDoneEventPayload,
+  DouyinInfoEventPayload,
+  DouyinPartialEventPayload,
+  DouyinProgressEventPayload
+} from '@/types/chat'
+import type { DouyinPipelineStep } from '@/lib/douyin/pipeline-steps'
 import { useQueryClient } from '@tanstack/react-query'
 import { processSSEStream } from '@/lib/utils/sse-parser'
 import { trimForChatAPI } from '@/lib/chat/context-trimmer'
 import * as dt from '@/lib/utils/date-toolkit'
 import { DEFAULT_MODEL } from '@/lib/ai/models'
+
+// 全局递增计数器确保 ID 唯一性
+let messageIdCounter = 0
 
 export function useChatActions({
   conversationId,
@@ -24,7 +36,6 @@ export function useChatActions({
   model?: string
 }) {
   const abortRef = useRef<AbortController | null>(null)
-  const [isStreaming, setIsStreaming] = useState(false)
   const queryClient = useQueryClient()
 
   // 组件卸载时清理 AbortController，防止内存泄漏
@@ -41,16 +52,20 @@ export function useChatActions({
     // 使用动态提供的conversationId，否则使用props中的
     const activeConversationId = dynamicConversationId ?? conversationId
 
-    // 生成唯一 ID
-    const requestId = `req_${dt.timestamp()}_${Math.random().toString(36).slice(2)}`
-    const pendingAssistantId = `pending_${dt.timestamp()}_${Math.random().toString(36).slice(2)}`
+    // 生成唯一 ID (时间戳 + 递增计数器 + 随机数，确保全局唯一)
+    const timestamp = dt.timestamp()
+    const counter = ++messageIdCounter
+    const randomSuffix = Math.random().toString(36).slice(2)
+
+    const requestId = `req_${timestamp}_${counter}_${randomSuffix}`
+    const pendingAssistantId = `pending_${timestamp}_${counter}_${randomSuffix}`
 
     // 创建用户消息
     const userMessage: ChatMessage = {
-      id: `msg_${dt.timestamp()}_${Math.random().toString(36).slice(2)}`,
+      id: `msg_${timestamp}_${counter}_${randomSuffix}`,
       role: 'user',
       content,
-      timestamp: dt.timestamp(),
+      timestamp,
       status: 'completed' // 用户消息立即完成
     }
 
@@ -59,9 +74,6 @@ export function useChatActions({
     const previousController = abortRef.current
     abortRef.current = currentController // 先设置新控制器再中止旧的
     previousController?.abort() // 中止之前的请求
-
-    // 设置流状态
-    setIsStreaming(true)
 
     try {
       // 发送 started 事件
@@ -106,7 +118,78 @@ export function useChatActions({
       // 使用现成SSE解析工具，修复跨chunk数据丢失问题
       const reader = response.body!.getReader()
 
+      let hasDouyinPipeline = false
+      let douyinFinalMarkdown: string | null = null
+      let douyinError: string | null = null
+      let douyinResultPayload: DouyinDoneEventPayload | null = null
+
       const fullContent = await processSSEStream(reader, {
+        onMessage: (message) => {
+          if (!message.event) return
+
+          if (message.event.startsWith('douyin-')) {
+            hasDouyinPipeline = true
+          }
+
+          switch (message.event) {
+            case 'douyin-progress': {
+              if (!message.payload) return
+              onEvent?.({
+                type: 'douyin-progress',
+                requestId,
+                pendingAssistantId,
+                progress: message.payload as DouyinProgressEventPayload
+              })
+              break
+            }
+            case 'douyin-info': {
+              if (!message.payload) return
+              onEvent?.({
+                type: 'douyin-info',
+                requestId,
+                pendingAssistantId,
+                info: message.payload as DouyinInfoEventPayload
+              })
+              break
+            }
+            case 'douyin-partial': {
+              if (!message.payload) return
+              onEvent?.({
+                type: 'douyin-partial',
+                requestId,
+                pendingAssistantId,
+                data: message.payload as DouyinPartialEventPayload
+              })
+              break
+            }
+            case 'douyin-done': {
+              if (!message.payload) return
+              douyinResultPayload = message.payload as DouyinDoneEventPayload
+              douyinFinalMarkdown = douyinResultPayload.markdown
+              onEvent?.({
+                type: 'douyin-done',
+                requestId,
+                pendingAssistantId,
+                result: douyinResultPayload
+              })
+              break
+            }
+            case 'douyin-error': {
+              const payload = (message.payload ?? {}) as { message?: string; step?: DouyinPipelineStep }
+              douyinError = payload?.message || '抖音视频处理失败'
+              onEvent?.({
+                type: 'douyin-error',
+                requestId,
+                pendingAssistantId,
+                error: douyinError,
+                step: payload?.step
+              })
+              break
+            }
+            default:
+              break
+          }
+        },
         onContent: (delta, _fullContent) => {
           // 发送 chunk 事件
           onEvent?.({
@@ -126,13 +209,26 @@ export function useChatActions({
         }
       })
 
-      // 创建最终助手消息
+      const finalContent = douyinFinalMarkdown ?? fullContent
+
+      if (hasDouyinPipeline && !finalContent) {
+        throw new Error(douyinError || '抖音视频处理失败')
+      }
+
+      const isDouyinFlow = hasDouyinPipeline && !!douyinResultPayload
+      const assistantMetadata: ChatMessage['metadata'] = { model }
+
+      if (isDouyinFlow && douyinResultPayload) {
+        assistantMetadata.douyinResult = douyinResultPayload
+        assistantMetadata.douyinProgressMessageId = pendingAssistantId
+      }
+
       const assistantMessage: ChatMessage = {
-        id: pendingAssistantId,
+        id: isDouyinFlow ? `${pendingAssistantId}_result` : pendingAssistantId,
         role: 'assistant',
-        content: fullContent,
+        content: finalContent,
         timestamp: dt.timestamp(),
-        metadata: { model },
+        metadata: assistantMetadata,
         status: 'completed' // 助手消息流式完成后设为completed
       }
 
@@ -145,8 +241,7 @@ export function useChatActions({
         finishedAt: dt.timestamp()
       })
 
-      // 复位流状态和abort控制器（仅在是当前请求时清理）
-      setIsStreaming(false)
+      // 清理 abort 控制器（仅在是当前请求时复位）
       if (abortRef.current === currentController) {
         abortRef.current = null
       }
@@ -162,10 +257,26 @@ export function useChatActions({
             if (!oldData) return oldData
 
             const existingMessages = oldData.messages || []
-            const messageExists = existingMessages.some(msg => msg.id === assistantMessage.id)
-            const mergedMessages = messageExists
-              ? existingMessages.map(msg => msg.id === assistantMessage.id ? assistantMessage : msg)
-              : [...existingMessages, assistantMessage]
+
+            // 【关键修复】同时添加用户消息和助手消息
+            const userExists = existingMessages.some(msg => msg.id === userMessage.id)
+            const assistantExists = existingMessages.some(msg => msg.id === assistantMessage.id)
+
+            let mergedMessages = [...existingMessages]
+
+            // 添加用户消息(如果不存在)
+            if (!userExists) {
+              mergedMessages.push(userMessage)
+            }
+
+            // 添加或更新助手消息
+            if (assistantExists) {
+              mergedMessages = mergedMessages.map(msg =>
+                msg.id === assistantMessage.id ? assistantMessage : msg
+              )
+            } else {
+              mergedMessages.push(assistantMessage)
+            }
 
             mergedMessages.sort((a, b) => a.timestamp - b.timestamp)
 
@@ -193,7 +304,12 @@ export function useChatActions({
               oldData.metadata?.messageCount ??
               adjustedMessages.length
 
-            const newTotalCount = messageExists ? totalCountBase : totalCountBase + 1
+            // 【修复】正确计算新增消息数(用户消息+助手消息)
+            let newMessagesAdded = 0
+            if (!userExists) newMessagesAdded++
+            if (!assistantExists) newMessagesAdded++
+
+            const newTotalCount = totalCountBase + newMessagesAdded
 
             const updatedMetadata = {
               ...oldData.metadata,
@@ -237,8 +353,17 @@ export function useChatActions({
                 conv.messageCount ??
                 conv.metadata?.messageCount ??
                 (conv.messages?.length ?? 0)
-              const isSameAsLatest = conv.lastMessage?.id === assistantMessage.id
-              const nextCount = isSameAsLatest ? baseCount : baseCount + 1
+
+              // 【修复】检查用户消息和助手消息是否已存在
+              const existingMessages = conv.messages || []
+              const userAlreadyExists = existingMessages.some((m: any) => m.id === userMessage.id)
+              const assistantAlreadyExists = conv.lastMessage?.id === assistantMessage.id
+
+              let added = 0
+              if (!userAlreadyExists) added++
+              if (!assistantAlreadyExists) added++
+
+              const nextCount = baseCount + added
 
               return {
                 ...conv,
@@ -269,9 +394,6 @@ export function useChatActions({
     }
 
     } catch (error) {
-      // 复位流状态
-      setIsStreaming(false)
-
       // 检查是否是当前请求被中止（避免清理新请求的控制器）
       if (abortRef.current === currentController) {
         abortRef.current = null
@@ -311,12 +433,10 @@ export function useChatActions({
     const currentController = abortRef.current
     abortRef.current = null // 先清空引用再中止
     currentController?.abort()
-    setIsStreaming(false)
   }, [])
 
   return {
     sendMessage,
-    stopGeneration,
-    isStreaming
+    stopGeneration
   }
 }

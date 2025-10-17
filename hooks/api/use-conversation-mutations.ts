@@ -58,8 +58,14 @@ export function useUpdateConversationMutation() {
     },
 
     onSuccess: (updatedConversation) => {
+      // 【关键修复】验证API返回值完整性，防止差量响应污染缓存
+      // 如果后端只返回PATCH差量（如 { id, model }），不能直接覆盖缓存
+      const hasCompleteMetadata = updatedConversation.metadata &&
+        (updatedConversation.metadata.messageCount !== undefined ||
+         updatedConversation.metadata.lastMessage !== undefined)
+
       // 立即在所有对话列表缓存中更新对话
-      // 修复：使用 predicate 匹配所有 lists 相关的查询（包括 summary）
+      // 修复：使用防御性合并，保留旧缓存中的完整字段（如 lastMessage）
       queryClient.setQueriesData(
         {
           predicate: (query) => {
@@ -71,9 +77,24 @@ export function useUpdateConversationMutation() {
         },
         (oldData: any) => {
           if (Array.isArray(oldData)) {
-            return oldData.map(conv =>
-              conv.id === updatedConversation.id ? { ...conv, ...updatedConversation } : conv
-            )
+            return oldData.map(conv => {
+              if (conv.id !== updatedConversation.id) return conv
+
+              // 【防御性合并】如果API返回不完整，保留旧缓存的metadata
+              if (!hasCompleteMetadata && conv.metadata) {
+                return {
+                  ...conv,
+                  ...updatedConversation,
+                  metadata: {
+                    ...conv.metadata,           // 保留旧metadata（包含lastMessage等）
+                    ...updatedConversation.metadata, // 覆盖更新字段（如pinned/tags）
+                  }
+                }
+              }
+
+              // API返回完整数据，直接合并
+              return { ...conv, ...updatedConversation }
+            })
           }
           return oldData
         }

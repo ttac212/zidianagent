@@ -387,7 +387,7 @@ export async function updateMerchantVideos(
     let updatedVideos = 0
 
     for (const video of videosResponse.aweme_list) {
-      const videoPublishedAt = dt.safeDate(video.create_time * 1000)
+      const videoPublishedAt = dt.parse(new Date(video.create_time * 1000).toISOString())
 
       // 如果视频早于最新记录，跳过（已经同步过）
       if (latestPublishedAt && videoPublishedAt && videoPublishedAt <= latestPublishedAt) {

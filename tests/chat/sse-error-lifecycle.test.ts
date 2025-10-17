@@ -60,14 +60,15 @@ data: [DONE]`
     expect(result.messages).toHaveLength(0)
   })
 
-  it('应该正确处理格式错误的数据', () => {
+  it('应该容错处理格式错误的JSON数据', () => {
     const invalidSSEContent = `data: {"invalid json"
 
 data: [DONE]`
 
     const result = parseSSEChunk(invalidSSEContent)
 
-    expect(result.messages).toHaveLength(0)
-    expect(result.remainingBuffer).toBeTruthy()
+    // safeParseData会fallback到纯文本,这是正确的容错行为
+    expect(result.messages).toHaveLength(1)
+    expect(result.messages[0].content).toBe('{"invalid json"')
   })
 })

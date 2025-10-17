@@ -169,7 +169,7 @@ async function testGetUserVideos() {
       console.log(`   点赞数: ${video.statistics.digg_count}`)
       console.log(`   评论数: ${video.statistics.comment_count}`)
       console.log(`   分享数: ${video.statistics.share_count}`)
-      console.log(`   发布时间: ${dt.safeDate(video.create_time * 1000)?.toLocaleString('zh-CN')}`)
+      console.log(`   发布时间: ${dt.parse(new Date(video.create_time * 1000).toISOString())?.toLocaleString('zh-CN')}`)
       console.log()
     })
 

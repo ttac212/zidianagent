@@ -16,7 +16,9 @@
     "db:studio": "prisma studio",
     "db:migrate": "prisma migrate dev",
     "check": "pnpm lint && pnpm type-check && pnpm test:run",
-    "deploy:check": "pnpm type-check && pnpm lint && pnpm build"
+    "deploy:check": "pnpm type-check && pnpm lint && pnpm build",
+    "check:douyin": "tsx scripts/check-douyin-setup.ts",
+    "test:douyin": "tsx scripts/test-doubao-asr.ts"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
@@ -58,12 +60,14 @@
     "csv-parse": "^5.6.0",
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",
+    "form-data": "^4.0.4",
     "framer-motion": "latest",
     "immer": "^10.1.3",
     "lucide-react": "^0.454.0",
     "next": "^15.4.7",
     "next-auth": "^4.24.11",
     "next-themes": "latest",
+    "p-limit": "^7.1.1",
     "react": "^19",
     "react-dom": "^19",
     "react-hook-form": "^7.62.0",
@@ -98,6 +102,7 @@
     "prisma": "^6.14.0",
     "tailwindcss": "^4.1.9",
     "ts-node": "^10.9.2",
+    "tsx": "^4.20.6",
     "typescript": "^5",
     "vitest": "^3.2.4"
   },

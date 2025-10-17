@@ -94,9 +94,9 @@ export function mapVideoToMerchantContent(
     shareCount: video.statistics?.share_count || 0,
     tags: JSON.stringify(tags),
     textExtra: JSON.stringify(textExtra),
-    publishedAt: dt.safeDate(video.create_time * 1000),
+    publishedAt: dt.parse(video.create_time * 1000) || dt.now(),
     collectedAt: dt.now(),
-    externalCreatedAt: dt.safeDate(video.create_time * 1000),
+    externalCreatedAt: dt.parse(video.create_time * 1000) || dt.now(),
   }
 }
 

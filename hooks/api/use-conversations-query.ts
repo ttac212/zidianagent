@@ -185,7 +185,15 @@ function safeParseTimestamp(dateValue: string | number | Date | undefined | null
 /**
  * 转换API对话为前端对话格式
  */
-function transformApiConversation(conv: ApiConversation): Conversation {
+export function transformApiConversation(conv: ApiConversation): Conversation {
+  if (!conv.createdAt) {
+    throw new Error('Invalid conversation payload: missing createdAt')
+  }
+
+  if (!conv.updatedAt) {
+    throw new Error('Invalid conversation payload: missing updatedAt')
+  }
+
   const transformedConversation: Conversation = {
     id: conv.id,
     title: conv.title,

@@ -8,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 
 import { MessageItem } from './message-item'
 import type { ChatMessagesProps } from '@/types/chat'
+import { CHAT_CONTAINER_MAX_WIDTH, CHAT_STATE_MAX_WIDTH } from '@/lib/config/layout-config'
 
 
 // 友好化错误处理函数
@@ -114,8 +115,10 @@ export const ChatMessages = forwardRef<HTMLDivElement, ChatMessagesProps>(({
   if (error && messages.length === 0) {
     return (
       <ScrollArea ref={ref} className="h-full w-full">
-        <div className="p-4 max-w-[720px] mx-auto">
-          <ErrorState error={error} />
+        <div className="p-4">
+          <div className={CHAT_STATE_MAX_WIDTH}>
+            <ErrorState error={error} />
+          </div>
         </div>
       </ScrollArea>
     )
@@ -125,11 +128,13 @@ export const ChatMessages = forwardRef<HTMLDivElement, ChatMessagesProps>(({
   if (isLoading && messages.length === 0) {
     return (
       <ScrollArea ref={ref} className="h-full w-full">
-        <div className="p-4 max-w-[720px] mx-auto">
-          <div className="text-center py-8">
-            <div className="flex items-center justify-center gap-2 text-muted-foreground">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current" />
-              <span className="text-sm">加载消息中...</span>
+        <div className="p-4">
+          <div className={CHAT_STATE_MAX_WIDTH}>
+            <div className="text-center py-8">
+              <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current" />
+                <span className="text-sm">加载消息中...</span>
+              </div>
             </div>
           </div>
         </div>
@@ -139,7 +144,7 @@ export const ChatMessages = forwardRef<HTMLDivElement, ChatMessagesProps>(({
 
   return (
     <ScrollArea ref={ref} className="h-full w-full">
-      <div className="p-4 space-y-6 max-w-[720px] mx-auto min-h-full">
+      <div className={`space-y-6 min-h-full ${CHAT_CONTAINER_MAX_WIDTH}`}>
         {hasMoreBefore && onLoadMore && (
           <div className="flex justify-center">
             <button

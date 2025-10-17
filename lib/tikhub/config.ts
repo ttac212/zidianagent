@@ -44,7 +44,7 @@ export const TIKHUB_ENDPOINTS = {
     getUserVideos: '/api/v1/douyin/app/v3/fetch_user_post_videos',
 
     // 获取单个视频详情
-    getVideoDetail: '/api/v1/douyin/app/v1/fetch_one_video',
+    getVideoDetail: '/api/v1/douyin/app/v3/fetch_one_video',
 
     // 搜索用户
     searchUser: '/api/v1/douyin/web/fetch_user_search_result',

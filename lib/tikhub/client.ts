@@ -223,8 +223,20 @@ export class TikHubClient {
    */
   async getVideoDetail(params: GetVideoDetailParams): Promise<DouyinVideoDetailResponse> {
     const response = await this.request<DouyinVideoDetailResponse>({
-      endpoint: '/api/v1/douyin/app/v1/fetch_one_video',
+      endpoint: '/api/v1/douyin/app/v3/fetch_one_video',
       params,
+    })
+    return response.data
+  }
+
+  /**
+   * 从任意抖音链接中提取视频ID
+   * 支持各种格式的分享链接,包括短代码
+   */
+  async extractAwemeId(url: string): Promise<string> {
+    const response = await this.request<string>({
+      endpoint: '/api/v1/douyin/web/get_aweme_id',
+      params: { url },
     })
     return response.data
   }

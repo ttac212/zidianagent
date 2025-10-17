@@ -65,10 +65,14 @@ export async function GET(request: NextRequest) {
         id: true,
         title: true,
         modelId: true,
+        temperature: true,
+        maxTokens: true,
+        contextAware: true,
         messageCount: true,
         totalTokens: true,
         metadata: true, // 修复：返回metadata字段（包含pinned、tags等）
         createdAt: true,
+        updatedAt: true,
         lastMessageAt: true,
         // 根据includeMessages决定消息查询策略
         messages: includeMessages ? {
@@ -118,7 +122,12 @@ export async function GET(request: NextRequest) {
       const mappedMessages = includeMessages && conv.messages ? conv.messages.map((msg: any) => ({
         ...msg,
         model: msg.modelId, // 映射 modelId 到 model 字段
-        totalTokens: (msg.promptTokens || 0) + (msg.completionTokens || 0) // 修复字段名匹配
+        timestamp: new Date(msg.createdAt).getTime(), // 映射 createdAt 到 timestamp (number)
+        status: 'completed' as const, // 默认状态为已完成
+        totalTokens: (msg.promptTokens || 0) + (msg.completionTokens || 0), // 修复字段名匹配
+        metadata: {
+          model: msg.modelId // 确保 metadata 中也有 model
+        }
       })) : undefined
 
       return {
