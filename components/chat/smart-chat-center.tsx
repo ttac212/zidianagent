@@ -185,7 +185,11 @@ function SmartChatCenterInternal({
   const handleChatEvent = useCallback((event: ChatEvent) => {
     switch (event.type) {
       case 'started': {
-        dispatch({ type: 'SEND_USER_MESSAGE', payload: event.userMessage })
+        // 添加用户消息
+        dispatch({ type: 'ADD_MESSAGE', payload: event.userMessage })
+
+        // 清空输入框
+        dispatch({ type: 'SET_INPUT', payload: '' })
 
         const pendingMessage: ChatMessage = {
           id: event.pendingAssistantId,

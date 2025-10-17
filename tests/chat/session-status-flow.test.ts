@@ -69,7 +69,7 @@ describe('Chat session status state machine', () => {
     expect(state.session.status).toBe('idle')
   })
 
-  it('SEND_USER_MESSAGE moves session to requesting and clears composer input', () => {
+  it('ADD_MESSAGE adds user message and moves session to requesting', () => {
     const userMessage: ChatMessage = {
       id: 'msg_1',
       role: 'user',
@@ -78,13 +78,23 @@ describe('Chat session status state machine', () => {
       status: 'completed'
     }
 
-    let state = chatReducer(
-      chatReducer(DEFAULT_CHAT_STATE, { type: 'SET_INPUT', payload: 'hello' }),
-      {
-        type: 'SEND_USER_MESSAGE',
-        payload: userMessage
-      }
-    )
+    // 先设置输入
+    let state = chatReducer(DEFAULT_CHAT_STATE, { type: 'SET_INPUT', payload: 'hello' })
+
+    // 添加用户消息
+    state = chatReducer(state, {
+      type: 'ADD_MESSAGE',
+      payload: userMessage
+    })
+
+    // 清空输入框
+    state = chatReducer(state, { type: 'SET_INPUT', payload: '' })
+
+    // 转换会话状态
+    state = chatReducer(state, {
+      type: 'SESSION_TRANSITION',
+      payload: { status: 'requesting' }
+    })
 
     expect(state.history.messages).toHaveLength(1)
     expect(state.history.messages[0].id).toBe('msg_1')

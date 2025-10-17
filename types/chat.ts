@@ -162,8 +162,6 @@ export type ChatAction =
   | { type: 'UPDATE_DOUYIN_PARTIAL'; payload: { messageId: string; data: DouyinPartialEventPayload } }
   | { type: 'UPDATE_DOUYIN_DONE'; payload: { messageId: string; result: DouyinDoneEventPayload } }
   | { type: 'UPDATE_DOUYIN_ERROR'; payload: { messageId: string; error: string; step?: DouyinPipelineStep } }
-  // 保留向后兼容的 action（逐步废弃）
-  | { type: 'SEND_USER_MESSAGE'; payload: ChatMessage }
 
 // 组件 Props 类型
 export interface SmartChatCenterProps {

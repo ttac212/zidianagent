@@ -655,27 +655,6 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         }
       }
 
-    case 'SEND_USER_MESSAGE': {
-      const nextMessages = [...state.history.messages, action.payload]
-
-      return {
-        ...state,
-        history: {
-          ...state.history,
-          messages: nextMessages
-        },
-        composer: {
-          ...state.composer,
-          input: ''
-        },
-        session: mergeSessionState(state.session, {
-          status: 'requesting',
-          error: null,
-          updatedAt: now()
-        })
-      }
-    }
-
     case 'SET_LOADING': {
       const isLoading = action.payload
       const nextStatus = isLoading
