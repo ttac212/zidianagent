@@ -196,6 +196,25 @@ function mapLegacyPhaseToStatus(phase: LegacyResponsePhase): ChatSessionStatus {
   return LEGACY_PHASE_STATUS_MAP[phase] ?? 'idle'
 }
 
+/**
+ * 工具函数：更新指定消息，避免重复的 map 样板代码
+ */
+function updateMessageById(
+  state: ChatState,
+  messageId: string,
+  updater: (msg: ChatMessage) => ChatMessage
+): ChatState {
+  return {
+    ...state,
+    history: {
+      ...state.history,
+      messages: state.history.messages.map(msg =>
+        msg.id === messageId ? updater(msg) : msg
+      )
+    }
+  }
+}
+
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
     case 'SESSION_SET_CONVERSATION': {
@@ -513,147 +532,76 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       }
     }
 
-    case 'UPDATE_DOUYIN_PROGRESS':
-      return {
-        ...state,
-        history: {
-          ...state.history,
-          messages: state.history.messages.map(message => {
-            if (message.id !== action.payload.messageId) {
-              return message
-            }
+    case 'UPDATE_DOUYIN_PROGRESS': {
+      return updateMessageById(state, action.payload.messageId, msg => {
+        const nextProgress = applyDouyinProgressUpdate(
+          msg.metadata?.douyinProgress,
+          action.payload.progress
+        )
+        const nextStatus = nextProgress.status === 'failed'
+          ? 'error'
+          : nextProgress.status === 'completed'
+            ? 'completed'
+            : 'streaming'
 
-            const nextProgress = applyDouyinProgressUpdate(
-              message.metadata?.douyinProgress,
-              action.payload.progress
-            )
-
-            const nextMetadata = {
-              ...message.metadata,
-              douyinProgress: nextProgress
-            }
-
-            const nextStatus = nextProgress.status === 'failed'
-              ? 'error'
-              : nextProgress.status === 'completed'
-                ? 'completed'
-                : 'streaming'
-
-            return {
-              ...message,
-              metadata: nextMetadata,
-              status: nextStatus
-            }
-          })
+        return {
+          ...msg,
+          metadata: { ...msg.metadata, douyinProgress: nextProgress },
+          status: nextStatus
         }
-      }
+      })
+    }
 
     case 'UPDATE_DOUYIN_INFO':
-      return {
-        ...state,
-        history: {
-          ...state.history,
-          messages: state.history.messages.map(message => {
-            if (message.id !== action.payload.messageId) {
-              return message
-            }
-
-            const nextProgress = applyDouyinInfoUpdate(
-              message.metadata?.douyinProgress,
-              action.payload.info
-            )
-
-            return {
-              ...message,
-              metadata: {
-                ...message.metadata,
-                douyinProgress: nextProgress
-              }
-            }
-          })
+      return updateMessageById(state, action.payload.messageId, msg => ({
+        ...msg,
+        metadata: {
+          ...msg.metadata,
+          douyinProgress: applyDouyinInfoUpdate(
+            msg.metadata?.douyinProgress,
+            action.payload.info
+          )
         }
-      }
+      }))
 
     case 'UPDATE_DOUYIN_PARTIAL':
-      return {
-        ...state,
-        history: {
-          ...state.history,
-          messages: state.history.messages.map(message => {
-            if (message.id !== action.payload.messageId) {
-              return message
-            }
-
-            const nextProgress = applyDouyinPartialUpdate(
-              message.metadata?.douyinProgress,
-              action.payload.data
-            )
-
-            return {
-              ...message,
-              metadata: {
-                ...message.metadata,
-                douyinProgress: nextProgress
-              }
-            }
-          })
+      return updateMessageById(state, action.payload.messageId, msg => ({
+        ...msg,
+        metadata: {
+          ...msg.metadata,
+          douyinProgress: applyDouyinPartialUpdate(
+            msg.metadata?.douyinProgress,
+            action.payload.data
+          )
         }
-      }
+      }))
 
     case 'UPDATE_DOUYIN_DONE':
-      return {
-        ...state,
-        history: {
-          ...state.history,
-          messages: state.history.messages.map(message => {
-            if (message.id !== action.payload.messageId) {
-              return message
-            }
-
-            const nextProgress = applyDouyinDoneUpdate(
-              message.metadata?.douyinProgress,
-              action.payload.result
-            )
-
-            return {
-              ...message,
-              metadata: {
-                ...message.metadata,
-                douyinProgress: nextProgress
-              },
-              status: 'completed'
-            }
-          })
-        }
-      }
+      return updateMessageById(state, action.payload.messageId, msg => ({
+        ...msg,
+        metadata: {
+          ...msg.metadata,
+          douyinProgress: applyDouyinDoneUpdate(
+            msg.metadata?.douyinProgress,
+            action.payload.result
+          )
+        },
+        status: 'completed'
+      }))
 
     case 'UPDATE_DOUYIN_ERROR':
-      return {
-        ...state,
-        history: {
-          ...state.history,
-          messages: state.history.messages.map(message => {
-            if (message.id !== action.payload.messageId) {
-              return message
-            }
-
-            const nextProgress = applyDouyinErrorUpdate(
-              message.metadata?.douyinProgress,
-              action.payload.error,
-              action.payload.step
-            )
-
-            return {
-              ...message,
-              metadata: {
-                ...message.metadata,
-                douyinProgress: nextProgress
-              },
-              status: 'error'
-            }
-          })
-        }
-      }
+      return updateMessageById(state, action.payload.messageId, msg => ({
+        ...msg,
+        metadata: {
+          ...msg.metadata,
+          douyinProgress: applyDouyinErrorUpdate(
+            msg.metadata?.douyinProgress,
+            action.payload.error,
+            action.payload.step
+          )
+        },
+        status: 'error'
+      }))
 
     case 'SET_LOADING': {
       const isLoading = action.payload
