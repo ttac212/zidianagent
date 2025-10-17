@@ -1,0 +1,314 @@
+/**
+ * 抖音视频文案提取 API (GPT-4o Audio Preview)
+ *
+ * 流程:
+ * 1. 下载视频
+ * 2. 提取音频
+ * 3. 使用 GPT-4o Audio Preview 转录
+ * 4. 使用LLM优化文案
+ */
+
+import { NextRequest } from 'next/server';
+import { VideoProcessor } from '@/lib/video/video-processor';
+import { parseDouyinVideoShare } from '@/lib/douyin/share-link';
+import { DOUYIN_DEFAULT_HEADERS } from '@/lib/douyin/constants';
+import { getTikHubClient } from '@/lib/tikhub';
+import type { DouyinVideo } from '@/lib/tikhub/types';
+
+export async function POST(req: NextRequest) {
+  try {
+    const { shareLink } = await req.json();
+
+    if (!shareLink) {
+      return new Response(
+        JSON.stringify({ error: '缺少分享链接参数' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const apiKey = process.env.DOUBAO_ASR_API_KEY || process.env.LLM_API_KEY;
+    if (!apiKey) {
+      throw new Error('未配置DOUBAO_ASR_API_KEY或LLM_API_KEY环境变量');
+    }
+
+    // 创建SSE流
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+
+        const sendEvent = (type: string, data: any) => {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type, ...data })}\n\n`)
+          );
+        };
+
+        try {
+          // 1. 解析抖音链接
+          sendEvent('progress', { stage: 'parsing', message: '正在解析抖音链接...' });
+
+          const tikhubClient = getTikHubClient();
+          const shareResult = await parseDouyinVideoShare(shareLink);
+
+          if (!shareResult.videoId) {
+            throw new Error('无法从链接中提取视频ID');
+          }
+
+          sendEvent('info', {
+            stage: 'parsed',
+            message: '短链解析成功',
+            videoInfo: { videoId: shareResult.videoId },
+          });
+
+          // 2. 获取视频详情
+          sendEvent('progress', { stage: 'analyzing', message: '正在获取视频详情...' });
+
+          const videoDetail = await tikhubClient.getVideoDetail({
+            aweme_id: shareResult.videoId,
+          });
+
+          const awemeDetail = videoDetail?.aweme_detail;
+          if (!awemeDetail) {
+            throw new Error('TikHub未返回视频详情数据');
+          }
+
+          const videoUrl = resolvePlayableVideoUrl(awemeDetail);
+          if (!videoUrl) {
+            throw new Error('未能获取可用的视频播放地址');
+          }
+
+          const videoDuration = normalizeDurationSeconds(awemeDetail.video?.duration) || 0;
+
+          sendEvent('info', {
+            stage: 'analyzed',
+            message: '视频信息获取成功',
+            duration: videoDuration ? videoDuration.toFixed(1) + '秒' : '未知',
+            videoInfo: {
+              title: awemeDetail.desc || '未知标题',
+              author: awemeDetail.author?.nickname || '未知作者',
+            },
+          });
+
+          // 3. 下载视频
+          sendEvent('progress', { stage: 'downloading', message: '正在下载视频...', percent: 20 });
+
+          const requestHeaders: Record<string, string> = {
+            ...DOUYIN_DEFAULT_HEADERS,
+          };
+
+          // 先获取视频大小
+          const videoInfo = await VideoProcessor.getVideoInfo(videoUrl, {
+            headers: requestHeaders,
+          });
+
+          // 下载完整视频
+          const videoBuffer = await VideoProcessor.downloadChunk(
+            videoUrl,
+            0,
+            videoInfo.size - 1, // 下载整个文件
+            { headers: requestHeaders }
+          );
+
+          sendEvent('info', {
+            stage: 'downloaded',
+            message: '视频下载完成',
+            size: (videoBuffer.length / (1024 * 1024)).toFixed(2) + ' MB',
+          });
+
+          // 4. 提取音频
+          sendEvent('progress', { stage: 'extracting', message: '正在提取音频...', percent: 40 });
+
+          const audioBuffer = await VideoProcessor.extractAudio(videoBuffer, {
+            format: 'mp3',
+            sampleRate: 16000,
+            channels: 1,
+            bitrate: '128k',
+          });
+
+          sendEvent('info', {
+            stage: 'extracted',
+            message: '音频提取完成',
+            size: (audioBuffer.length / (1024 * 1024)).toFixed(2) + ' MB',
+          });
+
+          // 5. 使用 GPT-4o Audio Preview 转录
+          sendEvent('progress', { stage: 'transcribing', message: '正在使用GPT-4o转录语音...', percent: 60 });
+
+          const base64Audio = audioBuffer.toString('base64');
+
+          const asrResponse = await fetch('https://api.302.ai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: 'gpt-4o-audio-preview',
+              modalities: ['text'],
+              messages: [
+                {
+                  role: 'user',
+                  content: [
+                    {
+                      type: 'text',
+                      text: '请转录这段音频的内容,只返回转录的文字,不要添加任何说明或解释。',
+                    },
+                    {
+                      type: 'input_audio',
+                      input_audio: {
+                        data: base64Audio,
+                        format: 'mp3',
+                      },
+                    },
+                  ],
+                },
+              ],
+              max_tokens: 4000,
+              temperature: 0.1,
+            }),
+          });
+
+          if (!asrResponse.ok) {
+            const errorText = await asrResponse.text();
+            throw new Error(`GPT-4o转录失败: ${asrResponse.status} - ${errorText}`);
+          }
+
+          const asrResult = await asrResponse.json();
+          const transcribedText = asrResult.choices?.[0]?.message?.content || '';
+
+          if (!transcribedText) {
+            throw new Error('转录失败,未返回文本');
+          }
+
+          sendEvent('info', {
+            stage: 'transcribed',
+            message: '语音转录完成',
+            textLength: transcribedText.length,
+          });
+
+          // 6. 使用LLM优化文案
+          sendEvent('progress', { stage: 'optimizing', message: '正在优化文案...', percent: 90 });
+
+          const optimizedText = await optimizeTextWithLLM(transcribedText, apiKey);
+
+          // 7. 返回最终结果
+          sendEvent('done', {
+            text: optimizedText || transcribedText,
+            originalText: transcribedText,
+            videoInfo: {
+              title: awemeDetail.desc || '未知标题',
+              author: awemeDetail.author?.nickname || '未知作者',
+              duration: videoDuration,
+              videoId: shareResult.videoId,
+            },
+            stats: {
+              totalCharacters: transcribedText.length,
+            },
+          });
+
+          controller.close();
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : '未知错误';
+
+          console.error('处理失败:', {
+            message: errorMessage,
+            error,
+          });
+
+          sendEvent('error', {
+            message: errorMessage,
+          });
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      },
+    });
+  } catch (error) {
+    console.error('API错误:', error);
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : '未知错误',
+      }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
+function resolvePlayableVideoUrl(video: DouyinVideo): string | null {
+  const videoData: any = video.video || video;
+  if (!videoData) return null;
+
+  const candidates: Array<string | undefined> = [];
+
+  if (Array.isArray(videoData.play_addr?.url_list)) {
+    candidates.push(...videoData.play_addr.url_list);
+  }
+
+  if (Array.isArray(videoData.bit_rate)) {
+    for (const item of videoData.bit_rate) {
+      if (Array.isArray(item?.play_addr?.url_list)) {
+        candidates.push(...item.play_addr.url_list);
+      }
+    }
+  }
+
+  if (Array.isArray(videoData.download_addr?.url_list)) {
+    candidates.push(...videoData.download_addr.url_list);
+  }
+
+  const sanitized = candidates
+    .map((url) => (url?.includes('playwm') ? url.replace('playwm', 'play') : url))
+    .filter((url): url is string => Boolean(url));
+
+  return sanitized.find((url) => url.includes('aweme')) || sanitized[0] || null;
+}
+
+function normalizeDurationSeconds(duration?: number | null): number {
+  if (!duration || Number.isNaN(duration)) return 0;
+  return duration >= 1000 ? duration / 1000 : duration;
+}
+
+async function optimizeTextWithLLM(text: string, apiKey: string): Promise<string | null> {
+  try {
+    const response = await fetch('https://api.302.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'claude-3-5-haiku-20241022',
+        messages: [
+          {
+            role: 'system',
+            content:
+              '你是一个专业的文案编辑。请对用户提供的视频转录文本进行优化：\n1. 修正明显的语音识别错误\n2. 添加适当的标点符号和段落\n3. 保持原意，不要添加原文没有的内容\n4. 直接返回优化后的文本，不要添加任何说明',
+          },
+          {
+            role: 'user',
+            content: text,
+          },
+        ],
+        max_tokens: 4000,
+        temperature: 0.3,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('LLM优化失败:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content || null;
+  } catch (error) {
+    console.error('LLM优化出错:', error);
+    return null;
+  }
+}
