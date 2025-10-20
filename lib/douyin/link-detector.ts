@@ -267,7 +267,33 @@ export async function extractAndResolveLink(text: string): Promise<DouyinLinkInf
 }
 
 /**
- * 检查文本是否主要是抖音分享请求
+ * 检查文本是否明确请求视频文案提取(需要关键词)
+ */
+export function isDouyinVideoExtractionRequest(text: string): boolean {
+  const trimmed = text.trim();
+
+  // 检查是否包含抖音链接
+  const shareLink = extractDouyinLink(trimmed);
+  if (!shareLink) return false;
+
+  // 视频文案提取关键词
+  const extractionKeywords = [
+    '提取',
+    '文案',
+    '转录',
+    '字幕',
+    '音频',
+    '视频内容',
+    '说了什么',
+    '讲的什么'
+  ];
+
+  // 检查是否包含提取关键词
+  return extractionKeywords.some((keyword) => trimmed.includes(keyword));
+}
+
+/**
+ * 检查文本是否主要是抖音分享请求(默认评论分析)
  */
 export function isDouyinShareRequest(text: string): boolean {
   const trimmed = text.trim();
@@ -275,6 +301,11 @@ export function isDouyinShareRequest(text: string): boolean {
   // 检查是否包含抖音链接
   const shareLink = extractDouyinLink(trimmed);
   if (!shareLink) return false;
+
+  // 如果明确请求视频提取,不走评论分析
+  if (isDouyinVideoExtractionRequest(text)) {
+    return false;
+  }
 
   // 去掉链接后的剩余文本
   const withoutLink = trimmed.replace(shareLink, '').trim();
@@ -307,60 +338,27 @@ export function isDouyinShareRequest(text: string): boolean {
     '长按复制',
   ];
 
-  // 用户请求处理视频的关键词
-  const requestKeywords = ['帮我', '提取', '分析', '转录', '文案'];
+  // 用户请求处理视频的关键词(去掉这些,因为默认是评论分析)
+  // const requestKeywords = ['帮我', '提取', '分析', '转录', '文案'];
 
-  // 1. 如果包含抖音官方分享文案特征,肯定是分享请求
+  // 1. 如果包含抖音官方分享文案特征,肯定是分享请求(默认评论分析)
   if (shareIndicators.some((indicator) => trimmed.includes(indicator))) {
     return true;
   }
 
-  // 2. 如果去掉链接后剩余文本很少,认为是纯链接分享
+  // 2. 如果去掉链接后剩余文本很少,认为是纯链接分享(默认评论分析)
   if (withoutLink.length < 50) {
     return true;
   }
 
-  // 3. 如果包含明确的请求关键词
-  if (requestKeywords.some((kw) => withoutLink.includes(kw))) {
-    return true;
-  }
-
-  // 4. 如果链接占文本的比例很大(说明主要内容是链接)
+  // 3. 如果链接占文本的比例很大(说明主要内容是链接)
   const linkRatio = shareLink.length / trimmed.length;
   if (linkRatio > 0.3) {
     return true;
   }
 
-  // 5. 否则,认为不是纯粹的分享请求
+  // 4. 否则,认为不是纯粹的分享请求
   return false;
-}
-
-/**
- * 检测文本是否是评论分析请求
- */
-export function isDouyinCommentsRequest(text: string): boolean {
-  const trimmed = text.trim();
-
-  // 检查是否包含抖音链接
-  const shareLink = extractDouyinLink(trimmed);
-  if (!shareLink) return false;
-
-  // 评论分析关键词
-  const commentsKeywords = [
-    '分析评论',
-    '评论分析',
-    '查看评论',
-    '评论数据',
-    '用户反馈',
-    '看看评论',
-    '评论怎么样',
-    '用户怎么说',
-    '评价如何',
-    '反馈',
-  ];
-
-  // 检查是否包含评论分析关键词
-  return commentsKeywords.some((keyword) => trimmed.includes(keyword));
 }
 
 /**

@@ -30,7 +30,7 @@ import {
   detectDouyinLink,
   extractDouyinLink,
   isDouyinShareRequest,
-  isDouyinCommentsRequest
+  isDouyinVideoExtractionRequest
 } from "@/lib/douyin/link-detector"
 import { runDouyinPipeline } from "@/lib/douyin/pipeline"
 import { runDouyinCommentsPipeline } from "@/lib/douyin/comments-pipeline"
@@ -73,14 +73,15 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // === 抖音视频处理：检测并返回视频信息 ===
+  // === 抖音链接处理：默认评论分析，除非明确要求视频提取 ===
   const lastUserMessage = messages[messages.length - 1]
 
   if (lastUserMessage?.role === 'user' && detectDouyinLink(lastUserMessage.content)) {
     console.info('[Douyin] 检测到抖音链接')
 
-    if (isDouyinShareRequest(lastUserMessage.content)) {
-      console.info('[Douyin] 处理抖音分享请求')
+    // 优先检查是否明确请求视频文案提取
+    if (isDouyinVideoExtractionRequest(lastUserMessage.content)) {
+      console.info('[Douyin] 明确请求视频文案提取')
 
       const shareLink = extractDouyinLink(lastUserMessage.content)
       if (!shareLink) {
@@ -181,8 +182,6 @@ export async function POST(request: NextRequest) {
 
             // SECURITY: 助手消息保存时再次确认权限(防御性编程)
             if (conversationId && finalMarkdown) {
-              // conversationId 已在上方第88-96行校验过,这里理论上安全
-              // 但为防御性考虑,再次确认权限
               try {
                 await QuotaManager.commitTokens(
                   userId,
@@ -219,15 +218,11 @@ export async function POST(request: NextRequest) {
           'Connection': 'keep-alive',
         }
       })
-    } else {
-      console.info('[Douyin] 检测到抖音链接但不是纯分享请求,保持原样')
     }
-  }
 
-  // === 抖音评论分析：检测并处理 ===
-  if (lastUserMessage?.role === 'user' && detectDouyinLink(lastUserMessage.content)) {
-    if (isDouyinCommentsRequest(lastUserMessage.content)) {
-      console.info('[Douyin Comments] 检测到评论分析请求')
+    // 默认：评论分析（只要是纯分享请求）
+    if (isDouyinShareRequest(lastUserMessage.content)) {
+      console.info('[Douyin Comments] 默认处理评论分析请求')
 
       const shareLink = extractDouyinLink(lastUserMessage.content)
       if (!shareLink) {
@@ -362,6 +357,8 @@ export async function POST(request: NextRequest) {
           'Connection': 'keep-alive'
         }
       })
+    } else {
+      console.info('[Douyin] 检测到抖音链接但不是纯分享请求,保持原样进入普通聊天')
     }
   }
 
