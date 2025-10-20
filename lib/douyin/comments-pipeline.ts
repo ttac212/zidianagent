@@ -123,7 +123,7 @@ async function emitProgress(
     Math.min(100, Math.round((completedSteps / total) * 100))
   )
 
-  await emit({
+  const progressEvent: DouyinCommentsProgressEvent = {
     type: 'progress',
     step,
     status,
@@ -133,7 +133,9 @@ async function emitProgress(
     detail,
     label: DOUYIN_COMMENTS_PIPELINE_STEPS[index].label,
     description: DOUYIN_COMMENTS_PIPELINE_STEPS[index].description
-  })
+  }
+
+  await emit(progressEvent)
 }
 
 /**
