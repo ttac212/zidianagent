@@ -18,7 +18,7 @@ const PROTECTED_PATHS = new Set([
 
 const PROTECTED_API_PREFIXES = [
   '/api/chat', '/api/conversations', '/api/users', '/api/admin',
-  '/api/merchants', '/api/workspace', '/api/keyword-data'
+  '/api/merchants', '/api/workspace'
 ]
 
 function isPublicPath(pathname: string): boolean {

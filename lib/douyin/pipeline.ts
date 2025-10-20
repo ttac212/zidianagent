@@ -207,7 +207,16 @@ export async function runDouyinPipeline(
     ensureActive(signal)
 
     await emitProgress(emit, 'parse-link', 'active')
-    const shareResult = await parseDouyinVideoShare(shareLink)
+    let shareResult
+    try {
+      shareResult = await parseDouyinVideoShare(shareLink)
+    } catch (error) {
+      throw new DouyinPipelineStepError(
+        error instanceof Error ? error.message : '链接解析失败',
+        'parse-link',
+        error
+      )
+    }
     ensureActive(signal)
 
     if (!shareResult.videoId) {
@@ -217,9 +226,18 @@ export async function runDouyinPipeline(
 
     await emitProgress(emit, 'fetch-detail', 'active')
     const tikhubClient = getTikHubClient()
-    const videoDetail = await tikhubClient.getVideoDetail({
-      aweme_id: shareResult.videoId
-    })
+    let videoDetail
+    try {
+      videoDetail = await tikhubClient.getVideoDetail({
+        aweme_id: shareResult.videoId
+      })
+    } catch (error) {
+      throw new DouyinPipelineStepError(
+        error instanceof Error ? error.message : 'TikHub API调用失败',
+        'fetch-detail',
+        error
+      )
+    }
     ensureActive(signal)
 
     const awemeDetail = videoDetail?.aweme_detail
@@ -257,65 +275,93 @@ export async function runDouyinPipeline(
       ...DOUYIN_DEFAULT_HEADERS
     }
 
-    const headInfo = await VideoProcessor.getVideoInfo(playableUrl, {
-      headers: requestHeaders
-    })
-    ensureActive(signal)
+    let headInfo
+    let videoBuffer
+    try {
+      headInfo = await VideoProcessor.getVideoInfo(playableUrl, {
+        headers: requestHeaders
+      })
+      ensureActive(signal)
 
-    const videoBuffer = await VideoProcessor.downloadChunk(
-      playableUrl,
-      0,
-      headInfo.size - 1,
-      { headers: requestHeaders }
-    )
-    ensureActive(signal)
+      videoBuffer = await VideoProcessor.downloadChunk(
+        playableUrl,
+        0,
+        headInfo.size - 1,
+        { headers: requestHeaders }
+      )
+      ensureActive(signal)
+    } catch (error) {
+      throw new DouyinPipelineStepError(
+        error instanceof Error ? error.message : '视频下载失败',
+        'download-video',
+        error
+      )
+    }
     await emitProgress(emit, 'download-video', 'completed')
 
     await emitProgress(emit, 'extract-audio', 'active')
-    const audioBuffer = await VideoProcessor.extractAudio(videoBuffer, {
-      format: 'mp3',
-      sampleRate: 16000,
-      channels: 1,
-      bitrate: '128k'
-    })
-    ensureActive(signal)
+    let audioBuffer
+    try {
+      audioBuffer = await VideoProcessor.extractAudio(videoBuffer, {
+        format: 'mp3',
+        sampleRate: 16000,
+        channels: 1,
+        bitrate: '128k'
+      })
+      ensureActive(signal)
+    } catch (error) {
+      throw new DouyinPipelineStepError(
+        error instanceof Error ? error.message : '音频提取失败',
+        'extract-audio',
+        error
+      )
+    }
     await emitProgress(emit, 'extract-audio', 'completed')
 
     await emitProgress(emit, 'transcribe-audio', 'active')
     const base64Audio = audioBuffer.toString('base64')
 
-    const asrResponse = await fetch('https://api.302.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-audio-preview',
-        modalities: ['text'],
-        max_tokens: 4000,
-        temperature: 0.1,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: '请转录这段音频的内容,只返回转录的文字,不要添加任何说明或解释。'
-              },
-              {
-                type: 'input_audio',
-                input_audio: {
-                  data: base64Audio,
-                  format: 'mp3'
+    let asrResponse
+    try {
+      asrResponse = await fetch('https://api.302.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-audio-preview',
+          modalities: ['text'],
+          max_tokens: 4000,
+          temperature: 0.1,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: '请转录这段音频的内容,只返回转录的文字,不要添加任何说明或解释。'
+                },
+                {
+                  type: 'input_audio',
+                  input_audio: {
+                    data: base64Audio,
+                    format: 'mp3'
+                  }
                 }
-              }
-            ]
-          }
-        ]
-      }),
-      signal
-    })
+              ]
+            }
+          ]
+        }),
+        signal
+      })
+    } catch (error) {
+      throw new DouyinPipelineStepError(
+        error instanceof Error ? error.message : 'ASR API请求失败',
+        'transcribe-audio',
+        error
+      )
+    }
 
     ensureActive(signal)
 

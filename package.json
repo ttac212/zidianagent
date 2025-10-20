@@ -16,9 +16,7 @@
     "db:studio": "prisma studio",
     "db:migrate": "prisma migrate dev",
     "check": "pnpm lint && pnpm type-check && pnpm test:run",
-    "deploy:check": "pnpm type-check && pnpm lint && pnpm build",
-    "check:douyin": "tsx scripts/check-douyin-setup.ts",
-    "test:douyin": "tsx scripts/test-doubao-asr.ts"
+    "deploy:check": "pnpm type-check && pnpm lint && pnpm build"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"

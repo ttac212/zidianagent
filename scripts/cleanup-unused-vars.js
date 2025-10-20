@@ -9,7 +9,7 @@ const fs = require('fs');
 const path = require('path');
 
 const fixes = [
-  // 1. 未使用的NextRequest导入 (5个文件)
+  // 1. 未使用的NextRequest导入 (2个文件)
   {
     file: 'app/api/health/route.ts',
     type: 'remove_import',
@@ -18,24 +18,6 @@ const fixes = [
   },
   {
     file: 'app/api/invite-codes/create-test/route.ts',
-    type: 'remove_import',
-    pattern: /, NextRequest/g,
-    replacement: ''
-  },
-  {
-    file: 'app/api/merchant-analysis/reports/route-simple.ts',
-    type: 'remove_import',
-    pattern: /, NextRequest/g,
-    replacement: ''
-  },
-  {
-    file: 'app/api/merchant-analysis/reports/route.ts',
-    type: 'remove_import',
-    pattern: /, NextRequest/g,
-    replacement: ''
-  },
-  {
-    file: 'app/api/merchant-analysis/reports/[id]/route.ts',
     type: 'remove_import',
     pattern: /, NextRequest/g,
     replacement: ''
@@ -88,12 +70,6 @@ const fixes = [
   // 3. 未使用的request参数 - 重命名为_request
   {
     file: 'app/api/auth/verify-invite-code/route.ts',
-    type: 'rename_param',
-    pattern: /GET\(request: NextRequest\)/g,
-    replacement: 'GET(_request: NextRequest)'
-  },
-  {
-    file: 'app/api/keyword-data/route.ts',
     type: 'rename_param',
     pattern: /GET\(request: NextRequest\)/g,
     replacement: 'GET(_request: NextRequest)'
