@@ -100,17 +100,29 @@ export async function POST(req: NextRequest) {
             headers: requestHeaders,
           });
 
-          // 下载完整视频
-          const videoBuffer = await VideoProcessor.downloadChunk(
-            videoUrl,
-            0,
-            videoInfo.size - 1, // 下载整个文件
-            { headers: requestHeaders }
-          );
+          let lastDownloadPercent = -1;
+          const downloadResult = await VideoProcessor.downloadVideo(videoUrl, videoInfo, {
+            headers: requestHeaders,
+            signal: request.signal,
+            onProgress: async (downloaded, total) => {
+              if (!total) return;
+              const percent = Math.floor((downloaded / total) * 100);
+              if (percent === lastDownloadPercent) return;
+              lastDownloadPercent = percent;
+              const mappedPercent = Math.min(40, Math.max(20, 20 + Math.floor((percent / 100) * 20)));
+              sendEvent('progress', {
+                stage: 'downloading',
+                message: `下载进度 ${percent}%`,
+                percent: mappedPercent,
+              });
+            },
+          });
+          const videoBuffer = downloadResult.buffer;
 
           sendEvent('info', {
             stage: 'downloaded',
-            message: '视频下载完成',
+            message:
+              downloadResult.strategy === 'chunked' ? '视频分段下载完成' : '视频下载完成',
             size: (videoBuffer.length / (1024 * 1024)).toFixed(2) + ' MB',
           });
 

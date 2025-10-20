@@ -5,7 +5,7 @@
 
 "use client"
 
-import React, { useCallback } from 'react'
+import React, { useCallback, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { ChatHeader } from './chat-header'
 import { ChatMessages } from './chat-messages'
@@ -86,6 +86,7 @@ function SmartChatCenterInternal({
 }: Props) {
   const queryClient = useQueryClient()
   const { state, dispatch } = useChatState()
+  const streamedResultMessageIds = useRef<Set<string>>(new Set())
   const { selectedModel: currentModel, setSelectedModel } = useModelState()
   const detailParams = React.useMemo(() => ({ take: CHAT_HISTORY_CONFIG.initialWindow }), [])
 
@@ -110,6 +111,10 @@ function SmartChatCenterInternal({
       params: detailParams
     }
   )
+
+  React.useEffect(() => {
+    streamedResultMessageIds.current.clear()
+  }, [conversationId])
 
   // 对话切换时重置本地状态，等待最新数据同步
   React.useEffect(() => {
@@ -247,6 +252,8 @@ function SmartChatCenterInternal({
           dispatch({ type: 'ADD_MESSAGE', payload: event.assistantMessage })
         }
 
+        streamedResultMessageIds.current.delete(event.assistantMessage.id)
+
         dispatch({
           type: 'SESSION_TRANSITION',
           payload: { status: 'done' }
@@ -310,6 +317,37 @@ function SmartChatCenterInternal({
         break
 
       case 'douyin-partial':
+        if (event.data.key === 'markdown') {
+          const resultMessageId = `${event.pendingAssistantId}_result`
+
+          if (!streamedResultMessageIds.current.has(resultMessageId)) {
+            streamedResultMessageIds.current.add(resultMessageId)
+
+            dispatch({
+              type: 'ADD_MESSAGE',
+              payload: {
+                id: resultMessageId,
+                role: 'assistant',
+                content: '',
+                timestamp: dt.timestamp(),
+                status: 'streaming',
+                metadata: {
+                  douyinProgressMessageId: event.pendingAssistantId
+                }
+              }
+            })
+          }
+
+          dispatch({
+            type: 'UPDATE_MESSAGE_STREAM',
+            payload: {
+              messageId: resultMessageId,
+              ...(event.data.append ? { delta: event.data.data } : { content: event.data.data }),
+              status: 'streaming'
+            }
+          })
+        }
+
         dispatch({
           type: 'UPDATE_DOUYIN_PARTIAL',
           payload: {
@@ -327,6 +365,8 @@ function SmartChatCenterInternal({
             result: event.result
           }
         })
+
+        streamedResultMessageIds.current.delete(`${event.pendingAssistantId}_result`)
         break
 
       case 'douyin-error':
@@ -338,6 +378,7 @@ function SmartChatCenterInternal({
             step: event.step
           }
         })
+        streamedResultMessageIds.current.delete(`${event.pendingAssistantId}_result`)
         break
     }
   }, [dispatch, messages])

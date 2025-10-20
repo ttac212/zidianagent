@@ -50,6 +50,8 @@ function StepBadge({
 
 export const DouyinProgress = memo(({ progress }: DouyinProgressProps) => {
   const statusTone = statusBadgeStyles[progress.status]
+  const isCompleted = progress.status === 'completed'
+  const isFailed = progress.status === 'failed'
 
   return (
     <motion.div
@@ -64,61 +66,67 @@ export const DouyinProgress = memo(({ progress }: DouyinProgressProps) => {
             {statusTextMap[progress.status]}
           </span>
         </div>
-        <div className="text-sm font-medium text-muted-foreground">
-          进度 {Math.min(100, Math.round(progress.percentage))}%
-        </div>
+        {!isCompleted && (
+          <div className="text-sm font-medium text-muted-foreground">
+            进度 {Math.min(100, Math.round(progress.percentage))}%
+          </div>
+        )}
       </div>
 
-      <ol className="mt-4 space-y-3">
-        <AnimatePresence initial={false}>
-          {progress.steps.map((step, idx) => (
-            <motion.li
-              layout
-              key={step.key}
-              className={cn(
-                'flex items-start gap-3 rounded-md border border-transparent px-3 py-2 transition-colors',
-                step.status === 'active' && 'border-primary/40 bg-primary/5',
-                step.status === 'completed' && 'bg-emerald-500/5',
-                step.status === 'error' && 'border-red-400/40 bg-red-500/10'
-              )}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-            >
-              <StepBadge index={idx} status={step.status} />
-              <div className="flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-foreground">{step.label}</p>
-                  <span className="text-xs text-muted-foreground">
-                    {
-                      {
-                        pending: '等待中',
-                        active: '进行中',
-                        completed: '已完成',
-                        error: '失败'
-                      }[step.status]
-                    }
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5">{step.description}</p>
-                {step.detail && (
-                  <motion.p
-                    layout
-                    className="mt-1 text-xs text-foreground"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                  >
-                    {step.detail}
-                  </motion.p>
+      {/* 只在处理中或失败时显示详细步骤 */}
+      {!isCompleted && (
+        <ol className="mt-4 space-y-3">
+          <AnimatePresence initial={false}>
+            {progress.steps.map((step, idx) => (
+              <motion.li
+                layout
+                key={step.key}
+                className={cn(
+                  'flex items-start gap-3 rounded-md border border-transparent px-3 py-2 transition-colors',
+                  step.status === 'active' && 'border-primary/40 bg-primary/5',
+                  step.status === 'completed' && 'bg-emerald-500/5',
+                  step.status === 'error' && 'border-red-400/40 bg-red-500/10'
                 )}
-              </div>
-            </motion.li>
-          ))}
-        </AnimatePresence>
-      </ol>
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <StepBadge index={idx} status={step.status} />
+                <div className="flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-foreground">{step.label}</p>
+                    <span className="text-xs text-muted-foreground">
+                      {
+                        {
+                          pending: '等待中',
+                          active: '进行中',
+                          completed: '已完成',
+                          error: '失败'
+                        }[step.status]
+                      }
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{step.description}</p>
+                  {step.detail && (
+                    <motion.p
+                      layout
+                      className="mt-1 text-xs text-foreground"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                    >
+                      {step.detail}
+                    </motion.p>
+                  )}
+                </div>
+              </motion.li>
+            ))}
+          </AnimatePresence>
+        </ol>
+      )}
 
+      {/* 只在处理中显示视频信息（完成后正文已有） */}
       <AnimatePresence>
-        {progress.videoInfo && (
+        {!isCompleted && progress.videoInfo && (
           <motion.div
             layout
             initial={{ opacity: 0, y: 6 }}
@@ -136,8 +144,44 @@ export const DouyinProgress = memo(({ progress }: DouyinProgressProps) => {
         )}
       </AnimatePresence>
 
+      {/* 转录文本实时预览 */}
       <AnimatePresence>
-        {progress.status === 'failed' && progress.error && (
+        {!isCompleted && progress.transcript && (
+          <motion.div
+            layout
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            className="mt-4 rounded-md border border-blue-300/40 bg-blue-500/5 p-3"
+          >
+            <p className="text-xs font-semibold text-muted-foreground">转录文本（实时）</p>
+            <div className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
+              {progress.transcript}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 只在处理中显示Markdown预览（完成后正文已有） */}
+      <AnimatePresence>
+        {!isCompleted && progress.markdownPreview && (
+          <motion.div
+            layout
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            className="mt-4 rounded-md border border-muted-foreground/20 bg-background/60 p-3"
+          >
+            <p className="text-xs font-semibold text-muted-foreground">实时生成中</p>
+            <div className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
+              {progress.markdownPreview}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isFailed && progress.error && (
           <motion.div
             layout
             role="alert"

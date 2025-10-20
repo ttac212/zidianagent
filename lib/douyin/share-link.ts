@@ -58,8 +58,8 @@ export async function parseDouyinUserShare(
 }
 
 function extractFirstUrl(text: string): string {
-  // 优先匹配 v.douyin.com 链接 (支持字母、数字、下划线)
-  const urlMatch = text.match(/https?:\/\/v\.douyin\.com\/[A-Za-z0-9_]+/);
+  // 优先匹配 v.douyin.com 链接 (支持字母、数字、下划线、连字符)
+  const urlMatch = text.match(/https?:\/\/v\.douyin\.com\/[A-Za-z0-9_-]+/);
   if (urlMatch) {
     return urlMatch[0].replace(/[)"\u3002\uff01\uff1f\uff0c\uff1b\uff1a\uff09]+$/, '');
   }

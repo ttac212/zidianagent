@@ -245,8 +245,9 @@ export interface DouyinInfoEventPayload {
 }
 
 export interface DouyinPartialEventPayload {
-  key: 'transcript'
+  key: 'transcript' | 'markdown'
   data: string
+  append?: boolean
 }
 
 export interface DouyinDoneEventPayload {
@@ -273,6 +274,7 @@ export interface DouyinProgressState {
   updatedAt: number
   videoInfo?: DouyinVideoInfo
   transcript?: string
+  markdownPreview?: string
 }
 
 // 事件协议类型

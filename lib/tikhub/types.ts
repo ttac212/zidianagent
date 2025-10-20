@@ -263,3 +263,102 @@ export interface BatchSyncConfig {
   onProgress?: (task: MerchantSyncTask) => void
   onComplete?: (results: MerchantSyncTask[]) => void
 }
+
+/**
+ * 抖音评论信息
+ */
+export interface DouyinComment {
+  cid: string // 评论ID
+  text: string // 评论文本
+  create_time: number // 创建时间戳
+  digg_count: number // 点赞数
+  reply_comment_total: number // 回复数
+  user: {
+    uid: string
+    sec_uid: string
+    nickname: string
+    avatar_thumb: {
+      url_list: string[]
+    }
+  }
+  reply_id?: string // 回复的评论ID
+  reply_to_reply_id?: string // 回复的回复ID
+  label_text?: string // 标签文本
+  stick_position?: number // 置顶位置
+  [key: string]: any
+}
+
+/**
+ * 视频评论列表响应
+ */
+export interface DouyinVideoCommentsResponse {
+  comments: DouyinComment[]
+  cursor: number // 下一页游标
+  has_more: boolean // 是否有更多数据
+  total: number // 评论总数
+  status_code: number
+}
+
+/**
+ * 请求参数 - 获取视频评论
+ */
+export interface GetVideoCommentsParams {
+  aweme_id: string // 视频ID
+  cursor?: number // 游标，用于分页，第一页为0
+  count?: number // 数量，默认20
+}
+
+/**
+ * 视频统计数据响应
+ */
+export interface DouyinVideoStatisticsResponse {
+  statistics: Array<{
+    aweme_id: string
+    comment_count: number // 评论数
+    digg_count: number // 点赞数
+    download_count: number // 下载数
+    play_count: number // 播放数
+    share_count: number // 分享数
+    collect_count: number // 收藏数
+    forward_count: number // 转发数
+  }>
+  status_code: number
+}
+
+/**
+ * 请求参数 - 获取视频统计数据
+ */
+export interface GetVideoStatisticsParams {
+  aweme_ids: string // 视频ID，多个用逗号分隔，最多2个
+}
+
+/**
+ * 词云权重项
+ */
+export interface CommentWordCloudItem {
+  word_seg: string // 关键词（实际API字段）
+  value: number // 权重/频率（实际API字段）
+  word?: string // 兼容字段
+  weight?: number // 兼容字段
+  related_comment?: any // 相关评论
+  hot_value?: number // 热度值
+}
+
+/**
+ * 评论词云权重响应
+ */
+export interface DouyinCommentWordCloudResponse {
+  code: number // 响应码
+  data: CommentWordCloudItem[] // 词云列表（实际API字段）
+  word_list?: CommentWordCloudItem[] // 兼容字段
+  status_code?: number
+  aweme_id?: string // 作品ID
+  total_words?: number // 总词数
+}
+
+/**
+ * 请求参数 - 获取评论词云权重
+ */
+export interface GetCommentWordCloudParams {
+  aweme_id: string // 视频ID
+}

@@ -38,8 +38,8 @@ export interface DouyinLinkInfo {
  * 正则表达式模式集合
  */
 const PATTERNS = {
-  // 短链接: https://v.douyin.com/k5Nc3QsEQH8 (支持字母、数字、下划线)
-  shortLink: /https?:\/\/v\.douyin\.com\/[A-Za-z0-9_]+/i,
+  // 短链接: https://v.douyin.com/k5Nc3QsEQH8 (支持字母、数字、下划线、连字符)
+  shortLink: /https?:\/\/v\.douyin\.com\/[A-Za-z0-9_-]+/i,
 
   // 作品链接: https://www.douyin.com/video/7445678901234567890
   videoLink: /https?:\/\/www\.douyin\.com\/video\/(\d{19})/i,
@@ -272,16 +272,67 @@ export async function extractAndResolveLink(text: string): Promise<DouyinLinkInf
 export function isDouyinShareRequest(text: string): boolean {
   const trimmed = text.trim();
 
-  // 检查是否是纯抖音链接或分享文本
+  // 检查是否包含抖音链接
   const shareLink = extractDouyinLink(trimmed);
   if (!shareLink) return false;
 
-  // 如果文本主要是分享链接(去除分享链接后剩余文本很少)
+  // 去掉链接后的剩余文本
   const withoutLink = trimmed.replace(shareLink, '').trim();
-  const keywords = ['帮我', '提取', '分析', '转录', '文案', '视频'];
 
-  // 如果没有其他实质性内容,或只有简单的请求词,认为是分享请求
-  return withoutLink.length < 50 || keywords.some((kw) => withoutLink.includes(kw));
+  // 对话意图的特征词(如果包含这些,说明用户想讨论而不是提取)
+  const conversationIndicators = [
+    '你怎么看',
+    '你觉得',
+    '对吗',
+    '是不是',
+    '为什么',
+    '怎么样',
+    '我觉得',
+    '我认为',
+    '?', // 问号通常表示对话意图
+  ];
+
+  // 如果包含对话意图,不认为是纯分享请求
+  if (conversationIndicators.some((indicator) => withoutLink.includes(indicator))) {
+    return false;
+  }
+
+  // 抖音官方分享文本的特征词
+  const shareIndicators = [
+    '复制此链接',
+    '打开Dou音',
+    '打开抖音',
+    '直接观看视频',
+    '复制此内容',
+    '长按复制',
+  ];
+
+  // 用户请求处理视频的关键词
+  const requestKeywords = ['帮我', '提取', '分析', '转录', '文案'];
+
+  // 1. 如果包含抖音官方分享文案特征,肯定是分享请求
+  if (shareIndicators.some((indicator) => trimmed.includes(indicator))) {
+    return true;
+  }
+
+  // 2. 如果去掉链接后剩余文本很少,认为是纯链接分享
+  if (withoutLink.length < 50) {
+    return true;
+  }
+
+  // 3. 如果包含明确的请求关键词
+  if (requestKeywords.some((kw) => withoutLink.includes(kw))) {
+    return true;
+  }
+
+  // 4. 如果链接占文本的比例很大(说明主要内容是链接)
+  const linkRatio = shareLink.length / trimmed.length;
+  if (linkRatio > 0.3) {
+    return true;
+  }
+
+  // 5. 否则,认为不是纯粹的分享请求
+  return false;
 }
 
 /**

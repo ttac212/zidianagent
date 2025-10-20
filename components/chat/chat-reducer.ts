@@ -42,6 +42,7 @@ function cloneDouyinProgressState(state?: DouyinProgressState): DouyinProgressSt
   return {
     ...state,
     steps: state.steps.map(step => ({ ...step })),
+    markdownPreview: state.markdownPreview,
     updatedAt: Date.now()
   }
 }
@@ -98,7 +99,16 @@ function applyDouyinPartialUpdate(
   partial: DouyinPartialEventPayload
 ): DouyinProgressState {
   const next = cloneDouyinProgressState(previous)
-  next.transcript = partial.data
+  if (partial.key === 'markdown') {
+    next.markdownPreview = partial.append
+      ? `${next.markdownPreview ?? ''}${partial.data}`
+      : partial.data
+  } else if (partial.key === 'transcript') {
+    // 支持流式转录
+    next.transcript = partial.append
+      ? `${next.transcript ?? ''}${partial.data}`
+      : partial.data
+  }
   next.updatedAt = Date.now()
   return next
 }
@@ -114,6 +124,7 @@ function applyDouyinDoneUpdate(
   next.error = undefined
   next.videoInfo = result.videoInfo
   next.transcript = result.transcript
+  next.markdownPreview = result.markdown
   next.updatedAt = Date.now()
   return next
 }

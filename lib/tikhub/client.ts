@@ -21,6 +21,12 @@ import type {
   GetUserVideosParams,
   GetVideoDetailParams,
   SearchUserParams,
+  DouyinVideoCommentsResponse,
+  GetVideoCommentsParams,
+  DouyinVideoStatisticsResponse,
+  GetVideoStatisticsParams,
+  DouyinCommentWordCloudResponse,
+  GetCommentWordCloudParams,
 } from './types'
 
 /**
@@ -335,6 +341,43 @@ export class TikHubClient {
     }
 
     return results
+  }
+
+  /**
+   * 获取视频评论
+   */
+  async getVideoComments(params: GetVideoCommentsParams): Promise<DouyinVideoCommentsResponse> {
+    const response = await this.request<DouyinVideoCommentsResponse>({
+      endpoint: '/api/v1/douyin/app/v3/fetch_video_comments',
+      params: {
+        ...params,
+        cursor: params.cursor || 0,
+        count: params.count || 20,
+      },
+    })
+    return response.data
+  }
+
+  /**
+   * 获取视频统计数据（点赞、下载、播放、分享数）
+   */
+  async getVideoStatistics(params: GetVideoStatisticsParams): Promise<DouyinVideoStatisticsResponse> {
+    const response = await this.request<DouyinVideoStatisticsResponse>({
+      endpoint: '/api/v1/douyin/app/v3/fetch_video_statistics',
+      params,
+    })
+    return response.data
+  }
+
+  /**
+   * 获取评论词云权重分析
+   */
+  async getCommentWordCloud(params: GetCommentWordCloudParams): Promise<DouyinCommentWordCloudResponse> {
+    const response = await this.request<DouyinCommentWordCloudResponse>({
+      endpoint: '/api/v1/douyin/billboard/fetch_hot_comment_word_list',
+      params,
+    })
+    return response.data
   }
 
   /**

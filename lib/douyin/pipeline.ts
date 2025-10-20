@@ -21,8 +21,9 @@ export interface DouyinPipelineInfoEvent {
 
 export interface DouyinPipelinePartialEvent {
   type: 'partial'
-  key: 'transcript'
+  key: 'transcript' | 'markdown'
   data: string
+  append?: boolean
 }
 
 export interface DouyinPipelineDoneEvent {
@@ -114,6 +115,26 @@ async function emitProgress(
     label: DOUYIN_PIPELINE_STEPS[index].label,
     description: DOUYIN_PIPELINE_STEPS[index].description
   })
+}
+
+async function streamMarkdownChunks(
+  emit: DouyinPipelineEmitter,
+  markdown: string,
+  signal: AbortSignal | undefined,
+  chunkSize = 160
+) {
+  if (!markdown) return
+
+  for (let offset = 0; offset < markdown.length; offset += chunkSize) {
+    ensureActive(signal)
+    const chunk = markdown.slice(offset, offset + chunkSize)
+    await emit({
+      type: 'partial',
+      key: 'markdown',
+      data: chunk,
+      append: offset !== 0
+    })
+  }
 }
 
 function resolvePlayableVideoUrl(video: any): string | null {
@@ -277,18 +298,40 @@ export async function runDouyinPipeline(
 
     let headInfo
     let videoBuffer
+    let lastDownloadPercent = -1
     try {
       headInfo = await VideoProcessor.getVideoInfo(playableUrl, {
         headers: requestHeaders
       })
       ensureActive(signal)
 
-      videoBuffer = await VideoProcessor.downloadChunk(
+      const downloadResult = await VideoProcessor.downloadVideo(
         playableUrl,
-        0,
-        headInfo.size - 1,
-        { headers: requestHeaders }
+        headInfo,
+        {
+          headers: requestHeaders,
+          signal,
+          onProgress: async (downloaded, total) => {
+            const percent =
+              total > 0 ? Math.floor((downloaded / total) * 100) : undefined
+            if (
+              typeof percent === 'number' &&
+              percent !== lastDownloadPercent &&
+              percent < 100
+            ) {
+              lastDownloadPercent = percent
+              await emitProgress(
+                emit,
+                'download-video',
+                'active',
+                `下载进度 ${percent}%`
+              )
+            }
+            ensureActive(signal)
+          }
+        }
       )
+      videoBuffer = downloadResult.buffer
       ensureActive(signal)
     } catch (error) {
       throw new DouyinPipelineStepError(
@@ -334,6 +377,7 @@ export async function runDouyinPipeline(
           modalities: ['text'],
           max_tokens: 4000,
           temperature: 0.1,
+          stream: true, // 启用流式输出
           messages: [
             {
               role: 'user',
@@ -373,21 +417,59 @@ export async function runDouyinPipeline(
       )
     }
 
-    const asrResult = await asrResponse.json()
-    const transcript =
-      asrResult?.choices?.[0]?.message?.content ||
-      asrResult?.choices?.[0]?.delta?.content ||
-      ''
+    // 处理流式响应
+    const reader = asrResponse.body?.getReader()
+    if (!reader) {
+      throw new DouyinPipelineStepError('无法读取转录响应流', 'transcribe-audio')
+    }
+
+    const decoder = new TextDecoder()
+    let transcript = ''
+    let buffer = ''
+
+    try {
+      while (true) {
+        ensureActive(signal)
+        const { done, value } = await reader.read()
+
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.trim() || line.trim() === 'data: [DONE]') continue
+
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+              const delta = data.choices?.[0]?.delta?.content
+
+              if (delta) {
+                transcript += delta
+                // 实时发送转录片段
+                await emit({
+                  type: 'partial',
+                  key: 'transcript',
+                  data: delta,
+                  append: true
+                })
+              }
+            } catch (parseError) {
+              // 忽略解析错误，继续处理
+            }
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock()
+    }
 
     if (!transcript) {
       throw new DouyinPipelineStepError('转录失败,未返回文本', 'transcribe-audio')
     }
 
-    await emit({
-      type: 'partial',
-      key: 'transcript',
-      data: transcript
-    })
     await emitProgress(emit, 'transcribe-audio', 'completed')
 
     await emitProgress(emit, 'optimize', 'active')
@@ -396,6 +478,7 @@ export async function runDouyinPipeline(
 
     await emitProgress(emit, 'summarize', 'active')
     const markdown = buildMarkdown(videoInfo, optimizedTranscript)
+    await streamMarkdownChunks(emit, markdown, signal)
     await emitProgress(emit, 'summarize', 'completed')
 
     const result: DouyinPipelineResult = {
