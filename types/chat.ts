@@ -9,6 +9,13 @@ import type {
   DouyinVideoInfo
 } from '@/lib/douyin/pipeline-steps'
 
+import type {
+  DouyinCommentsProgress,
+  DouyinCommentsPipelineStep,
+  DouyinCommentsVideoInfo,
+  DouyinCommentsStatistics
+} from '@/lib/douyin/comments-pipeline-steps'
+
 // 消息状态类型
 export type MessageStatus = 'pending' | 'streaming' | 'completed' | 'error'
 
@@ -32,6 +39,9 @@ export interface MessageMetadata {
   douyinProgress?: DouyinProgressState
   douyinResult?: DouyinDoneEventPayload
   douyinProgressMessageId?: string
+  commentsProgress?: DouyinCommentsProgressState
+  commentsResult?: DouyinCommentsDoneEventPayload
+  commentsProgressMessageId?: string
 }
 
 // 对话类型
@@ -277,6 +287,51 @@ export interface DouyinProgressState {
   markdownPreview?: string
 }
 
+// Douyin 评论分析事件载荷
+export type DouyinCommentsProgressEventPayload = DouyinCommentsProgress
+
+export interface DouyinCommentsInfoEventPayload {
+  videoInfo: DouyinCommentsVideoInfo
+  statistics?: DouyinCommentsStatistics
+}
+
+export interface DouyinCommentsPartialEventPayload {
+  key: 'analysis'
+  data: string
+  append?: boolean
+}
+
+export interface DouyinCommentsDoneEventPayload {
+  markdown: string
+  videoInfo: DouyinCommentsVideoInfo
+  statistics: DouyinCommentsStatistics
+  analysis: {
+    sentiment: any
+    coreTopics: any
+    userProfile: any
+    suggestions: any
+  }
+}
+
+export interface DouyinCommentsProgressState {
+  steps: DouyinCommentsProgressStep[]
+  percentage: number
+  status: 'running' | 'completed' | 'failed'
+  error?: string
+  updatedAt: number
+  videoInfo?: DouyinCommentsVideoInfo
+  statistics?: DouyinCommentsStatistics
+  analysisPreview?: string
+}
+
+export interface DouyinCommentsProgressStep {
+  key: DouyinCommentsPipelineStep
+  label: string
+  description: string
+  status: 'pending' | 'active' | 'completed' | 'error'
+  detail?: string
+}
+
 // 事件协议类型
 export interface ChatEventProtocol {
   started: {
@@ -343,6 +398,37 @@ export interface ChatEventProtocol {
     pendingAssistantId: string
     error: string
     step?: DouyinPipelineStep
+  }
+  'comments-progress': {
+    type: 'comments-progress'
+    requestId: string
+    pendingAssistantId: string
+    progress: DouyinCommentsProgressEventPayload
+  }
+  'comments-info': {
+    type: 'comments-info'
+    requestId: string
+    pendingAssistantId: string
+    info: DouyinCommentsInfoEventPayload
+  }
+  'comments-partial': {
+    type: 'comments-partial'
+    requestId: string
+    pendingAssistantId: string
+    data: DouyinCommentsPartialEventPayload
+  }
+  'comments-done': {
+    type: 'comments-done'
+    requestId: string
+    pendingAssistantId: string
+    result: DouyinCommentsDoneEventPayload
+  }
+  'comments-error': {
+    type: 'comments-error'
+    requestId: string
+    pendingAssistantId: string
+    error: string
+    step?: DouyinCommentsPipelineStep
   }
 }
 

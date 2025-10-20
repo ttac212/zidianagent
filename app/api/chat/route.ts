@@ -29,9 +29,11 @@ import {
 import {
   detectDouyinLink,
   extractDouyinLink,
-  isDouyinShareRequest
+  isDouyinShareRequest,
+  isDouyinCommentsRequest
 } from "@/lib/douyin/link-detector"
 import { runDouyinPipeline } from "@/lib/douyin/pipeline"
+import { runDouyinCommentsPipeline } from "@/lib/douyin/comments-pipeline"
 
 
 const API_BASE = process.env.LLM_API_BASE || "https://api.302.ai/v1"
@@ -219,6 +221,147 @@ export async function POST(request: NextRequest) {
       })
     } else {
       console.info('[Douyin] 检测到抖音链接但不是纯分享请求,保持原样')
+    }
+  }
+
+  // === 抖音评论分析：检测并处理 ===
+  if (lastUserMessage?.role === 'user' && detectDouyinLink(lastUserMessage.content)) {
+    if (isDouyinCommentsRequest(lastUserMessage.content)) {
+      console.info('[Douyin Comments] 检测到评论分析请求')
+
+      const shareLink = extractDouyinLink(lastUserMessage.content)
+      if (!shareLink) {
+        return validationError('无法提取抖音链接')
+      }
+
+      // SECURITY: 必须在保存消息前校验会话权限
+      if (conversationId) {
+        const conversation = await prisma.conversation.findFirst({
+          where: { id: conversationId, userId }
+        })
+
+        if (!conversation) {
+          return forbidden('无权访问此对话')
+        }
+
+        try {
+          await QuotaManager.commitTokens(
+            userId,
+            { promptTokens: 0, completionTokens: 0 },
+            0,
+            {
+              conversationId,
+              role: 'USER',
+              content: lastUserMessage.content,
+              modelId: model
+            }
+          )
+        } catch (dbError) {
+          console.error('[Douyin Comments] Failed to save user message:', dbError)
+        }
+      }
+
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream({
+        async start(controller) {
+          let isClosed = false
+
+          const sendEvent = (type: string, payload: unknown) => {
+            if (isClosed) return
+
+            try {
+              const chunk = `event: ${type}\n` + `data: ${JSON.stringify(payload)}\n\n`
+              controller.enqueue(encoder.encode(chunk))
+            } catch (enqueueError) {
+              console.error('[Douyin Comments] Failed to enqueue event:', enqueueError)
+            }
+          }
+
+          const finishStream = () => {
+            if (isClosed) return
+            isClosed = true
+            try {
+              controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+            } catch (doneError) {
+              console.error('[Douyin Comments] Failed to enqueue DONE marker:', doneError)
+            } finally {
+              controller.close()
+            }
+          }
+
+          const abortHandler = () => finishStream()
+          request.signal.addEventListener('abort', abortHandler)
+
+          try {
+            let finalMarkdown: string | null = null
+
+            const result = await runDouyinCommentsPipeline(
+              shareLink,
+              async (event) => {
+                switch (event.type) {
+                  case 'progress':
+                    sendEvent('comments-progress', event)
+                    break
+                  case 'info':
+                    sendEvent('comments-info', event)
+                    break
+                  case 'partial':
+                    sendEvent('comments-partial', event)
+                    break
+                  case 'done':
+                    finalMarkdown = event.markdown
+                    sendEvent('comments-done', event)
+                    break
+                  case 'error':
+                    sendEvent('comments-error', event)
+                    break
+                }
+              },
+              { signal: request.signal }
+            )
+
+            if (!finalMarkdown && result?.markdown) {
+              finalMarkdown = result.markdown
+            }
+
+            // SECURITY: 助手消息保存时再次确认权限
+            if (conversationId && finalMarkdown) {
+              try {
+                await QuotaManager.commitTokens(
+                  userId,
+                  { promptTokens: 0, completionTokens: 0 },
+                  0,
+                  {
+                    conversationId,
+                    role: 'ASSISTANT',
+                    content: finalMarkdown,
+                    modelId: model
+                  }
+                )
+              } catch (dbError) {
+                console.error('[Douyin Comments] Failed to save assistant message:', dbError)
+              }
+            }
+          } catch (err) {
+            if (err instanceof Error && err.name === 'AbortError') {
+              console.warn('[Douyin Comments] Pipeline aborted by client')
+            } else {
+              console.error('[Douyin Comments] Pipeline failed:', err)
+            }
+          } finally {
+            finishStream()
+            request.signal.removeEventListener('abort', abortHandler)
+          }
+        }
+      })
+
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive'
+        }
+      })
     }
   }
 

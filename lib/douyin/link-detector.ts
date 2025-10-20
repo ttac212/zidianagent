@@ -336,6 +336,34 @@ export function isDouyinShareRequest(text: string): boolean {
 }
 
 /**
+ * 检测文本是否是评论分析请求
+ */
+export function isDouyinCommentsRequest(text: string): boolean {
+  const trimmed = text.trim();
+
+  // 检查是否包含抖音链接
+  const shareLink = extractDouyinLink(trimmed);
+  if (!shareLink) return false;
+
+  // 评论分析关键词
+  const commentsKeywords = [
+    '分析评论',
+    '评论分析',
+    '查看评论',
+    '评论数据',
+    '用户反馈',
+    '看看评论',
+    '评论怎么样',
+    '用户怎么说',
+    '评价如何',
+    '反馈',
+  ];
+
+  // 检查是否包含评论分析关键词
+  return commentsKeywords.some((keyword) => trimmed.includes(keyword));
+}
+
+/**
  * 生成抖音视频处理提示
  */
 export function generateDouyinProcessingPrompt(
