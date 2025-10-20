@@ -14,6 +14,7 @@ import { getModelDisplayName, getModelProvider } from '@/lib/model-utils'
 import { SecureMarkdown } from '@/components/ui/secure-markdown'
 import { MESSAGE_BUBBLE_MAX_WIDTH } from '@/lib/config/layout-config'
 import { DouyinProgress } from './douyin-progress'
+import { DouyinCommentsProgress } from './douyin-comments-progress'
 
 export const MessageItem = React.memo<MessageItemProps>(({
   message,
@@ -23,7 +24,9 @@ export const MessageItem = React.memo<MessageItemProps>(({
   const isAssistant = message.role === 'assistant'
   const hasError = message.metadata?.error
   const douyinProgress = message.metadata?.douyinProgress
+  const commentsProgress = message.metadata?.commentsProgress
   const isDouyinProgressCard = Boolean(douyinProgress)
+  const isCommentsProgressCard = Boolean(commentsProgress)
   const isStreaming = message.status === 'streaming'
   const isPending = message.status === 'pending'
   const isCompleted = message.status === 'completed'
@@ -36,7 +39,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
   const [copied, setCopied] = useState(false)
 
   // 字数统计
-  const wordCount = isDouyinProgressCard ? 0 : message.content.length
+  const wordCount = (isDouyinProgressCard || isCommentsProgressCard) ? 0 : message.content.length
 
   useEffect(() => {
     // 如果是助手消息且状态变为完成，触发微光效果
@@ -115,14 +118,14 @@ export const MessageItem = React.memo<MessageItemProps>(({
       )}>
         <div className={cn(
           "text-sm leading-relaxed relative overflow-hidden transition-all duration-500",
-          isDouyinProgressCard
+          (isDouyinProgressCard || isCommentsProgressCard)
             ? "border-none bg-transparent px-0 py-0"
             : isUser
               ? "bg-primary text-primary-foreground rounded-2xl rounded-br-md px-4 py-3"
               : hasError
                 ? "bg-destructive/10 border border-destructive/30 text-destructive rounded-2xl px-6 py-4"
                 : "bg-muted/50 dark:bg-muted/40 border border-border rounded-2xl rounded-bl-md px-6 py-4",
-          isAssistant && shouldGlow && !isDouyinProgressCard && "shadow-lg ring-2 ring-primary/30 bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5"
+          isAssistant && shouldGlow && !(isDouyinProgressCard || isCommentsProgressCard) && "shadow-lg ring-2 ring-primary/30 bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5"
         )}>
           
           {/* 微光效果 - 仅对助手消息 */}
@@ -139,7 +142,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
           )}
 
           {/* 状态指示器 - 仅对助手消息显示 */}
-          {isAssistant && !isDouyinProgressCard && (isPending || isStreaming) && (
+          {isAssistant && !(isDouyinProgressCard || isCommentsProgressCard) && (isPending || isStreaming) && (
             <motion.div
               initial={{ opacity: 0, y: -5 }}
               animate={{ opacity: 1, y: 0 }}
@@ -184,6 +187,8 @@ export const MessageItem = React.memo<MessageItemProps>(({
           <div className="relative z-10">
             {isDouyinProgressCard && douyinProgress ? (
               <DouyinProgress progress={douyinProgress} />
+            ) : isCommentsProgressCard && commentsProgress ? (
+              <DouyinCommentsProgress progress={commentsProgress} />
             ) : isAssistant ? (
               <SecureMarkdown
                 content={message.content}
@@ -238,7 +243,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
           </div>
 
           {/* 复制按钮 - 移动端友好化，增大触控面积 */}
-          {isAssistant && !isDouyinProgressCard && (
+          {isAssistant && !(isDouyinProgressCard || isCommentsProgressCard) && (
             <Button
               variant="ghost"
               size="sm"

@@ -380,6 +380,165 @@ function SmartChatCenterInternal({
         })
         streamedResultMessageIds.current.delete(`${event.pendingAssistantId}_result`)
         break
+
+      // === 抖音评论分析事件 ===
+      case 'comments-progress':
+        dispatch({
+          type: 'UPDATE_MESSAGE',
+          payload: {
+            id: event.pendingAssistantId,
+            updates: {
+              metadata: {
+                commentsProgress: {
+                  steps: event.progress.step ? [{
+                    key: event.progress.step,
+                    label: event.progress.label || '',
+                    description: event.progress.description || '',
+                    status: event.progress.status as any,
+                    detail: event.progress.detail
+                  }] : [],
+                  percentage: event.progress.percentage || 0,
+                  status: 'running',
+                  updatedAt: dt.timestamp()
+                }
+              }
+            }
+          }
+        })
+        break
+
+      case 'comments-info':
+        dispatch({
+          type: 'UPDATE_MESSAGE',
+          payload: {
+            id: event.pendingAssistantId,
+            updates: {
+              metadata: {
+                commentsProgress: {
+                  ...(messages.find(m => m.id === event.pendingAssistantId)?.metadata?.commentsProgress || {
+                    steps: [],
+                    percentage: 0,
+                    status: 'running',
+                    updatedAt: dt.timestamp()
+                  }),
+                  videoInfo: event.info.videoInfo,
+                  statistics: event.info.statistics
+                }
+              }
+            }
+          }
+        })
+        break
+
+      case 'comments-partial':
+        if (event.data.key === 'analysis') {
+          // 创建结果消息（如果还没有）
+          const resultMessageId = `${event.pendingAssistantId}_result`
+
+          if (!streamedResultMessageIds.current.has(resultMessageId)) {
+            streamedResultMessageIds.current.add(resultMessageId)
+
+            dispatch({
+              type: 'ADD_MESSAGE',
+              payload: {
+                id: resultMessageId,
+                role: 'assistant',
+                content: '',
+                timestamp: dt.timestamp(),
+                status: 'streaming',
+                metadata: {
+                  commentsProgressMessageId: event.pendingAssistantId
+                }
+              }
+            })
+          }
+
+          // 更新流式内容
+          dispatch({
+            type: 'UPDATE_MESSAGE_STREAM',
+            payload: {
+              messageId: resultMessageId,
+              ...(event.data.append ? { delta: event.data.data } : { content: event.data.data }),
+              status: 'streaming'
+            }
+          })
+        }
+
+        // 更新预览
+        dispatch({
+          type: 'UPDATE_MESSAGE',
+          payload: {
+            id: event.pendingAssistantId,
+            updates: {
+              metadata: {
+                commentsProgress: {
+                  ...(messages.find(m => m.id === event.pendingAssistantId)?.metadata?.commentsProgress || {
+                    steps: [],
+                    percentage: 0,
+                    status: 'running',
+                    updatedAt: dt.timestamp()
+                  }),
+                  analysisPreview: event.data.append
+                    ? (messages.find(m => m.id === event.pendingAssistantId)?.metadata?.commentsProgress?.analysisPreview || '') + event.data.data
+                    : event.data.data
+                }
+              }
+            }
+          }
+        })
+        break
+
+      case 'comments-done':
+        dispatch({
+          type: 'UPDATE_MESSAGE',
+          payload: {
+            id: event.pendingAssistantId,
+            updates: {
+              metadata: {
+                commentsProgress: {
+                  ...(messages.find(m => m.id === event.pendingAssistantId)?.metadata?.commentsProgress || {
+                    steps: [],
+                    percentage: 0,
+                    status: 'completed',
+                    updatedAt: dt.timestamp()
+                  }),
+                  status: 'completed',
+                  percentage: 100
+                },
+                commentsResult: event.result
+              },
+              status: 'completed'
+            }
+          }
+        })
+
+        streamedResultMessageIds.current.delete(`${event.pendingAssistantId}_result`)
+        break
+
+      case 'comments-error':
+        dispatch({
+          type: 'UPDATE_MESSAGE',
+          payload: {
+            id: event.pendingAssistantId,
+            updates: {
+              metadata: {
+                commentsProgress: {
+                  ...(messages.find(m => m.id === event.pendingAssistantId)?.metadata?.commentsProgress || {
+                    steps: [],
+                    percentage: 0,
+                    status: 'failed',
+                    updatedAt: dt.timestamp()
+                  }),
+                  status: 'failed',
+                  error: event.error
+                }
+              },
+              status: 'error'
+            }
+          }
+        })
+        streamedResultMessageIds.current.delete(`${event.pendingAssistantId}_result`)
+        break
     }
   }, [dispatch, messages])
 
