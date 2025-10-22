@@ -52,17 +52,7 @@ async function checkDataStatus() {
             take: 2,
             orderBy: { createdAt: 'desc' }
           },
-          category: true,
-          members: {
-            include: {
-              user: {
-                select: {
-                  email: true,
-                  displayName: true
-                }
-              }
-            }
-          }
+          category: true
         }
       })
       console.log('🏢 样本商家数据:')
@@ -84,8 +74,7 @@ async function checkDataStatus() {
           _count: {
             select: {
               conversations: true,
-              messages: true,
-              merchantMemberships: true
+              messages: true
             }
           }
         }
@@ -94,7 +83,7 @@ async function checkDataStatus() {
       userList.forEach(user => {
         console.log(`  - ${user.email} (${user.displayName || '未命名'})`)
         console.log(`    角色: ${user.role}, 状态: ${user.status}`)
-        console.log(`    对话: ${user._count.conversations}, 消息: ${user._count.messages}, 商家成员: ${user._count.merchantMemberships}`)
+        console.log(`    对话: ${user._count.conversations}, 消息: ${user._count.messages}`)
       })
       console.log()
     } else {

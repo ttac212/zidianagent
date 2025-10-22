@@ -158,8 +158,11 @@ async function main() {
       aweme_ids: parseResult.videoId,
     })
 
-    if (statistics.statistics_list && statistics.statistics_list.length > 0) {
-      const stats = statistics.statistics_list[0]
+    const statisticsList =
+      statistics.statistics ?? (statistics as { statistics_list?: typeof statistics.statistics }).statistics_list ?? []
+
+    if (statisticsList.length > 0) {
+      const stats = statisticsList[0]
       console.log(`📺 播放量: ${stats.play_count.toLocaleString('zh-CN')}`)
       console.log(`👍 点赞数: ${stats.digg_count.toLocaleString('zh-CN')}`)
       console.log(`💬 评论数: ${videoInfo?.statistics?.comment_count?.toLocaleString('zh-CN') || 'N/A'}`)
@@ -249,7 +252,7 @@ async function main() {
         title: videoInfo?.title || '',
         author: videoInfo?.author || '',
       },
-      statistics: statistics.statistics_list?.[0] || {},
+      statistics: statisticsList[0] || {},
       comments: cleanedComments,
       locationStats,
     }

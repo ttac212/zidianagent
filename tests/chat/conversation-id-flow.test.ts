@@ -4,10 +4,20 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+type ConversationPayload = {
+  id: string
+  title: string
+  model: string
+}
+
 describe('会话ID传递修复验证', () => {
-  const mockSendMessage = vi.fn()
-  const mockOnCreateConversation = vi.fn()
-  const mockOnSelectConversation = vi.fn()
+  type SendMessageMock = ReturnType<typeof vi.fn> & ((message: string, conversationId?: string) => void)
+  type CreateConversationMock = ReturnType<typeof vi.fn> & ((model: string) => Promise<ConversationPayload>)
+  type SelectConversationMock = ReturnType<typeof vi.fn> & ((conversationId: string) => void)
+
+  const mockSendMessage = vi.fn() as SendMessageMock
+  const mockOnCreateConversation = vi.fn() as CreateConversationMock
+  const mockOnSelectConversation = vi.fn() as SelectConversationMock
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -23,13 +33,12 @@ describe('会话ID传递修复验证', () => {
     })
 
     // 模拟handleSend的核心逻辑
-    const conversation = undefined // 初始没有对话
     const trimmedInput = '测试消息'
 
-    let activeConversationId = conversation?.id
+    let activeConversationId: string | undefined = undefined
     if (!activeConversationId && mockOnCreateConversation) {
-      const newConversation = await mockOnCreateConversation('gpt-3.5-turbo')
-      activeConversationId = newConversation?.id
+      const newConversation = (await mockOnCreateConversation('gpt-3.5-turbo')) as ConversationPayload
+      activeConversationId = newConversation.id
 
       if (mockOnSelectConversation && activeConversationId) {
         mockOnSelectConversation(activeConversationId)
@@ -49,10 +58,9 @@ describe('会话ID传递修复验证', () => {
   it('应该在已有对话时直接使用现有ID', async () => {
     // 模拟已有对话
     const existingConversationId = 'existing-conv-456'
-    const conversation = { id: existingConversationId, title: '现有对话' }
     const trimmedInput = '另一条消息'
 
-    let activeConversationId = conversation?.id
+    let activeConversationId: string | undefined = existingConversationId
     // 不需要创建新对话
 
     mockSendMessage(trimmedInput, activeConversationId)
@@ -67,16 +75,15 @@ describe('会话ID传递修复验证', () => {
     // 模拟创建对话失败
     mockOnCreateConversation.mockRejectedValue(new Error('创建失败'))
 
-    const conversation = undefined
     const trimmedInput = '失败消息'
 
-    let activeConversationId = conversation?.id
+    let activeConversationId: string | undefined = undefined
     let shouldSend = true
 
     try {
       if (!activeConversationId && mockOnCreateConversation) {
-        const newConversation = await mockOnCreateConversation('gpt-3.5-turbo')
-        activeConversationId = newConversation?.id
+        const newConversation = (await mockOnCreateConversation('gpt-3.5-turbo')) as ConversationPayload
+        activeConversationId = newConversation.id
       }
     } catch (error) {
       shouldSend = false

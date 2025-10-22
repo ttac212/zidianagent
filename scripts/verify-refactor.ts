@@ -6,6 +6,15 @@
 import { selectApiKey, getKeyHealthStatus } from '../lib/ai/key-manager'
 import { selectAuthStrategy } from '../auth/strategies'
 
+const setEnv = (key: string, value: string | undefined) => {
+  if (typeof value === 'undefined') {
+    delete (process.env as Record<string, string | undefined>)[key]
+    return
+  }
+
+  (process.env as Record<string, string | undefined>)[key] = value
+}
+
 console.log('🔍 开始验证重构...\n')
 
 // ==================== 测试 1: Key Manager ====================
@@ -13,12 +22,12 @@ console.log('📝 测试 1: Key Manager 重构验证')
 console.log('─'.repeat(60))
 
 // 设置测试环境变量
-process.env.LLM_CLAUDE_SONNET_4_5_THINKING_KEY = 'test-thinking-key'
-process.env.LLM_CLAUDE_SONNET_4_5_KEY = 'test-sonnet-key'
-process.env.LLM_CLAUDE_API_KEY = 'test-claude-key'
-process.env.LLM_GEMINI_API_KEY = 'test-gemini-key'
-process.env.LLM_OPENAI_API_KEY = 'test-openai-key'
-process.env.LLM_API_KEY = 'test-fallback-key'
+setEnv('LLM_CLAUDE_SONNET_4_5_THINKING_KEY', 'test-thinking-key')
+setEnv('LLM_CLAUDE_SONNET_4_5_KEY', 'test-sonnet-key')
+setEnv('LLM_CLAUDE_API_KEY', 'test-claude-key')
+setEnv('LLM_GEMINI_API_KEY', 'test-gemini-key')
+setEnv('LLM_OPENAI_API_KEY', 'test-openai-key')
+setEnv('LLM_API_KEY', 'test-fallback-key')
 
 const testCases = [
   {
@@ -136,13 +145,13 @@ const authTests = [
 for (const authTest of authTests) {
   try {
     const originalEnv = process.env.NODE_ENV
-    process.env.NODE_ENV = authTest.env
+    setEnv('NODE_ENV', authTest.env)
 
     // 清除 DEV_LOGIN_CODE 以避免生产环境安全检查
     if (authTest.env === 'production') {
-      delete process.env.DEV_LOGIN_CODE
+      setEnv('DEV_LOGIN_CODE', undefined)
     } else {
-      process.env.DEV_LOGIN_CODE = 'dev123'
+      setEnv('DEV_LOGIN_CODE', 'dev123')
     }
 
     const strategy = selectAuthStrategy()
@@ -157,7 +166,7 @@ for (const authTest of authTests) {
       failedTests++
     }
 
-    process.env.NODE_ENV = originalEnv
+    setEnv('NODE_ENV', originalEnv)
   } catch (error) {
     console.log(`❌ ${authTest.name} - 异常: ${error}`)
     failedTests++

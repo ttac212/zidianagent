@@ -74,7 +74,10 @@ export async function POST(request: NextRequest) {
     const payload = await request.json()
     const parsed = requestSchema.safeParse(payload)
     if (!parsed.success) {
-      return validationError(parsed.error.flatten().fieldErrors)
+      return validationError(
+        '请求参数不合法',
+        parsed.error.flatten().fieldErrors
+      )
     }
 
     const { merchantId, parentBatchId } = parsed.data
@@ -116,7 +119,7 @@ export async function POST(request: NextRequest) {
         promptAssets.map(asset => [asset.id, asset.type])
       )
 
-      for (const asset of assetsInput.filter(isPromptRole)) {
+      for (const asset of assetsInput.filter(asset => isPromptRole(asset.role))) {
         const recordType = promptAssetMap.get(asset.assetId)
         if (!recordType) {
           return validationError(`资产 ${asset.assetId} 不属于该商家`)

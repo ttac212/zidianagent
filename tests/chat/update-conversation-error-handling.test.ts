@@ -84,7 +84,11 @@ describe('SmartChatCenter - 更新对话异常处理', () => {
     try {
       await mockOnUpdateConversation('test-conversation', { title: '新标题' })
     } catch (error) {
-      expect(error.message).toBe('API错误')
+      if (error instanceof Error) {
+        expect(error.message).toBe('API错误')
+      } else {
+        throw error
+      }
     }
 
     consoleSpy.mockRestore()

@@ -6,6 +6,7 @@
  */
 
 import { TIKHUB_CONFIG, TIKHUB_ERROR_CODES } from './config'
+import { CircuitBreaker } from '@/lib/utils/retry'
 import type {
   TikHubBaseResponse,
   TikHubRequestConfig,
@@ -38,6 +39,7 @@ export class TikHubClient {
   private timeout: number
   private maxRetries: number
   private retryDelay: number
+  private circuitBreaker: CircuitBreaker | null
 
   constructor(config?: {
     apiKey?: string
@@ -45,6 +47,8 @@ export class TikHubClient {
     timeout?: number
     maxRetries?: number
     retryDelay?: number
+    /** 启用熔断器保护（默认开启） */
+    enableCircuitBreaker?: boolean
   }) {
     this.apiKey = config?.apiKey || TIKHUB_CONFIG.apiKey
     this.baseURL = config?.baseURL || TIKHUB_CONFIG.baseURL
@@ -52,15 +56,40 @@ export class TikHubClient {
     this.maxRetries = config?.maxRetries || TIKHUB_CONFIG.maxRetries
     this.retryDelay = config?.retryDelay || TIKHUB_CONFIG.retryDelay
 
+    // 默认启用熔断器
+    const enableBreaker = config?.enableCircuitBreaker ?? true
+    this.circuitBreaker = enableBreaker
+      ? new CircuitBreaker({
+          failureThreshold: 5,
+          resetTimeout: 60000, // 1分钟后尝试恢复
+          name: 'TikHub'
+        })
+      : null
+
     if (!this.apiKey) {
       throw new Error('TikHub API key is required. Set TIKHUB_API_KEY in environment variables.')
     }
   }
 
   /**
-   * 发起HTTP请求
+   * 发起HTTP请求（带熔断器保护）
    */
   private async request<T = any>(
+    config: TikHubRequestConfig,
+    retryCount = 0
+  ): Promise<TikHubBaseResponse<T>> {
+    // 如果启用了熔断器，通过熔断器执行请求
+    if (this.circuitBreaker) {
+      return this.circuitBreaker.execute(() => this._requestInternal<T>(config, retryCount))
+    }
+
+    return this._requestInternal<T>(config, retryCount)
+  }
+
+  /**
+   * 实际的HTTP请求实现
+   */
+  private async _requestInternal<T = any>(
     config: TikHubRequestConfig,
     retryCount = 0
   ): Promise<TikHubBaseResponse<T>> {
@@ -128,11 +157,15 @@ export class TikHubClient {
         TIKHUB_ERROR_CODES.SERVICE_UNAVAILABLE,
       ]
 
-      if (retryableErrors.includes(response.status) && retryCount < this.maxRetries) {
+      const isRetryable = retryableErrors.includes(
+        response.status as (typeof retryableErrors)[number]
+      )
+
+      if (isRetryable && retryCount < this.maxRetries) {
         // 计算退避延迟
         const delay = this.retryDelay * Math.pow(2, retryCount)
         await this.sleep(delay)
-        return this.request<T>(config, retryCount + 1)
+        return this._requestInternal<T>(config, retryCount + 1)
       }
 
       throw error
@@ -144,7 +177,7 @@ export class TikHubClient {
         if (retryCount < this.maxRetries) {
           const delay = this.retryDelay * Math.pow(2, retryCount)
           await this.sleep(delay)
-          return this.request<T>(config, retryCount + 1)
+          return this._requestInternal<T>(config, retryCount + 1)
         }
       }
 

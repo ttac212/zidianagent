@@ -42,13 +42,32 @@ async function backfillBatchFields(options: {
     // 查询所有批次
     // 注意：metadata 字段已从 schema 中移除，此脚本仅用于迁移前的历史数据处理
     // 如果 schema 中已删除 metadata，此脚本将跳过所有批次
-    const batches = await prisma.creativeBatch.findMany({
-      select: {
-        id: true,
-        targetSequence: true,
-        appendPrompt: true
-      }
-    })
+    const columns = await prisma.$queryRaw<Array<{ name: string }>>`
+      PRAGMA table_info('creative_batches')
+    `
+
+    const hasTargetSequence = columns.some(col => col.name === 'targetSequence')
+    const hasAppendPrompt = columns.some(col => col.name === 'appendPrompt')
+
+    if (!hasTargetSequence && !hasAppendPrompt) {
+      console.log('✅ creative_batches 表中不存在 targetSequence/appendPrompt 字段，无需迁移')
+      return result
+    }
+
+    const selectColumns = ['id']
+    if (hasTargetSequence) selectColumns.push('targetSequence')
+    if (hasAppendPrompt) selectColumns.push('appendPrompt')
+
+    const rawBatches = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(`
+      SELECT ${selectColumns.join(', ')}
+      FROM creative_batches
+    `)
+
+    const batches = rawBatches.map(batch => ({
+      id: String(batch.id),
+      targetSequence: (batch.targetSequence as string | null | undefined) ?? null,
+      appendPrompt: (batch.appendPrompt as string | null | undefined) ?? null
+    }))
 
     result.totalBatches = batches.length
     console.log(`📊 找到 ${result.totalBatches} 个批次`)

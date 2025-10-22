@@ -10,6 +10,94 @@ import {
   type DouyinVideoInfo
 } from '@/lib/douyin/pipeline-steps'
 
+const ASR_ENDPOINT = 'https://api.302.ai/v1/chat/completions'
+const DEFAULT_ASR_TIMEOUT_MS = 120_000
+const ASR_MAX_RETRIES = 2
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) {
+    return `${ms}毫秒`
+  }
+  const seconds = ms / 1000
+  if (seconds >= 10) {
+    return `${Math.round(seconds)}秒`
+  }
+  return `${seconds.toFixed(1)}秒`
+}
+
+function createStepTimer() {
+  const startedAt = new Map<DouyinPipelineStep, number>()
+
+  return {
+    markActive(step: DouyinPipelineStep) {
+      if (!startedAt.has(step)) {
+        startedAt.set(step, Date.now())
+      }
+    },
+    getDetail(step: DouyinPipelineStep, detail?: string): string | undefined {
+      const started = startedAt.get(step)
+      if (!started) return detail
+      const elapsed = Date.now() - started
+      const durationText = `耗时 ${formatDuration(elapsed)}`
+      return detail ? `${detail}，${durationText}` : durationText
+    }
+  }
+}
+
+function getAbortReason(signal: AbortSignal | undefined, fallback: string) {
+  if (!signal) {
+    return new Error(fallback)
+  }
+  const withReason = signal as AbortSignal & { reason?: unknown }
+  return withReason.reason ?? new Error(fallback)
+}
+
+function createAbortableSignal(
+  timeoutMs: number,
+  timeoutMessage: string,
+  external?: AbortSignal
+) {
+  const controller = new AbortController()
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+
+  if (timeoutMs > 0) {
+    timeoutId = setTimeout(() => {
+      controller.abort(new Error(timeoutMessage))
+    }, timeoutMs)
+  }
+
+  if (external) {
+    if (external.aborted) {
+      controller.abort(getAbortReason(external, '操作已取消'))
+    } else {
+      const handleAbort = () => {
+        controller.abort(getAbortReason(external, '操作已取消'))
+      }
+      external.addEventListener('abort', handleAbort, { once: true })
+      return {
+        controller,
+        signal: controller.signal,
+        cleanup: () => {
+          if (timeoutId) {
+            clearTimeout(timeoutId)
+          }
+          external.removeEventListener('abort', handleAbort)
+        }
+      }
+    }
+  }
+
+  return {
+    controller,
+    signal: controller.signal,
+    cleanup: () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+    }
+  }
+}
+
 export interface DouyinPipelineProgressEvent extends DouyinPipelineProgress {
   type: 'progress'
 }
@@ -140,33 +228,66 @@ async function streamMarkdownChunks(
 function resolvePlayableVideoUrl(video: any): string | null {
   if (!video) return null
 
-  const candidates: Array<string | undefined> = []
+  type Candidate = { url: string; priority: number }
 
-  if (Array.isArray(video?.video?.play_addr?.url_list)) {
-    candidates.push(...video.video.play_addr.url_list)
-  }
+  const candidates: Candidate[] = []
 
-  if (Array.isArray(video?.video?.bit_rate)) {
-    for (const item of video.video.bit_rate) {
-      if (Array.isArray(item?.play_addr?.url_list)) {
-        candidates.push(...item.play_addr.url_list)
-      }
+  const pushUrls = (urls: unknown, priority: number) => {
+    if (!Array.isArray(urls)) return
+    for (const rawUrl of urls) {
+      if (typeof rawUrl !== 'string' || !rawUrl) continue
+      const sanitized = rawUrl.includes('playwm')
+        ? rawUrl.replace('playwm', 'play')
+        : rawUrl
+      candidates.push({ url: sanitized, priority })
     }
   }
 
-  if (Array.isArray(video?.video?.download_addr?.url_list)) {
-    candidates.push(...video.video.download_addr.url_list)
+  const music = video?.music
+  if (music) {
+    pushUrls(music.play_url?.url_list, 0)
+    pushUrls(music.play_url_lowbr?.url_list, 0)
   }
 
-  if (Array.isArray(video?.video?.play_addr_lowbr?.url_list)) {
-    candidates.push(...video.video.play_addr_lowbr.url_list)
+  pushUrls(video?.video?.play_addr_lowbr?.url_list, 1)
+
+  if (Array.isArray(video?.video?.bit_rate)) {
+    for (const item of video.video.bit_rate) {
+      const bitrate = typeof item?.bit_rate === 'number' ? item.bit_rate : 0
+      const dynamicPriority =
+        bitrate > 0 ? Math.min(9, 2 + Math.round(bitrate / 1_000_000)) : 4
+      pushUrls(item?.play_addr?.url_list, dynamicPriority)
+    }
   }
 
-  const sanitized = candidates
-    .map((url) => (url?.includes('playwm') ? url.replace('playwm', 'play') : url))
-    .filter((url): url is string => Boolean(url))
+  pushUrls(video?.video?.play_addr?.url_list, 8)
+  pushUrls(video?.video?.download_addr?.url_list, 9)
 
-  return sanitized.find((url) => url.includes('aweme')) || sanitized[0] || null
+  if (candidates.length === 0) {
+    return null
+  }
+
+  const bestByUrl = new Map<string, Candidate>()
+  for (const candidate of candidates) {
+    const existing = bestByUrl.get(candidate.url)
+    if (!existing || candidate.priority < existing.priority) {
+      bestByUrl.set(candidate.url, candidate)
+    }
+  }
+
+  const ordered = Array.from(bestByUrl.values()).sort((a, b) => {
+    if (a.priority !== b.priority) {
+      return a.priority - b.priority
+    }
+    const aIsAweme = a.url.includes('aweme')
+    const bIsAweme = b.url.includes('aweme')
+    if (aIsAweme !== bIsAweme) {
+      return aIsAweme ? -1 : 1
+    }
+    return a.url.length - b.url.length
+  })
+
+  return ordered[0]?.url ?? null
 }
 
 function normalizeDurationSeconds(duration?: number | null): number {
@@ -211,6 +332,7 @@ export async function runDouyinPipeline(
   emit: DouyinPipelineEmitter,
   options: DouyinPipelineOptions = {}
 ): Promise<DouyinPipelineResult> {
+  const stepTimer = createStepTimer()
   const signal = options.signal
   const apiKey = process.env.DOUBAO_ASR_API_KEY || process.env.LLM_API_KEY
 
@@ -227,6 +349,7 @@ export async function runDouyinPipeline(
   try {
     ensureActive(signal)
 
+    stepTimer.markActive('parse-link')
     await emitProgress(emit, 'parse-link', 'active')
     let shareResult
     try {
@@ -243,8 +366,14 @@ export async function runDouyinPipeline(
     if (!shareResult.videoId) {
       throw new DouyinPipelineStepError('无法从链接中提取视频ID', 'parse-link')
     }
-    await emitProgress(emit, 'parse-link', 'completed')
+    await emitProgress(
+      emit,
+      'parse-link',
+      'completed',
+      stepTimer.getDetail('parse-link')
+    )
 
+    stepTimer.markActive('fetch-detail')
     await emitProgress(emit, 'fetch-detail', 'active')
     const tikhubClient = getTikHubClient()
     let videoDetail
@@ -289,8 +418,14 @@ export async function runDouyinPipeline(
       type: 'info',
       videoInfo
     })
-    await emitProgress(emit, 'fetch-detail', 'completed')
+    await emitProgress(
+      emit,
+      'fetch-detail',
+      'completed',
+      stepTimer.getDetail('fetch-detail')
+    )
 
+    stepTimer.markActive('download-video')
     await emitProgress(emit, 'download-video', 'active', '准备下载视频文件')
     const requestHeaders: Record<string, string> = {
       ...DOUYIN_DEFAULT_HEADERS
@@ -340,8 +475,14 @@ export async function runDouyinPipeline(
         error
       )
     }
-    await emitProgress(emit, 'download-video', 'completed')
+    await emitProgress(
+      emit,
+      'download-video',
+      'completed',
+      stepTimer.getDetail('download-video', '下载完成')
+    )
 
+    stepTimer.markActive('extract-audio')
     await emitProgress(emit, 'extract-audio', 'active')
     let audioBuffer
     try {
@@ -359,60 +500,155 @@ export async function runDouyinPipeline(
         error
       )
     }
-    await emitProgress(emit, 'extract-audio', 'completed')
+    await emitProgress(
+      emit,
+      'extract-audio',
+      'completed',
+      stepTimer.getDetail('extract-audio')
+    )
 
-    await emitProgress(emit, 'transcribe-audio', 'active')
+    stepTimer.markActive('transcribe-audio')
+    await emitProgress(
+      emit,
+      'transcribe-audio',
+      'active',
+      '正在向ASR服务请求转录'
+    )
     const base64Audio = audioBuffer.toString('base64')
 
-    let asrResponse
-    try {
-      asrResponse = await fetch('https://api.302.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-audio-preview',
-          modalities: ['text'],
-          max_tokens: 4000,
-          temperature: 0.1,
-          stream: true, // 启用流式输出
-          messages: [
+    const asrPayload = {
+      model: 'gpt-4o-audio-preview',
+      modalities: ['text'],
+      max_tokens: 4000,
+      temperature: 0.1,
+      stream: true,
+      messages: [
+        {
+          role: 'user',
+          content: [
             {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: '请转录这段音频的内容,只返回转录的文字,不要添加任何说明或解释。'
-                },
-                {
-                  type: 'input_audio',
-                  input_audio: {
-                    data: base64Audio,
-                    format: 'mp3'
-                  }
-                }
-              ]
+              type: 'text',
+              text: '请转录这段音频的内容,只返回转录的文字,不要添加任何说明或解释。'
+            },
+            {
+              type: 'input_audio',
+              input_audio: {
+                data: base64Audio,
+                format: 'mp3'
+              }
             }
           ]
-        }),
+        }
+      ]
+    }
+
+    const asrBody = JSON.stringify(asrPayload)
+    let asrResponse: Response | null = null
+    let attempt = 0
+
+    while (attempt <= ASR_MAX_RETRIES) {
+      ensureActive(signal)
+      const { controller, signal: asrSignal, cleanup } = createAbortableSignal(
+        DEFAULT_ASR_TIMEOUT_MS,
+        'ASR 请求超时',
         signal
-      })
-    } catch (error) {
-      throw new DouyinPipelineStepError(
-        error instanceof Error ? error.message : 'ASR API请求失败',
-        'transcribe-audio',
-        error
       )
+
+      try {
+        const response = await fetch(ASR_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`
+          },
+          body: asrBody,
+          signal: asrSignal
+        })
+        cleanup()
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          const errorMessage = `GPT-4o转录失败: ${response.status} - ${errorText}`
+          if (response.status >= 500 && attempt < ASR_MAX_RETRIES) {
+            await emitProgress(
+              emit,
+              'transcribe-audio',
+              'active',
+              `ASR 服务响应异常 (${response.status})，准备重试 ${attempt + 2}/${ASR_MAX_RETRIES + 1}`
+            )
+            attempt += 1
+            continue
+          }
+          throw new DouyinPipelineStepError(errorMessage, 'transcribe-audio')
+        }
+
+        asrResponse = response
+        break
+      } catch (error) {
+        cleanup()
+
+        if (controller.signal.aborted) {
+          const reason = controller.signal.reason
+          const reasonMessage =
+            reason instanceof Error
+              ? reason.message
+              : typeof reason === 'string'
+              ? reason
+              : 'ASR 请求已取消'
+
+          if (reasonMessage.includes('超时')) {
+            if (attempt < ASR_MAX_RETRIES) {
+              await emitProgress(
+                emit,
+                'transcribe-audio',
+                'active',
+                `ASR 请求超时，准备重试 ${attempt + 2}/${ASR_MAX_RETRIES + 1}`
+              )
+              attempt += 1
+              continue
+            }
+
+            throw new DouyinPipelineStepError(
+              reasonMessage,
+              'transcribe-audio',
+              reason
+            )
+          }
+
+          ensureActive(signal)
+          throw new DouyinPipelineAbortError()
+        }
+
+        if (error instanceof DouyinPipelineStepError) {
+          throw error
+        }
+
+        if (attempt < ASR_MAX_RETRIES) {
+          const message =
+            error instanceof Error ? error.message : '未知错误（准备重试）'
+          await emitProgress(
+            emit,
+            'transcribe-audio',
+            'active',
+            `ASR 请求失败（${message}），准备重试 ${attempt + 2}/${ASR_MAX_RETRIES + 1}`
+          )
+          attempt += 1
+          continue
+        }
+
+        throw new DouyinPipelineStepError(
+          error instanceof Error ? error.message : 'ASR API请求失败',
+          'transcribe-audio',
+          error
+        )
+      }
     }
 
     ensureActive(signal)
 
-    if (!asrResponse.ok) {
-      const errorText = await asrResponse.text()
+    if (!asrResponse) {
       throw new DouyinPipelineStepError(
-        `GPT-4o转录失败: ${asrResponse.status} - ${errorText}`,
+        'ASR API请求失败',
         'transcribe-audio'
       )
     }
@@ -426,43 +662,73 @@ export async function runDouyinPipeline(
     const decoder = new TextDecoder()
     let transcript = ''
     let buffer = ''
+    let receivedDone = false
+    let readerClosed = false
+
+    const processLine = async (rawLine: string): Promise<boolean> => {
+      ensureActive(signal)
+      const line = rawLine.trim()
+      if (!line) return false
+      if (line === 'data: [DONE]') {
+        return true
+      }
+
+      if (line.startsWith('data: ')) {
+        try {
+          const data = JSON.parse(line.slice(6))
+          const delta = data.choices?.[0]?.delta?.content
+
+          if (delta) {
+            transcript += delta
+            await emit({
+              type: 'partial',
+              key: 'transcript',
+              data: delta,
+              append: true
+            })
+          }
+        } catch {
+          // 忽略解析错误，继续处理
+        }
+      }
+
+      return false
+    }
 
     try {
-      while (true) {
+      while (!receivedDone) {
         ensureActive(signal)
         const { done, value } = await reader.read()
 
-        if (done) break
+        if (done) {
+          readerClosed = true
+          break
+        }
 
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
         buffer = lines.pop() || ''
 
         for (const line of lines) {
-          if (!line.trim() || line.trim() === 'data: [DONE]') continue
-
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6))
-              const delta = data.choices?.[0]?.delta?.content
-
-              if (delta) {
-                transcript += delta
-                // 实时发送转录片段
-                await emit({
-                  type: 'partial',
-                  key: 'transcript',
-                  data: delta,
-                  append: true
-                })
-              }
-            } catch (parseError) {
-              // 忽略解析错误，继续处理
-            }
+          const shouldStop = await processLine(line)
+          if (shouldStop) {
+            receivedDone = true
+            break
           }
         }
       }
+
+      if (!receivedDone && buffer) {
+        receivedDone = await processLine(buffer)
+      }
     } finally {
+      if (!readerClosed && receivedDone) {
+        try {
+          await reader.cancel()
+        } catch {
+          // ignore cancel errors
+        }
+      }
       reader.releaseLock()
     }
 
@@ -470,7 +736,12 @@ export async function runDouyinPipeline(
       throw new DouyinPipelineStepError('转录失败,未返回文本', 'transcribe-audio')
     }
 
-    await emitProgress(emit, 'transcribe-audio', 'completed')
+    await emitProgress(
+      emit,
+      'transcribe-audio',
+      'completed',
+      stepTimer.getDetail('transcribe-audio', '转录完成')
+    )
 
     await emitProgress(emit, 'optimize', 'active')
     const optimizedTranscript = optimizeTranscript(transcript)

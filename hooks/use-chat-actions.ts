@@ -1,8 +1,3 @@
-/**
- * 聊天 Hook - 事件协议版本
- * 实现 started/chunk/done/error 事件流
- */
-
 import { useCallback, useEffect, useRef } from 'react'
 import { toast } from '@/lib/toast/toast'
 import type {
@@ -12,7 +7,8 @@ import type {
   DouyinDoneEventPayload,
   DouyinInfoEventPayload,
   DouyinPartialEventPayload,
-  DouyinProgressEventPayload
+  DouyinProgressEventPayload,
+  DouyinCommentsPartialEventPayload
 } from '@/types/chat'
 import type { DouyinPipelineStep } from '@/lib/douyin/pipeline-steps'
 import { useQueryClient } from '@tanstack/react-query'
@@ -20,6 +16,7 @@ import { processSSEStream } from '@/lib/utils/sse-parser'
 import { trimForChatAPI } from '@/lib/chat/context-trimmer'
 import * as dt from '@/lib/utils/date-toolkit'
 import { DEFAULT_MODEL } from '@/lib/ai/models'
+import { createStreamThrottle, createBatchStreamThrottle } from '@/lib/utils/stream-throttle'
 
 // 全局递增计数器确保 ID 唯一性
 let messageIdCounter = 0
@@ -123,15 +120,76 @@ export function useChatActions({
       let douyinError: string | null = null
       let douyinResultPayload: DouyinDoneEventPayload | null = null
 
+      // 创建节流器 - 使用requestIdleCallback优化增量更新性能
+      // 保留完整字符串，只节流UI更新频率
+      const contentThrottle = createStreamThrottle((fullContent: string) => {
+        onEvent?.({
+          type: 'chunk',
+          requestId,
+          content: fullContent,  // 传递完整内容而不是delta
+          pendingAssistantId
+        })
+      }, { maxWait: 16 })  // 60fps
+
+      const douyinAppendBuffer: Partial<Record<DouyinPartialEventPayload['key'], string>> = {}
+      const douyinPartialThrottle = createBatchStreamThrottle<DouyinPartialEventPayload['key']>(
+        (updates) => {
+          for (const key of Object.keys(updates) as Array<DouyinPartialEventPayload['key']>) {
+            const data = updates[key]
+            if (!data) continue
+
+            onEvent?.({
+              type: 'douyin-partial',
+              requestId,
+              pendingAssistantId,
+              data: {
+                key,
+                data,
+                append: true
+              }
+            })
+
+            delete douyinAppendBuffer[key]
+          }
+        },
+        { maxWait: 32 }
+      )
+
+      const commentsAppendBuffer: Partial<Record<DouyinCommentsPartialEventPayload['key'], string>> = {}
+      const commentsPartialThrottle = createBatchStreamThrottle<DouyinCommentsPartialEventPayload['key']>(
+        (updates) => {
+          for (const key of Object.keys(updates) as Array<DouyinCommentsPartialEventPayload['key']>) {
+            const data = updates[key]
+            if (!data) continue
+
+            onEvent?.({
+              type: 'comments-partial',
+              requestId,
+              pendingAssistantId,
+              data: {
+                key,
+                data,
+                append: true
+              }
+            })
+
+            delete commentsAppendBuffer[key]
+          }
+        },
+        { maxWait: 32 }
+      )
+
       const fullContent = await processSSEStream(reader, {
         onMessage: (message) => {
           if (!message.event) return
 
-          if (message.event.startsWith('douyin-')) {
+          // 识别抖音相关事件（包括视频和评论）
+          if (message.event.startsWith('douyin-') || message.event.startsWith('comments-')) {
             hasDouyinPipeline = true
           }
 
           switch (message.event) {
+            // ===== 抖音视频文案提取事件 =====
             case 'douyin-progress': {
               if (!message.payload) return
               onEvent?.({
@@ -154,12 +212,25 @@ export function useChatActions({
             }
             case 'douyin-partial': {
               if (!message.payload) return
-              onEvent?.({
-                type: 'douyin-partial',
-                requestId,
-                pendingAssistantId,
-                data: message.payload as DouyinPartialEventPayload
-              })
+              const payload = message.payload as DouyinPartialEventPayload
+              const shouldAppend = payload.append !== false
+
+              if (!shouldAppend) {
+                douyinPartialThrottle.flush()
+                delete douyinAppendBuffer[payload.key]
+                onEvent?.({
+                  type: 'douyin-partial',
+                  requestId,
+                  pendingAssistantId,
+                  data: payload
+                })
+              } else {
+                const chunk = typeof payload.data === 'string' ? payload.data : String(payload.data ?? '')
+                if (!chunk) break
+
+                douyinAppendBuffer[payload.key] = (douyinAppendBuffer[payload.key] ?? '') + chunk
+                douyinPartialThrottle.update(payload.key, douyinAppendBuffer[payload.key]!)
+              }
               break
             }
             case 'douyin-done': {
@@ -186,18 +257,86 @@ export function useChatActions({
               })
               break
             }
+
+            // ===== 抖音评论分析事件 =====
+            case 'comments-progress': {
+              if (!message.payload) return
+              // 转发为统一的progress事件，前端使用相同的进度组件
+              onEvent?.({
+                type: 'comments-progress',
+                requestId,
+                pendingAssistantId,
+                progress: message.payload as any // 评论和视频的progress结构相同
+              })
+              break
+            }
+            case 'comments-info': {
+              if (!message.payload) return
+              onEvent?.({
+                type: 'comments-info',
+                requestId,
+                pendingAssistantId,
+                info: message.payload as any
+              })
+              break
+            }
+            case 'comments-partial': {
+              if (!message.payload) return
+              const payload = message.payload as DouyinCommentsPartialEventPayload
+              const shouldAppend = payload.append !== false
+
+              if (!shouldAppend) {
+                commentsPartialThrottle.flush()
+                delete commentsAppendBuffer[payload.key]
+                onEvent?.({
+                  type: 'comments-partial',
+                  requestId,
+                  pendingAssistantId,
+                  data: payload
+                })
+              } else {
+                const chunk = typeof payload.data === 'string' ? payload.data : String(payload.data ?? '')
+                if (!chunk) break
+
+                commentsAppendBuffer[payload.key] = (commentsAppendBuffer[payload.key] ?? '') + chunk
+                commentsPartialThrottle.update(payload.key, commentsAppendBuffer[payload.key]!)
+              }
+              break
+            }
+            case 'comments-done': {
+              if (!message.payload) return
+              // 评论完成事件 - 提取markdown
+              const commentsPayload = message.payload as any
+              douyinFinalMarkdown = commentsPayload.markdown
+              douyinResultPayload = commentsPayload as DouyinDoneEventPayload // 结构兼容
+              onEvent?.({
+                type: 'comments-done',
+                requestId,
+                pendingAssistantId,
+                result: commentsPayload
+              })
+              break
+            }
+            case 'comments-error': {
+              const payload = (message.payload ?? {}) as { message?: string; step?: any }
+              douyinError = payload?.message || '评论分析失败'
+              onEvent?.({
+                type: 'comments-error',
+                requestId,
+                pendingAssistantId,
+                error: douyinError,
+                step: payload?.step
+              })
+              break
+            }
+
             default:
               break
           }
         },
-        onContent: (delta, _fullContent) => {
-          // 发送 chunk 事件
-          onEvent?.({
-            type: 'chunk',
-            requestId,
-            delta,
-            pendingAssistantId
-          })
+        onContent: (_delta, fullContent) => {
+          // 使用节流器批量更新UI，保留完整内容
+          contentThrottle(fullContent)
         },
         onError: (error) => {
           // 处理流内部错误（如服务端警告）
@@ -208,6 +347,11 @@ export function useChatActions({
           })
         }
       })
+
+      // Flush节流器，确保最后的内容一定会更新到UI
+      douyinPartialThrottle.flush()
+      commentsPartialThrottle.flush()
+      contentThrottle.flush()
 
       const finalContent = douyinFinalMarkdown ?? fullContent
 

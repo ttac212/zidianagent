@@ -13,20 +13,25 @@ import type {
   DouyinInfoEventPayload,
   DouyinPartialEventPayload,
   DouyinProgressEventPayload,
-  DouyinProgressState
+  DouyinProgressState,
+  DouyinCommentsDoneEventPayload,
+  DouyinCommentsInfoEventPayload,
+  DouyinCommentsPartialEventPayload,
+  DouyinCommentsProgressEventPayload,
+  DouyinCommentsProgressState
 } from '@/types/chat'
 import { DEFAULT_CHAT_STATE } from '@/types/chat'
 import type { DouyinPipelineStep } from '@/lib/douyin/pipeline-steps'
 import { DOUYIN_PIPELINE_STEPS } from '@/lib/douyin/pipeline-steps'
+import type { DouyinCommentsPipelineStep } from '@/lib/douyin/comments-pipeline-steps'
+import { DOUYIN_COMMENTS_PIPELINE_STEPS } from '@/lib/douyin/comments-pipeline-steps'
 import * as dt from '@/lib/utils/date-toolkit'
 
 function createInitialDouyinProgressState(): DouyinProgressState {
   return {
     steps: DOUYIN_PIPELINE_STEPS.map(step => ({
       key: step.key,
-      label: step.label,
-      description: step.description,
-      status: 'pending'
+      status: 'pending' as const
     })),
     percentage: 0,
     status: 'running',
@@ -34,15 +39,19 @@ function createInitialDouyinProgressState(): DouyinProgressState {
   }
 }
 
+/**
+ * 克隆抖音进度状态 - 优化版
+ * 原则：只拷贝真正需要修改的部分，保持未修改部分的引用稳定
+ */
 function cloneDouyinProgressState(state?: DouyinProgressState): DouyinProgressState {
   if (!state) {
     return createInitialDouyinProgressState()
   }
 
+  // 不再深拷贝steps，返回浅拷贝
+  // 调用者负责只在需要时创建新的step对象
   return {
     ...state,
-    steps: state.steps.map(step => ({ ...step })),
-    markdownPreview: state.markdownPreview,
     updatedAt: Date.now()
   }
 }
@@ -53,24 +62,30 @@ function applyDouyinProgressUpdate(
 ): DouyinProgressState {
   const next = cloneDouyinProgressState(previous)
 
+  // 优化：只拷贝需要修改的step，保持其他step的引用
   next.steps = next.steps.map((step, idx) => {
     if (idx < progress.index) {
+      // 前面的步骤：只有状态不是completed时才需要更新
       return step.status === 'completed' ? step : { ...step, status: 'completed' }
     }
 
     if (idx === progress.index) {
+      // 当前步骤：总是需要更新
       return {
         ...step,
         status: progress.status === 'completed' ? 'completed' : 'active',
-        detail: progress.detail ?? step.detail
+        detail: progress.detail ?? step.detail,
+        labelOverride: progress.label ?? step.labelOverride,
+        descriptionOverride: progress.description ?? step.descriptionOverride
       }
     }
 
+    // 后面的步骤：如果已完成保持不变，否则设为pending
     if (step.status === 'completed') {
       return step
     }
 
-    return { ...step, status: 'pending' }
+    return step.status === 'pending' ? step : { ...step, status: 'pending' }
   })
 
   next.percentage = Math.max(next.percentage, progress.percentage)
@@ -135,6 +150,185 @@ function applyDouyinErrorUpdate(
   failedStep?: DouyinPipelineStep
 ): DouyinProgressState {
   const next = cloneDouyinProgressState(previous)
+  const steps = next.steps.map(step => ({ ...step }))
+
+  let targetIndex = typeof failedStep !== 'undefined'
+    ? steps.findIndex(step => step.key === failedStep)
+    : -1
+
+  if (targetIndex === -1) {
+    targetIndex = steps.findIndex(step => step.status === 'active')
+  }
+
+  if (targetIndex === -1) {
+    targetIndex = steps.findIndex(step => step.status !== 'completed')
+  }
+
+  next.steps = steps.map((step, idx) => {
+    if (idx === targetIndex) {
+      return { ...step, status: 'error', detail: errorMessage }
+    }
+
+    if (idx > targetIndex && step.status !== 'completed') {
+      return { ...step, status: 'pending' }
+    }
+
+    return step
+  })
+
+  next.status = 'failed'
+  next.error = errorMessage
+  next.updatedAt = Date.now()
+
+  return next
+}
+
+// ===== 抖音评论分析辅助函数 =====
+
+function createInitialCommentsProgressState(): DouyinCommentsProgressState {
+  return {
+    steps: DOUYIN_COMMENTS_PIPELINE_STEPS.map(step => ({
+      key: step.key,
+      status: 'pending' as const
+    })),
+    percentage: 0,
+    status: 'running',
+    updatedAt: Date.now()
+  }
+}
+
+/**
+ * 克隆评论进度状态 - 优化版
+ */
+function cloneCommentsProgressState(
+  state?: DouyinCommentsProgressState | null
+): DouyinCommentsProgressState {
+  if (!state) {
+    return createInitialCommentsProgressState()
+  }
+
+  // 确保steps结构正确，但避免不必要的深拷贝
+  const stepMap = new Map((state.steps ?? []).map(step => [step.key, step]))
+  const baseSteps = DOUYIN_COMMENTS_PIPELINE_STEPS
+
+  return {
+    ...state,
+    // 只在steps结构不完整时重建，否则保持引用
+    steps: state.steps?.length === baseSteps.length
+      ? state.steps
+      : baseSteps.map(base => {
+          const existing = stepMap.get(base.key)
+          return existing ?? {
+            key: base.key,
+            status: 'pending' as const,
+            detail: undefined
+          }
+        }),
+    updatedAt: Date.now()
+  }
+}
+
+function applyCommentsProgressUpdate(
+  previous: DouyinCommentsProgressState | undefined,
+  progress: DouyinCommentsProgressEventPayload
+): DouyinCommentsProgressState {
+  const next = cloneCommentsProgressState(previous)
+
+  // 优化：只拷贝需要修改的step
+  next.steps = next.steps.map((step, idx) => {
+    if (idx < progress.index) {
+      return step.status === 'completed' ? step : { ...step, status: 'completed' }
+    }
+
+    if (idx === progress.index) {
+      const status =
+        progress.status === 'error'
+          ? 'error'
+          : progress.status === 'completed'
+            ? 'completed'
+            : 'active'
+
+      return {
+        ...step,
+        status,
+        detail: progress.detail ?? step.detail,
+        labelOverride: progress.label ?? step.labelOverride,
+        descriptionOverride: progress.description ?? step.descriptionOverride
+      }
+    }
+
+    if (step.status === 'completed') {
+      return step
+    }
+
+    return step.status === 'pending' ? step : { ...step, status: 'pending' }
+  })
+
+  next.percentage = Math.max(next.percentage, progress.percentage ?? 0)
+
+  if (progress.status === 'error') {
+    next.status = 'failed'
+    next.error = progress.detail
+  } else if (progress.status === 'completed' && progress.index >= progress.total - 1) {
+    next.status = 'completed'
+    next.error = undefined
+  } else {
+    next.status = 'running'
+    next.error = undefined
+  }
+
+  next.updatedAt = Date.now()
+  return next
+}
+
+function applyCommentsInfoUpdate(
+  previous: DouyinCommentsProgressState | undefined,
+  info: DouyinCommentsInfoEventPayload
+): DouyinCommentsProgressState {
+  const next = cloneCommentsProgressState(previous)
+  next.videoInfo = info.videoInfo
+  next.statistics = info.statistics ?? next.statistics
+  next.updatedAt = Date.now()
+  return next
+}
+
+function applyCommentsPartialUpdate(
+  previous: DouyinCommentsProgressState | undefined,
+  partial: DouyinCommentsPartialEventPayload
+): DouyinCommentsProgressState {
+  const next = cloneCommentsProgressState(previous)
+
+  if (partial.key === 'analysis') {
+    next.analysisPreview = partial.append
+      ? `${next.analysisPreview ?? ''}${partial.data}`
+      : partial.data
+  }
+
+  next.updatedAt = Date.now()
+  return next
+}
+
+function applyCommentsDoneUpdate(
+  previous: DouyinCommentsProgressState | undefined,
+  payload: DouyinCommentsDoneEventPayload
+): DouyinCommentsProgressState {
+  const next = cloneCommentsProgressState(previous)
+  next.steps = next.steps.map(step => ({ ...step, status: 'completed' }))
+  next.percentage = 100
+  next.status = 'completed'
+  next.error = undefined
+  next.videoInfo = payload.videoInfo
+  next.statistics = payload.statistics
+  next.updatedAt = Date.now()
+  return next
+}
+
+function applyCommentsErrorUpdate(
+  previous: DouyinCommentsProgressState | undefined,
+  errorMessage: string,
+  failedStep?: DouyinCommentsPipelineStep
+): DouyinCommentsProgressState {
+  const next = cloneCommentsProgressState(previous)
   const steps = next.steps.map(step => ({ ...step }))
 
   let targetIndex = typeof failedStep !== 'undefined'
@@ -607,6 +801,80 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
           ...msg.metadata,
           douyinProgress: applyDouyinErrorUpdate(
             msg.metadata?.douyinProgress,
+            action.payload.error,
+            action.payload.step
+          )
+        },
+        status: 'error'
+      }))
+
+    // ===== 评论分析 Actions =====
+
+    case 'UPDATE_COMMENTS_PROGRESS': {
+      return updateMessageById(state, action.payload.messageId, msg => {
+        const nextProgress = applyCommentsProgressUpdate(
+          msg.metadata?.commentsProgress,
+          action.payload.progress
+        )
+        const nextStatus = nextProgress.status === 'failed'
+          ? 'error'
+          : nextProgress.status === 'completed'
+            ? 'completed'
+            : 'streaming'
+
+        return {
+          ...msg,
+          metadata: { ...msg.metadata, commentsProgress: nextProgress },
+          status: nextStatus
+        }
+      })
+    }
+
+    case 'UPDATE_COMMENTS_INFO':
+      return updateMessageById(state, action.payload.messageId, msg => ({
+        ...msg,
+        metadata: {
+          ...msg.metadata,
+          commentsProgress: applyCommentsInfoUpdate(
+            msg.metadata?.commentsProgress,
+            action.payload.info
+          )
+        }
+      }))
+
+    case 'UPDATE_COMMENTS_PARTIAL':
+      return updateMessageById(state, action.payload.messageId, msg => ({
+        ...msg,
+        metadata: {
+          ...msg.metadata,
+          commentsProgress: applyCommentsPartialUpdate(
+            msg.metadata?.commentsProgress,
+            action.payload.data
+          )
+        }
+      }))
+
+    case 'UPDATE_COMMENTS_DONE':
+      return updateMessageById(state, action.payload.messageId, msg => ({
+        ...msg,
+        metadata: {
+          ...msg.metadata,
+          commentsProgress: applyCommentsDoneUpdate(
+            msg.metadata?.commentsProgress,
+            action.payload.result
+          ),
+          commentsResult: action.payload.result
+        },
+        status: 'completed'
+      }))
+
+    case 'UPDATE_COMMENTS_ERROR':
+      return updateMessageById(state, action.payload.messageId, msg => ({
+        ...msg,
+        metadata: {
+          ...msg.metadata,
+          commentsProgress: applyCommentsErrorUpdate(
+            msg.metadata?.commentsProgress,
             action.payload.error,
             action.payload.step
           )

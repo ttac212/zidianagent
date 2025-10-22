@@ -38,7 +38,7 @@ export async function createBatchWithAssets(input: CreateBatchInput): Promise<Cr
   validateAssetRoles(assets)
 
   return prisma.$transaction(async tx => {
-    let parentBatch: Pick<CreativeBatch, 'id' | 'merchantId' | 'parentBatchId' | 'status'> | undefined
+    let parentBatch: Pick<CreativeBatch, 'id' | 'merchantId' | 'parentBatchId' | 'status'> | null = null
 
     if (parentBatchId) {
       parentBatch = await tx.creativeBatch.findUnique({
@@ -76,7 +76,7 @@ export async function createBatchWithAssets(input: CreateBatchInput): Promise<Cr
 
     await tx.creativeBatchAsset.createMany({ data: payload })
 
-    return { batch, parentBatch }
+    return { batch, parentBatch: parentBatch ?? undefined }
   })
 }
 
@@ -87,7 +87,7 @@ export interface UpdateBatchStatusInput {
   completedAt?: Date | null
   errorCode?: string | null
   errorMessage?: string | null
-  tokenUsage?: Prisma.JsonValue | null
+  tokenUsage?: Prisma.InputJsonValue | null
 }
 
 export async function updateBatchStatus(input: UpdateBatchStatusInput) {
@@ -119,7 +119,8 @@ export async function updateBatchStatus(input: UpdateBatchStatusInput) {
     data.errorMessage = errorMessage
   }
   if (tokenUsage !== undefined) {
-    data.tokenUsage = tokenUsage
+    data.tokenUsage =
+      tokenUsage === null ? Prisma.JsonNull : (tokenUsage as Prisma.InputJsonValue)
   }
 
   return prisma.creativeBatch.update({

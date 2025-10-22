@@ -78,6 +78,13 @@ export function mapVideoToMerchantContent(
     type: t.type,
   })) || []
 
+  const createdAt =
+    Number.isFinite(video.create_time) && video.create_time
+      ? new Date(video.create_time * 1000)
+      : null
+
+  const resolvedCreatedAt = createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt : dt.now()
+
   return {
     merchantId,
     externalId: video.aweme_id,
@@ -94,9 +101,9 @@ export function mapVideoToMerchantContent(
     shareCount: video.statistics?.share_count || 0,
     tags: JSON.stringify(tags),
     textExtra: JSON.stringify(textExtra),
-    publishedAt: dt.parse(video.create_time * 1000) || dt.now(),
+    publishedAt: resolvedCreatedAt,
     collectedAt: dt.now(),
-    externalCreatedAt: dt.parse(video.create_time * 1000) || dt.now(),
+    externalCreatedAt: resolvedCreatedAt,
   }
 }
 

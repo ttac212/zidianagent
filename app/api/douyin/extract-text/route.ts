@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
           let lastDownloadPercent = -1;
           const downloadResult = await VideoProcessor.downloadVideo(videoUrl, videoInfo, {
             headers: requestHeaders,
-            signal: request.signal,
+            signal: req.signal,
             onProgress: async (downloaded, total) => {
               if (!total) return;
               const percent = Math.floor((downloaded / total) * 100);

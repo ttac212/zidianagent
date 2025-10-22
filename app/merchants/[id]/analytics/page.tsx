@@ -25,6 +25,7 @@ import {
   Star,
   Eye
 } from 'lucide-react'
+import { unwrapApiResponse } from '@/lib/api/http-response'
 import type { MerchantWithDetails } from '@/types/merchant'
 
 // 分析数据类型
@@ -84,7 +85,8 @@ export default function MerchantAnalyticsPage() {
         return
       }
 
-      const data = await response.json()
+      const result = await response.json()
+      const data = unwrapApiResponse<AnalyticsData>(result)
       setAnalytics(data)
     } catch (error) {
       console.error('获取商户分析异常', error)

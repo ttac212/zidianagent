@@ -52,6 +52,7 @@ export interface Conversation {
   model: string
   createdAt: number
   updatedAt: number
+  messageCount?: number
   temperature?: number
   maxTokens?: number
   contextAware?: boolean
@@ -172,6 +173,12 @@ export type ChatAction =
   | { type: 'UPDATE_DOUYIN_PARTIAL'; payload: { messageId: string; data: DouyinPartialEventPayload } }
   | { type: 'UPDATE_DOUYIN_DONE'; payload: { messageId: string; result: DouyinDoneEventPayload } }
   | { type: 'UPDATE_DOUYIN_ERROR'; payload: { messageId: string; error: string; step?: DouyinPipelineStep } }
+  // 评论分析事件
+  | { type: 'UPDATE_COMMENTS_PROGRESS'; payload: { messageId: string; progress: DouyinCommentsProgressEventPayload } }
+  | { type: 'UPDATE_COMMENTS_INFO'; payload: { messageId: string; info: DouyinCommentsInfoEventPayload } }
+  | { type: 'UPDATE_COMMENTS_PARTIAL'; payload: { messageId: string; data: DouyinCommentsPartialEventPayload } }
+  | { type: 'UPDATE_COMMENTS_DONE'; payload: { messageId: string; result: DouyinCommentsDoneEventPayload } }
+  | { type: 'UPDATE_COMMENTS_ERROR'; payload: { messageId: string; error: string; step?: DouyinCommentsPipelineStep } }
 
 // 组件 Props 类型
 export interface SmartChatCenterProps {
@@ -270,10 +277,10 @@ export type DouyinProgressStepStatus = 'pending' | 'active' | 'completed' | 'err
 
 export interface DouyinProgressStep {
   key: DouyinPipelineStep
-  label: string
-  description: string
   status: DouyinProgressStepStatus
   detail?: string
+  labelOverride?: string
+  descriptionOverride?: string
 }
 
 export interface DouyinProgressState {
@@ -326,10 +333,10 @@ export interface DouyinCommentsProgressState {
 
 export interface DouyinCommentsProgressStep {
   key: DouyinCommentsPipelineStep
-  label: string
-  description: string
   status: 'pending' | 'active' | 'completed' | 'error'
   detail?: string
+  labelOverride?: string
+  descriptionOverride?: string
 }
 
 // 事件协议类型
@@ -344,7 +351,10 @@ export interface ChatEventProtocol {
   chunk: {
     type: 'chunk'
     requestId: string
-    delta: string
+    /** @deprecated 使用 content 替代，保留用于向后兼容 */
+    delta?: string
+    /** 完整内容（优化后使用此字段，避免频繁增量更新） */
+    content?: string
     pendingAssistantId: string
   }
   done: {

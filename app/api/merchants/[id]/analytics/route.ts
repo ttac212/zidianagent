@@ -49,14 +49,44 @@ export async function GET(
     }
 
     // 计算互动统计
-    const totalEngagement = merchant.totalDiggCount + merchant.totalCommentCount + 
+    const totalEngagement = merchant.totalDiggCount + merchant.totalCommentCount +
                            merchant.totalCollectCount + merchant.totalShareCount
-    const avgEngagementPerContent = merchant.totalContentCount > 0 
-      ? Math.round(totalEngagement / merchant.totalContentCount) 
+    const avgEngagementPerContent = merchant.totalContentCount > 0
+      ? Math.round(totalEngagement / merchant.totalContentCount)
       : 0
 
-    // 计算互动趋势（简单示例，可以基于实际时间数据计算）
-    const engagementTrend = Math.random() * 20 - 10 // -10% 到 +10% 的随机趋势
+    // 计算互动趋势（基于真实时间数据）
+    let engagementTrend = 0
+    const now = dt.now()
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000)
+
+    // 计算最近30天的平均互动
+    const recentContents = merchant.contents.filter(c =>
+      c.publishedAt && c.publishedAt >= thirtyDaysAgo
+    )
+    const recentEngagement = recentContents.reduce((sum, c) =>
+      sum + c.diggCount + c.commentCount + c.collectCount + c.shareCount, 0
+    )
+    const recentAvg = recentContents.length > 0
+      ? recentEngagement / recentContents.length
+      : 0
+
+    // 计算之前30天的平均互动
+    const previousContents = merchant.contents.filter(c =>
+      c.publishedAt && c.publishedAt >= sixtyDaysAgo && c.publishedAt < thirtyDaysAgo
+    )
+    const previousEngagement = previousContents.reduce((sum, c) =>
+      sum + c.diggCount + c.commentCount + c.collectCount + c.shareCount, 0
+    )
+    const previousAvg = previousContents.length > 0
+      ? previousEngagement / previousContents.length
+      : 0
+
+    // 计算趋势百分比
+    if (previousAvg > 0) {
+      engagementTrend = ((recentAvg - previousAvg) / previousAvg) * 100
+    }
 
     // 内容统计
     const videoCount = merchant.contents.filter(c => c.contentType === 'VIDEO').length

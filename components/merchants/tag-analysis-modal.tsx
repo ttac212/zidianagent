@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { unwrapApiResponse } from '@/lib/api/http-response'
 import {
   Tag,
   Hash,
@@ -63,11 +64,11 @@ export function TagAnalysisModal({
       setLoading(true)
       const response = await fetch(`/api/merchants/${merchantId}/tags`)
       const result = await response.json()
-      
+
       if (response.ok) {
-        setData(result)
-      } else {
-        }
+        const unwrappedData = unwrapApiResponse<TagAnalysisData>(result)
+        setData(unwrappedData)
+      }
     // eslint-disable-next-line no-unused-vars
     } catch (_error) {
       } finally {

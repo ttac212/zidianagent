@@ -306,13 +306,26 @@ export async function processSSEStream(
 }
 
 /**
+ * 检测TransformStream是否可用
+ * Safari部分版本和旧浏览器可能不支持
+ */
+export function isTransformStreamSupported(): boolean {
+  return typeof TransformStream !== 'undefined'
+}
+
+/**
  * 创建Transform流用于SSE处理(用于API route)
  * 修复: 使用持久化 TextDecoder 并启用流模式,避免多字节字符截断
+ * 兼容性: 仅在支持TransformStream的环境中使用，否则抛出错误提示使用fallback
  */
 export function createSSETransformStream(
   onContent?: (_content: string) => void,
   onComplete?: (_fullContent: string, _usage?: SSEMessage['usage']) => void | Promise<void>
 ): TransformStream {
+  if (!isTransformStreamSupported()) {
+    throw new Error('TransformStream not supported in this environment. Use processSSEStream instead.')
+  }
+
   let buffer = ''
   let assistantContent = ''
   let tokenUsage: SSEMessage['usage'] | undefined

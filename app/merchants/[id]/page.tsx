@@ -44,14 +44,17 @@ import {
 } from 'lucide-react'
 import type { 
   MerchantWithDetails, 
-  MerchantContent
+  MerchantContent,
+  MerchantDetailResponse,
+  ContentListResponse
 } from '@/types/merchant'
-import { 
+import {
   BUSINESS_TYPE_LABELS,
   MERCHANT_STATUS_LABELS,
-  CONTENT_TYPE_LABELS 
+  CONTENT_TYPE_LABELS
 } from '@/types/merchant'
 import { TagAnalysisModal } from '@/components/merchants/tag-analysis-modal'
+import { unwrapApiResponse } from '@/lib/api/http-response'
 import * as dt from '@/lib/utils/date-toolkit'
 
 export default function MerchantDetailPage() {
@@ -87,7 +90,8 @@ export default function MerchantDetailPage() {
         return
       }
 
-      const data = await response.json()
+      const result = await response.json()
+      const data = unwrapApiResponse<MerchantDetailResponse>(result)
       setMerchant(data.merchant)
       setContents(data.merchant.contents || [])
     } catch (error) {
@@ -135,7 +139,8 @@ export default function MerchantDetailPage() {
         return
       }
 
-      const data = await response.json()
+      const result = await response.json()
+      const data = unwrapApiResponse<ContentListResponse>(result)
       let sortedContents = data.contents || []
 
       if (contentFilters.sortBy === 'engagement') {

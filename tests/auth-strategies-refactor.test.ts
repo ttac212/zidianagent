@@ -3,7 +3,7 @@
  * 确保开发/生产环境认证逻辑正确
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { selectAuthStrategy, authenticate } from '@/auth/strategies'
 import type { Credentials } from '@/auth/strategies'
 
@@ -16,6 +16,15 @@ vi.mock('@/lib/prisma', () => ({
     }
   }
 }))
+
+const mutateEnv = (key: string, value: string | undefined) => {
+  if (typeof value === 'undefined') {
+    delete (process.env as Record<string, string | undefined>)[key]
+    return
+  }
+
+  (process.env as Record<string, string | undefined>)[key] = value
+}
 
 describe('Auth 策略重构验证', () => {
   const originalEnv = process.env
@@ -32,8 +41,8 @@ describe('Auth 策略重构验证', () => {
 
   describe('策略选择', () => {
     it('开发环境应该选择 developmentAuth', () => {
-      process.env.NODE_ENV = 'development'
-      process.env.DEV_LOGIN_CODE = 'dev123'
+      mutateEnv('NODE_ENV', 'development')
+      mutateEnv('DEV_LOGIN_CODE', 'dev123')
 
       const strategy = selectAuthStrategy()
 
@@ -41,8 +50,8 @@ describe('Auth 策略重构验证', () => {
     })
 
     it('生产环境应该选择 productionAuth', () => {
-      process.env.NODE_ENV = 'production'
-      delete process.env.DEV_LOGIN_CODE
+      mutateEnv('NODE_ENV', 'production')
+      mutateEnv('DEV_LOGIN_CODE', undefined)
 
       const strategy = selectAuthStrategy()
 
@@ -50,8 +59,8 @@ describe('Auth 策略重构验证', () => {
     })
 
     it('生产环境检测到 DEV_LOGIN_CODE 应该返回失败策略', async () => {
-      process.env.NODE_ENV = 'production'
-      process.env.DEV_LOGIN_CODE = 'dev123' // 安全漏洞
+      mutateEnv('NODE_ENV', 'production')
+      mutateEnv('DEV_LOGIN_CODE', 'dev123') // 安全漏洞
 
       const strategy = selectAuthStrategy()
       const result = await strategy({
@@ -87,8 +96,8 @@ describe('Auth 策略重构验证', () => {
     })
 
     it('无效邮箱格式应该返回 null', async () => {
-      process.env.NODE_ENV = 'development'
-      process.env.DEV_LOGIN_CODE = 'dev123'
+      mutateEnv('NODE_ENV', 'development')
+      mutateEnv('DEV_LOGIN_CODE', 'dev123')
 
       const credentials = {
         email: 'invalid-email',
@@ -103,8 +112,8 @@ describe('Auth 策略重构验证', () => {
 
   describe('开发环境认证行为', () => {
     beforeEach(() => {
-      process.env.NODE_ENV = 'development'
-      process.env.DEV_LOGIN_CODE = 'dev123'
+      mutateEnv('NODE_ENV', 'development')
+      mutateEnv('DEV_LOGIN_CODE', 'dev123')
     })
 
     it('正确的开发码应该成功认证', async () => {
@@ -186,9 +195,9 @@ describe('Auth 策略重构验证', () => {
 
   describe('生产环境认证行为', () => {
     beforeEach(() => {
-      process.env.NODE_ENV = 'production'
-      process.env.ADMIN_LOGIN_PASSWORD = 'secure-password'
-      delete process.env.DEV_LOGIN_CODE
+      mutateEnv('NODE_ENV', 'production')
+      mutateEnv('ADMIN_LOGIN_PASSWORD', 'secure-password')
+      mutateEnv('DEV_LOGIN_CODE', undefined)
     })
 
     it('正确的密码应该成功认证', async () => {
@@ -291,8 +300,8 @@ describe('Auth 策略重构验证', () => {
 
   describe('错误处理', () => {
     it('数据库错误应该返回 null', async () => {
-      process.env.NODE_ENV = 'development'
-      process.env.DEV_LOGIN_CODE = 'dev123'
+      mutateEnv('NODE_ENV', 'development')
+      mutateEnv('DEV_LOGIN_CODE', 'dev123')
 
       const { prisma } = await import('@/lib/prisma')
       vi.mocked(prisma.user.findUnique).mockRejectedValue(new Error('Database error'))

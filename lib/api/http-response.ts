@@ -17,6 +17,7 @@ export interface ApiResponse<T = any> {
   success: boolean
   data?: T
   error?: string
+  message?: string
   details?: unknown
   timestamp?: string
 }
@@ -64,6 +65,27 @@ export class HttpResponse {
     const response: ApiResponse<T> = {
       success: true,
       data,
+      timestamp: dt.toISO()
+    }
+
+    return NextResponse.json(response, {
+      status: init?.status || 200,
+      headers: init?.headers
+    })
+  }
+
+  /**
+   * 标准成功响应（带消息）
+   */
+  static ok<T = any>(
+    message: string,
+    data?: T,
+    init?: ResponseOptions
+  ): NextResponse<ApiResponse<T>> {
+    const response: ApiResponse<T> = {
+      success: true,
+      message,
+      ...(typeof data === 'undefined' ? {} : { data }),
       timestamp: dt.toISO()
     }
 
@@ -155,6 +177,19 @@ export class HttpResponse {
   }
 
   /**
+   * 错误响应（400 Bad Request）
+   */
+  static badRequest(
+    message: string = 'Bad request',
+    details?: unknown
+  ): NextResponse<ApiResponse> {
+    return HttpResponse.error(message, {
+      status: 400,
+      details
+    })
+  }
+
+  /**
    * 服务器错误响应
    */
   static serverError(
@@ -209,11 +244,13 @@ export class HttpResponse {
  */
 export const success = HttpResponse.success
 export const error = HttpResponse.error
+export const ok = HttpResponse.ok
 export const paginated = HttpResponse.paginated
 export const notFound = HttpResponse.notFound
 export const unauthorized = HttpResponse.unauthorized
 export const forbidden = HttpResponse.forbidden
 export const validationError = HttpResponse.validationError
+export const badRequest = HttpResponse.badRequest
 export const serverError = HttpResponse.serverError
 export const tooManyRequests = HttpResponse.tooManyRequests
 export const noContent = HttpResponse.noContent
@@ -324,4 +361,24 @@ export function extractPaginationParams(
   )
 
   return { page, pageSize }
+}
+
+/**
+ * 客户端解包函数：统一处理包装和未包装的响应
+ *
+ * Linus: "这是为了修复人为制造的特殊情况"
+ * 用法：const data = unwrapApiResponse(result)
+ *
+ * 支持两种格式：
+ * 1. 包装格式：{ success: true, data: {...} } → 返回 {...}
+ * 2. 裸数据格式：{...} → 返回 {...}
+ */
+export function unwrapApiResponse<T = any>(response: any): T {
+  // 如果响应是标准的 { success, data } 格式，解包 data
+  if (response && typeof response === 'object' && 'success' in response && 'data' in response) {
+    return response.data as T
+  }
+
+  // 否则假设是裸数据，直接返回
+  return response as T
 }

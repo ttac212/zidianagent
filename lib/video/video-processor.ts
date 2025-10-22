@@ -7,7 +7,7 @@ import { spawn } from 'child_process';
 import { promises as fs } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { Readable } from 'stream';
+import { Readable, Writable } from 'stream';
 import pLimit from 'p-limit';
 
 type SupportedAudioFormat = 'mp3' | 'wav' | 'pcm';
@@ -592,7 +592,7 @@ export class VideoProcessor {
     sampleRate?: number;
     channels?: number;
   }): {
-    input: Readable;
+    input: Writable;
     output: Readable;
     process: any;
   } {

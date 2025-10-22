@@ -4,7 +4,8 @@
  * 负责从TikHub API获取数据并同步到数据库
  */
 
-import { PrismaClient } from '@prisma/client'
+import { Prisma } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
 import { TikHubClient, getTikHubClient } from './client'
 import {
   mapUserProfileToMerchant,
@@ -16,12 +17,9 @@ import {
 import type {
   MerchantSyncTask,
   BatchSyncConfig,
-  DouyinUserProfile,
   DouyinVideo,
 } from './types'
 import * as dt from '@/lib/utils/date-toolkit'
-
-const prisma = new PrismaClient()
 
 /**
  * 同步单个商家的数据
@@ -61,24 +59,38 @@ export async function syncMerchantData(
     }
 
     // 3. 创建或更新商家
+    const { categoryId, ...merchantBase } = merchantData
+
+    const merchantCreateData: Prisma.MerchantCreateInput = {
+      ...merchantBase,
+      contactInfo: merchantData.contactInfo as Prisma.InputJsonValue,
+      ...(categoryId && {
+        category: {
+          connect: { id: categoryId }
+        }
+      })
+    }
+
+    const merchantUpdateData: Prisma.MerchantUpdateInput = {
+      name: merchantData.name,
+      description: merchantData.description,
+      location: merchantData.location,
+      address: merchantData.address,
+      contactInfo: merchantData.contactInfo as Prisma.InputJsonValue,
+      businessType: merchantData.businessType,
+      isVerified: merchantData.isVerified,
+      lastCollectedAt: dt.now(),
+      ...(options.categoryId && {
+        category: {
+          connect: { id: options.categoryId },
+        },
+      }),
+    }
+
     const merchant = await prisma.merchant.upsert({
       where: { uid: merchantData.uid },
-      update: {
-        name: merchantData.name,
-        description: merchantData.description,
-        location: merchantData.location,
-        address: merchantData.address,
-        contactInfo: merchantData.contactInfo,
-        businessType: merchantData.businessType,
-        isVerified: merchantData.isVerified,
-        lastCollectedAt: dt.now(),
-        ...(options.categoryId && {
-          category: {
-            connect: { id: options.categoryId },
-          },
-        }),
-      },
-      create: merchantData,
+      update: merchantUpdateData,
+      create: merchantCreateData,
     })
 
     // 4. 获取视频列表
@@ -374,12 +386,37 @@ export async function updateMerchantVideos(
       throw new Error('商家不存在')
     }
 
+    // 安全地提取 sec_uid，支持向后兼容
+    // 1. 优先从 contactInfo 中提取（新数据格式）
+    // 2. 如果 contactInfo 是字符串，先解析
+    // 3. 如果 contactInfo.sec_uid 不存在，回退到 merchant.uid（旧数据格式）
+    let secUid: string | undefined
+
+    try {
+      const contactInfo = typeof merchant.contactInfo === 'string'
+        ? JSON.parse(merchant.contactInfo)
+        : merchant.contactInfo as any
+
+      secUid = contactInfo?.sec_uid
+    } catch (_e) {
+      // JSON 解析失败，忽略错误
+    }
+
+    // 回退策略：旧的 CSV 导入脚本可能直接将 sec_uid 存在 merchant.uid 中
+    if (!secUid) {
+      secUid = merchant.uid
+    }
+
+    if (!secUid) {
+      throw new Error('商家缺少 sec_uid/uid 信息，无法同步视频')
+    }
+
     // 获取最新视频的发布时间
     const latestPublishedAt = merchant.contents[0]?.publishedAt
 
     // 获取用户视频
     const videosResponse = await client.getUserVideos({
-      sec_uid: merchant.uid, // 注意：这里需要sec_uid，可能需要存储
+      sec_uid: secUid,
       count: options.limit || 20,
     })
 
@@ -468,9 +505,3 @@ export async function updateMerchantVideos(
   }
 }
 
-/**
- * 清理资源
- */
-export async function cleanup(): Promise<void> {
-  await prisma.$disconnect()
-}

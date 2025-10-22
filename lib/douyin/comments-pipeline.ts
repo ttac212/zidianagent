@@ -172,7 +172,7 @@ function buildMarkdown(
     '',
     '---',
     '',
-    '✅ 评论分析完成！你可以继续提问或深入讨论。'
+    '评论分析完成！你可以继续提问或深入讨论。'
   ].join('\n')
 }
 
@@ -209,9 +209,7 @@ ${data.locationStats.map(({ location, count }) => `- ${location}: ${count}条`).
 
 请按以下维度分析：
 
-## 1. 用户情感倾向分析
-- 正面/负面/中性比例
-- 整体情感得分
+
 
 ## 2. 核心关注点（按权重排序）
 - 用户最关心的3-5个话题
@@ -228,7 +226,6 @@ ${data.locationStats.map(({ location, count }) => `- ${location}: ${count}条`).
 
 ## 5. 潜在问题或改进建议
 - 用户反馈的问题
-- 可优化的方向
 
 请用中文简洁地输出分析结果，使用markdown格式。`
 
@@ -407,11 +404,15 @@ export async function runDouyinCommentsPipeline(
         aweme_ids: shareResult.videoId
       })
 
-      if (!statsResponse.statistics_list || statsResponse.statistics_list.length === 0) {
+      const statisticsList =
+        (statsResponse as { statistics_list?: typeof statsResponse.statistics } | undefined)
+          ?.statistics_list ?? statsResponse.statistics
+
+      if (!statisticsList || statisticsList.length === 0) {
         throw new Error('未获取到统计数据')
       }
 
-      const stats = statsResponse.statistics_list[0]
+      const stats = statisticsList[0]
       statistics = {
         play_count: stats.play_count || 0,
         digg_count: stats.digg_count || 0,

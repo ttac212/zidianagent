@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import type { Prisma } from '@prisma/client'
 import * as nextAuthJwt from 'next-auth/jwt'
 import * as rateLimiter from '@/lib/security/rate-limiter'
 import { prisma } from '@/lib/prisma'
@@ -16,15 +17,19 @@ describe('GET /api/conversations integration contract', () => {
   let capturedSelect: any
 
   beforeEach(() => {
-    getTokenSpy = vi.spyOn(nextAuthJwt, 'getToken').mockResolvedValue({ sub: userId } as any)
+    getTokenSpy = vi
+      .spyOn(nextAuthJwt, 'getToken')
+      .mockResolvedValue({ sub: userId } as any) as ReturnType<typeof vi.spyOn>
     rateLimitSpy = vi
       .spyOn(rateLimiter, 'checkRateLimit')
-      .mockResolvedValue({ allowed: true, remaining: 10, resetTime: Date.now() + 60000 })
+      .mockResolvedValue({ allowed: true, remaining: 10, resetTime: Date.now() + 60000 }) as ReturnType<
+      typeof vi.spyOn
+    >
 
     capturedSelect = undefined
-    findManySpy = vi.spyOn(prisma.conversation, 'findMany').mockImplementation(async (args: any) => {
+    findManySpy = vi.spyOn(prisma.conversation, 'findMany').mockImplementation((args: any) => {
       capturedSelect = args?.select
-      return [
+      const result = [
         {
           id: 'conv-latest',
           title: '最新对话',
@@ -63,9 +68,13 @@ describe('GET /api/conversations integration contract', () => {
           messages: []
         }
       ] as any
-    })
 
-    countSpy = vi.spyOn(prisma.conversation, 'count').mockResolvedValue(2)
+      const prismaPromise = Promise.resolve(result) as unknown as Prisma.PrismaPromise<typeof result>
+      Object.defineProperty(prismaPromise, Symbol.toStringTag, { value: 'PrismaPromise' })
+      return prismaPromise
+    }) as ReturnType<typeof vi.spyOn>
+
+    countSpy = vi.spyOn(prisma.conversation, 'count').mockResolvedValue(2) as ReturnType<typeof vi.spyOn>
   })
 
   afterEach(() => {

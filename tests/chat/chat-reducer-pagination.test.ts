@@ -107,7 +107,13 @@ describe('chatReducer PREPEND_MESSAGES', () => {
 
     const state = createState({
       history: {
-        messages: baseMessages.slice()
+        messages: baseMessages.slice(),
+        pagination: {
+          hasMoreBefore: DEFAULT_CHAT_STATE.history.pagination.hasMoreBefore,
+          cursor: DEFAULT_CHAT_STATE.history.pagination.cursor
+            ? { ...DEFAULT_CHAT_STATE.history.pagination.cursor }
+            : null
+        }
       }
     })
 
@@ -132,7 +138,13 @@ describe('chatReducer PREPEND_MESSAGES', () => {
 
     const state = createState({
       history: {
-        messages: baseMessages.slice()
+        messages: baseMessages.slice(),
+        pagination: {
+          hasMoreBefore: DEFAULT_CHAT_STATE.history.pagination.hasMoreBefore,
+          cursor: DEFAULT_CHAT_STATE.history.pagination.cursor
+            ? { ...DEFAULT_CHAT_STATE.history.pagination.cursor }
+            : null
+        }
       }
     })
 

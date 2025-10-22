@@ -7,7 +7,12 @@ import { NextRequest } from "next/server"
 import { getToken } from "next-auth/jwt"
 import { prisma } from "@/lib/prisma"
 import { selectApiKey } from "@/lib/ai/key-manager"
-import { createSSETransformStream } from "@/lib/utils/sse-parser"
+import {
+  createSSETransformStream,
+  isTransformStreamSupported,
+  processSSEStream,
+  type SSEMessage
+} from "@/lib/utils/sse-parser"
 import { checkRateLimit } from "@/lib/security/rate-limiter"
 import { trimForChatAPI } from "@/lib/chat/context-trimmer"
 import { DEFAULT_MODEL, isAllowed } from "@/lib/ai/models"
@@ -19,13 +24,6 @@ import {
   forbidden,
   unauthorized
 } from '@/lib/api/http-response'
-import {
-  isCopywritingRequest,
-  extractMerchantInfo,
-  buildCopywritingSystemPrompt,
-  buildCopywritingUserPrompt,
-  isCopywritingEditRequest
-} from "@/lib/ai/copywriting-prompts"
 import {
   detectDouyinLink,
   extractDouyinLink,
@@ -362,84 +360,8 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  let processedMessages = messages
-
-  // === 文案生成功能：检测并处理 ===
-  let isCopywriting = false
-  let copywritingMessages = processedMessages
-
-  if (lastUserMessage?.role === 'user' && isCopywritingRequest(lastUserMessage.content)) {
-    console.info('[Copywriting] 检测到文案生成请求')
-    isCopywriting = true
-
-    // 提取商家信息
-    const { merchantId, merchantName } = extractMerchantInfo(lastUserMessage.content)
-
-    let merchant = null
-    if (merchantId) {
-      merchant = await prisma.merchant.findUnique({
-        where: { id: merchantId },
-        include: {
-          contents: { take: 10, orderBy: { diggCount: 'desc' } },
-          category: true
-        }
-      })
-    } else if (merchantName) {
-      merchant = await prisma.merchant.findFirst({
-        where: { name: { contains: merchantName } },
-        include: {
-          contents: { take: 10, orderBy: { diggCount: 'desc' } },
-          category: true
-        }
-      })
-    }
-
-    if (!merchant) {
-      // 没找到商家，让用户明确指定（此时还未预留配额，无需释放）
-      return Response.json({
-        error: '未找到商家信息。请提供商家ID或明确的商家名称，例如："为【XX全屋定制】生成文案"'
-      }, { status: 400 })
-    }
-
-    // 检查是否是修改请求（修改之前生成的版本）
-    const editCheck = isCopywritingEditRequest(lastUserMessage.content)
-    let previousVersions = undefined
-
-    if (editCheck.isEdit) {
-      // 从对话历史中找到之前生成的文案
-      const historyMessages = messages.slice(0, -1)
-      const lastAssistantMessage = historyMessages.reverse().find((m: any) => m.role === 'assistant')
-
-      if (lastAssistantMessage) {
-        try {
-          const parsed = JSON.parse(lastAssistantMessage.content)
-          if (parsed.versions && Array.isArray(parsed.versions)) {
-            previousVersions = parsed.versions
-            console.info('[Copywriting] 检测到修改请求,引用之前的版本')
-          }
-        } catch {
-          // 不是JSON格式，忽略
-        }
-      }
-    }
-
-    // 构建专门的文案生成prompt
-    const systemPrompt = buildCopywritingSystemPrompt()
-    const userPrompt = buildCopywritingUserPrompt({
-      merchant,
-      userRequest: lastUserMessage.content,
-      previousVersions
-    })
-
-    // 替换消息为文案生成专用prompt
-    copywritingMessages = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt }
-    ]
-  }
-
   // 服务端统一裁剪（防止客户端绕过限制）- 基于实际模型上限
-  const trimResult = trimForChatAPI(isCopywriting ? copywritingMessages : processedMessages, model, creativeMode)
+  const trimResult = trimForChatAPI(messages, model, creativeMode)
   const finalMessages = trimResult.messages
 
   // 估算本次请求需要的token数量（保守估计）
@@ -464,7 +386,7 @@ export async function POST(request: NextRequest) {
     console.info(`[API] Server-side trim: ${trimResult.dropCount} messages dropped, tokens: ${trimResult.estimatedTokens}`)
 
     // SECURITY: 如果裁剪太多，返回友好错误而不是继续处理
-    if (trimResult.dropCount > processedMessages.length * 0.5) {
+    if (trimResult.dropCount > messages.length * 0.5) {
       // 释放预留的配额
       await QuotaManager.releaseTokens(userId, estimatedTokens)
       return error(
@@ -474,7 +396,7 @@ export async function POST(request: NextRequest) {
           details: {
             modelLimit: true,
             droppedMessages: trimResult.dropCount,
-            totalMessages: processedMessages.length
+            totalMessages: messages.length
           }
         }
       )
@@ -509,8 +431,8 @@ export async function POST(request: NextRequest) {
   }
 
   // 4. 保存用户消息（权限已验证）- 使用真正的QuotaManager
-  if (conversationId && processedMessages.length > 0) {
-    const userMessage = processedMessages[processedMessages.length - 1]
+  if (conversationId && messages.length > 0) {
+    const userMessage = messages[messages.length - 1]
     if (userMessage.role === 'user') {
       try {
         // 使用QuotaManager保存用户消息（不计费）
@@ -602,56 +524,101 @@ export async function POST(request: NextRequest) {
   }
 
   // 7. 使用现成SSE解析工具，修复数据丢失问题
-  const sseTransform = createSSETransformStream(
-    undefined, // onContent - 不需要实时处理
-    async (fullContent, usage) => {
-      // onComplete - 流结束后保存完整消息，使用真正的QuotaManager
-      if (conversationId && fullContent) {
-        try {
-          const promptTokens = usage?.prompt_tokens || 0
-          const completionTokens = usage?.completion_tokens || 0
+  const handleStreamCompletion = async (
+    fullContent: string,
+    usage?: SSEMessage["usage"]
+  ) => {
+    if (conversationId && fullContent) {
+      try {
+        const promptTokens = usage?.prompt_tokens || 0
+        const completionTokens = usage?.completion_tokens || 0
 
-          // 使用QuotaManager提交实际使用的tokens
-          const success = await QuotaManager.commitTokens(
-            userId,
-            { promptTokens, completionTokens },
-            estimatedTokens, // 传入预留的token数量
-            {
-              conversationId,
-              role: 'ASSISTANT',
-              content: fullContent,
-              modelId: model
-            }
-          )
-
-          if (!success) {
-            console.error('[Chat] Failed to save assistant message')
-            // 释放预留配额，避免配额卡死
-            await QuotaManager.releaseTokens(userId, estimatedTokens)
+        const success = await QuotaManager.commitTokens(
+          userId,
+          { promptTokens, completionTokens },
+          estimatedTokens,
+          {
+            conversationId,
+            role: 'ASSISTANT',
+            content: fullContent,
+            modelId: model
           }
-        } catch (dbError) {
-          console.error('[Chat] Failed to save assistant message:', dbError)
+        )
 
-          if (dbError instanceof QuotaExceededError) {
-            console.error(`[Chat] Quota exceeded during commit: ${dbError.message}`)
-            // 配额超限时，系统已经确保不会扣减配额，无需释放
-          } else {
-            // 其他错误时释放预留配额
-            await QuotaManager.releaseTokens(userId, estimatedTokens)
-          }
+        if (!success) {
+          console.error('[Chat] Failed to save assistant message')
+          await QuotaManager.releaseTokens(userId, estimatedTokens)
         }
-      } else {
-        // 如果没有内容或对话ID，释放预留配额
+      } catch (dbError) {
+        console.error('[Chat] Failed to save assistant message:', dbError)
+
+        if (dbError instanceof QuotaExceededError) {
+          console.error(`[Chat] Quota exceeded during commit: ${dbError.message}`)
+        } else {
+          await QuotaManager.releaseTokens(userId, estimatedTokens)
+        }
+      }
+    } else {
+      await QuotaManager.releaseTokens(userId, estimatedTokens)
+    }
+  }
+
+  const responseBody = aiResponse.body
+
+  if (!responseBody) {
+    await QuotaManager.releaseTokens(userId, estimatedTokens)
+    return error('AI响应无内容', { status: 502 })
+  }
+
+  const responseHeaders = {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+  } as const
+
+  if (isTransformStreamSupported()) {
+    const sseTransform = createSSETransformStream(
+      undefined,
+      handleStreamCompletion
+    )
+
+    return new Response(responseBody.pipeThrough(sseTransform), {
+      headers: responseHeaders
+    })
+  }
+
+  if (typeof responseBody.tee === 'function') {
+    const [clientStream, processingStream] = responseBody.tee()
+    let fallbackUsage: SSEMessage["usage"] | undefined
+
+    processSSEStream(processingStream.getReader(), {
+      onUsage(usage) {
+        fallbackUsage = usage
+      },
+      onError(message) {
+        console.error('[Chat] SSE fallback error:', message)
+      }
+    }).then(
+      (fullContent) => handleStreamCompletion(fullContent, fallbackUsage),
+      async (streamError) => {
+        if (streamError instanceof Error && streamError.name === 'AbortError') {
+          return
+        }
+
+        console.error('[Chat] SSE fallback processing failed:', streamError)
         await QuotaManager.releaseTokens(userId, estimatedTokens)
       }
-    }
-  )
+    )
 
-  return new Response(aiResponse.body?.pipeThrough(sseTransform), {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      "Connection": "keep-alive",
-    }
+    return new Response(clientStream, {
+      headers: responseHeaders
+    })
+  }
+
+  console.warn('[Chat] Falling back to raw stream without TransformStream/tee support')
+  await QuotaManager.releaseTokens(userId, estimatedTokens)
+
+  return new Response(responseBody, {
+    headers: responseHeaders
   })
 }

@@ -17,7 +17,12 @@ import { useChatScroll } from '@/hooks/use-chat-scroll'
 import { useChatKeyboard } from '@/hooks/use-chat-keyboard'
 import { useChatFocus } from '@/hooks/use-chat-focus'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
-import type { Conversation, ChatEvent, ChatSettings, ChatMessage } from '@/types/chat'
+import type {
+  Conversation,
+  ChatEvent,
+  ChatSettings,
+  ChatMessage
+} from '@/types/chat'
 import { useChatState } from '@/hooks/use-chat-state'
 import {
   selectSessionError,
@@ -218,6 +223,8 @@ function SmartChatCenterInternal({
           type: 'UPDATE_MESSAGE_STREAM',
           payload: {
             messageId: event.pendingAssistantId,
+            // 支持新的content字段（完整内容）和旧的delta字段（增量）
+            content: event.content,
             delta: event.delta,
             status: 'streaming'
           }
@@ -384,48 +391,20 @@ function SmartChatCenterInternal({
       // === 抖音评论分析事件 ===
       case 'comments-progress':
         dispatch({
-          type: 'UPDATE_MESSAGE',
+          type: 'UPDATE_COMMENTS_PROGRESS',
           payload: {
-            id: event.pendingAssistantId,
-            updates: {
-              metadata: {
-                commentsProgress: {
-                  steps: event.progress.step ? [{
-                    key: event.progress.step,
-                    label: event.progress.label || '',
-                    description: event.progress.description || '',
-                    status: event.progress.status as any,
-                    detail: event.progress.detail
-                  }] : [],
-                  percentage: event.progress.percentage || 0,
-                  status: 'running',
-                  updatedAt: dt.timestamp()
-                }
-              }
-            }
+            messageId: event.pendingAssistantId,
+            progress: event.progress
           }
         })
         break
 
       case 'comments-info':
         dispatch({
-          type: 'UPDATE_MESSAGE',
+          type: 'UPDATE_COMMENTS_INFO',
           payload: {
-            id: event.pendingAssistantId,
-            updates: {
-              metadata: {
-                commentsProgress: {
-                  ...(messages.find(m => m.id === event.pendingAssistantId)?.metadata?.commentsProgress || {
-                    steps: [],
-                    percentage: 0,
-                    status: 'running',
-                    updatedAt: dt.timestamp()
-                  }),
-                  videoInfo: event.info.videoInfo,
-                  statistics: event.info.statistics
-                }
-              }
-            }
+            messageId: event.pendingAssistantId,
+            info: event.info
           }
         })
         break
@@ -466,49 +445,20 @@ function SmartChatCenterInternal({
 
         // 更新预览
         dispatch({
-          type: 'UPDATE_MESSAGE',
+          type: 'UPDATE_COMMENTS_PARTIAL',
           payload: {
-            id: event.pendingAssistantId,
-            updates: {
-              metadata: {
-                commentsProgress: {
-                  ...(messages.find(m => m.id === event.pendingAssistantId)?.metadata?.commentsProgress || {
-                    steps: [],
-                    percentage: 0,
-                    status: 'running',
-                    updatedAt: dt.timestamp()
-                  }),
-                  analysisPreview: event.data.append
-                    ? (messages.find(m => m.id === event.pendingAssistantId)?.metadata?.commentsProgress?.analysisPreview || '') + event.data.data
-                    : event.data.data
-                }
-              }
-            }
+            messageId: event.pendingAssistantId,
+            data: event.data
           }
         })
         break
 
       case 'comments-done':
         dispatch({
-          type: 'UPDATE_MESSAGE',
+          type: 'UPDATE_COMMENTS_DONE',
           payload: {
-            id: event.pendingAssistantId,
-            updates: {
-              metadata: {
-                commentsProgress: {
-                  ...(messages.find(m => m.id === event.pendingAssistantId)?.metadata?.commentsProgress || {
-                    steps: [],
-                    percentage: 0,
-                    status: 'completed',
-                    updatedAt: dt.timestamp()
-                  }),
-                  status: 'completed',
-                  percentage: 100
-                },
-                commentsResult: event.result
-              },
-              status: 'completed'
-            }
+            messageId: event.pendingAssistantId,
+            result: event.result
           }
         })
 
@@ -517,24 +467,11 @@ function SmartChatCenterInternal({
 
       case 'comments-error':
         dispatch({
-          type: 'UPDATE_MESSAGE',
+          type: 'UPDATE_COMMENTS_ERROR',
           payload: {
-            id: event.pendingAssistantId,
-            updates: {
-              metadata: {
-                commentsProgress: {
-                  ...(messages.find(m => m.id === event.pendingAssistantId)?.metadata?.commentsProgress || {
-                    steps: [],
-                    percentage: 0,
-                    status: 'failed',
-                    updatedAt: dt.timestamp()
-                  }),
-                  status: 'failed',
-                  error: event.error
-                }
-              },
-              status: 'error'
-            }
+            messageId: event.pendingAssistantId,
+            error: event.error,
+            step: event.step
           }
         })
         streamedResultMessageIds.current.delete(`${event.pendingAssistantId}_result`)
