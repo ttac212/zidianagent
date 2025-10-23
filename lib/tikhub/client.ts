@@ -209,9 +209,17 @@ export class TikHubClient {
    * 获取抖音用户资料
    */
   async getUserProfile(params: GetUserProfileParams): Promise<DouyinUserProfile> {
+    if (!params.sec_uid) {
+      throw new Error('sec_uid is required to fetch user profile.')
+    }
+
+    const { sec_uid, ...restParams } = params
     const response = await this.request<DouyinUserProfile>({
       endpoint: '/api/v1/douyin/app/v3/fetch_user_profile',
-      params,
+      params: {
+        ...restParams,
+        sec_user_id: sec_uid,
+      },
     })
     return response.data
   }
@@ -220,11 +228,17 @@ export class TikHubClient {
    * 获取用户视频列表
    */
   async getUserVideos(params: GetUserVideosParams): Promise<DouyinUserVideosResponse> {
+    if (!params.sec_uid) {
+      throw new Error('sec_uid is required to fetch user videos.')
+    }
+
+    const { sec_uid, count, ...restParams } = params
     const response = await this.request<DouyinUserVideosResponse>({
       endpoint: '/api/v1/douyin/app/v3/fetch_user_post_videos',
       params: {
-        ...params,
-        count: params.count || 20,
+        ...restParams,
+        sec_user_id: sec_uid,
+        count: count ?? 20,
       },
     })
     return response.data

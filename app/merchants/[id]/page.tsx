@@ -12,7 +12,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
-import { 
+import { EditMerchantDialog } from '@/components/merchants/edit-merchant-dialog'
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -42,11 +43,12 @@ import {
   ArrowUp,
   ArrowDown
 } from 'lucide-react'
-import type { 
-  MerchantWithDetails, 
+import type {
+  MerchantWithDetails,
   MerchantContent,
   MerchantDetailResponse,
-  ContentListResponse
+  ContentListResponse,
+  MerchantCategory
 } from '@/types/merchant'
 import {
   BUSINESS_TYPE_LABELS,
@@ -63,6 +65,7 @@ export default function MerchantDetailPage() {
   const merchantId = Array.isArray(params.id) ? params.id[0] : params.id
   const [merchant, setMerchant] = useState<MerchantWithDetails | null>(null)
   const [contents, setContents] = useState<MerchantContent[]>([])
+  const [categories, setCategories] = useState<MerchantCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [contentLoading, setContentLoading] = useState(false)
   const [contentFilters, setContentFilters] = useState({
@@ -167,6 +170,7 @@ export default function MerchantDetailPage() {
 
   useEffect(() => {
     fetchMerchant()
+    fetchCategories()
   }, [fetchMerchant])
 
   useEffect(() => {
@@ -174,6 +178,19 @@ export default function MerchantDetailPage() {
       fetchContents()
     }
   }, [fetchContents, merchant])
+
+  // 获取分类列表
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch('/api/merchants/categories')
+      if (response.ok) {
+        const data = await response.json()
+        setCategories(data)
+      }
+    } catch (error) {
+      console.error('获取分类列表失败', error)
+    }
+  }
 
   // 格式化数字
   const formatNumber = (num: number) => {
@@ -278,10 +295,28 @@ export default function MerchantDetailPage() {
           {/* 基本信息 */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Building2 className="h-5 w-5" />
-                基本信息
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Building2 className="h-5 w-5" />
+                  基本信息
+                </CardTitle>
+                <EditMerchantDialog
+                  merchant={{
+                    id: merchant.id,
+                    name: merchant.name,
+                    description: merchant.description,
+                    location: merchant.location,
+                    address: merchant.address,
+                    businessType: merchant.businessType,
+                    status: merchant.status,
+                    categoryId: merchant.categoryId,
+                  }}
+                  categories={categories}
+                  onSuccess={() => {
+                    fetchMerchant()
+                  }}
+                />
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -298,8 +333,12 @@ export default function MerchantDetailPage() {
                   <div className="font-medium">{merchant.location || '未指定'}</div>
                 </div>
                 <div>
+                  <label className="text-sm font-medium text-muted-foreground">详细地址</label>
+                  <div className="font-medium">{merchant.address || '未指定'}</div>
+                </div>
+                <div>
                   <label className="text-sm font-medium text-muted-foreground">状态</label>
-                  <Badge 
+                  <Badge
                     variant={merchant.status === 'ACTIVE' ? 'default' : 'secondary'}
                     className="ml-1"
                   >
@@ -314,22 +353,26 @@ export default function MerchantDetailPage() {
                   <label className="text-sm font-medium text-muted-foreground">创建时间</label>
                   <div className="font-medium">{new Date(merchant.createdAt).toLocaleString()}</div>
                 </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">更新时间</label>
+                  <div className="font-medium">{new Date(merchant.updatedAt).toLocaleString()}</div>
+                </div>
               </div>
-              
+
               {merchant.description && (
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">描述</label>
-                  <div className="mt-1">{merchant.description}</div>
+                  <div className="mt-1 whitespace-pre-wrap">{merchant.description}</div>
                 </div>
               )}
-              
+
               {merchant.category && (
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">分类</label>
-                  <Badge 
+                  <Badge
                     variant="outline"
                     className="ml-1"
-                    style={{ 
+                    style={{
                       borderColor: merchant.category.color || '#6366f1',
                       color: merchant.category.color || '#6366f1'
                     }}

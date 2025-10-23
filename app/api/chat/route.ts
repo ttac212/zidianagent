@@ -37,13 +37,14 @@ import { runDouyinCommentsPipeline } from "@/lib/douyin/comments-pipeline"
 const API_BASE = process.env.LLM_API_BASE || "https://api.302.ai/v1"
 
 export async function POST(request: NextRequest) {
-  // 1. 认证
-  const token = await getToken({ req: request as any })
-  if (!token?.sub) {
-    return unauthorized('未认证')
-  }
+  try {
+    // 1. 认证
+    const token = await getToken({ req: request as any })
+    if (!token?.sub) {
+      return unauthorized('未认证')
+    }
 
-  const userId = String(token.sub)
+    const userId = String(token.sub)
 
   // 2. 速率限制检查（修复形同虚设问题）
   const rateLimitResult = await checkRateLimit(request, 'CHAT', userId)
@@ -69,6 +70,11 @@ export async function POST(request: NextRequest) {
     return validationError(
       `Model '${model}' is not allowed. Check MODEL_ALLOWLIST configuration.`
     )
+  }
+
+  // 验证 messages 参数
+  if (!messages || !Array.isArray(messages) || messages.length === 0) {
+    return validationError('messages 参数不能为空')
   }
 
   // === 抖音链接处理：默认评论分析，除非明确要求视频提取 ===
@@ -621,4 +627,20 @@ export async function POST(request: NextRequest) {
   return new Response(responseBody, {
     headers: responseHeaders
   })
+  } catch (err) {
+    console.error('[Chat] Unexpected error:', err)
+
+    // 尝试获取 userId 和 estimatedTokens（如果已定义）
+    const errorContext = {
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined
+    }
+
+    console.error('[Chat] Error context:', errorContext)
+
+    return error(
+      '服务器内部错误，请稍后重试',
+      { status: 500, details: errorContext }
+    )
+  }
 }

@@ -2,6 +2,7 @@ import { parseDouyinVideoShare } from '@/lib/douyin/share-link'
 import { getTikHubClient } from '@/lib/tikhub'
 import { VideoProcessor } from '@/lib/video/video-processor'
 import { DOUYIN_DEFAULT_HEADERS } from '@/lib/douyin/constants'
+import { selectApiKey } from '@/lib/ai/key-manager'
 import {
   DOUYIN_PIPELINE_STEPS,
   type DouyinPipelineStep,
@@ -303,6 +304,135 @@ function optimizeTranscript(raw: string): string {
     .join('\n')
 }
 
+/**
+ * 使用LLM优化转录文案（结合视频元数据智能纠错）
+ */
+async function optimizeTranscriptWithLLM(
+  text: string,
+  apiKey: string,
+  modelId: string,
+  videoInfo: {
+    title: string
+    author: string
+    hashtags?: string[]
+    videoTags?: string[]
+  }
+): Promise<string | null> {
+  try {
+    const apiBase = process.env.LLM_API_BASE || 'https://api.302.ai/v1'
+
+    // 构建视频上下文信息
+    const contextParts = [
+      `视频标题：${videoInfo.title}`,
+      `作者：${videoInfo.author}`
+    ]
+
+    if (videoInfo.hashtags && videoInfo.hashtags.length > 0) {
+      contextParts.push(`话题标签：${videoInfo.hashtags.join('、')}`)
+    }
+
+    if (videoInfo.videoTags && videoInfo.videoTags.length > 0) {
+      contextParts.push(`视频标签：${videoInfo.videoTags.join('、')}`)
+    }
+
+    const contextInfo = contextParts.join('\n')
+
+    const response = await fetch(`${apiBase}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: modelId,
+        messages: [
+          {
+            role: 'system',
+            content: `你是一个专业的抖音视频文案编辑。你的核心任务是利用视频的标题、标签等上下文信息，修正语音转录中的同音字错误和识别错误。
+
+**工作流程：**
+1. **仔细阅读视频上下文信息**（标题、作者、标签），理解视频主题
+2. **识别关键词**：从标题和标签中提取地名、人名、品牌、专业术语等关键信息
+3. **逐句核对转录文本**：检查是否有与关键词发音相同但字形错误的内容
+4. **修正错误**：
+   - 地名错误：如"南京"→"南宁"（根据标题确认）
+   - 人名错误：如"金姐"→"君姐"（根据作者名确认）
+   - 品牌/术语错误：根据标签中的规范写法修正
+5. **添加标点**：为文本添加适当的标点符号和段落
+6. **保持原意**：只修正错误，不添加原文没有的内容
+
+**重要原则：**
+- ⚠️ **优先使用视频标题和标签中的词语**：如果转录文本中出现与标题/标签发音相似的词，必须以标题/标签为准
+- ⚠️ **地名、人名必须严格核对**：这类错误最常见，必须仔细比对
+- ⚠️ **专业术语以标签为准**：标签中的写法通常是规范的
+- 直接输出优化后的文本，不要添加任何说明`,
+          },
+          {
+            role: 'user',
+            content: `【示例1：地名和人名纠错】
+视频信息：
+标题：君姐在南宁做旧房改造
+作者：君姐改旧房
+
+转录文本：
+"金姐在南京做了15年旧房改造..."
+
+正确修正：
+"君姐在南宁做了15年旧房改造..."
+
+---
+
+【示例2：专业术语纠错】
+视频信息：
+标题：iPhone 15 Pro Max 开箱
+话题标签：#苹果手机 #iPhone15ProMax
+
+转录文本：
+"今天给大家开箱爱疯15 Pro Max..."
+
+正确修正：
+"今天给大家开箱iPhone 15 Pro Max..."
+
+---
+
+现在请你修正以下视频的转录文本：`,
+          },
+          {
+            role: 'user',
+            content: `${contextInfo}
+
+---
+
+**转录文本：**
+${text}
+
+---
+
+**修正要求：**
+1. 检查转录文本中是否有与标题、作者、标签发音相同但写法不同的词语，如有则修正为标题/标签中的写法
+2. 特别注意地名、人名、品牌名的正确性
+3. 添加标点符号，使文本更易读
+4. 直接返回修正后的文本，不要任何解释`,
+          },
+        ],
+        max_tokens: 4000,
+        temperature: 0.2,
+      }),
+    })
+
+    if (!response.ok) {
+      console.error('[Pipeline] LLM优化失败:', response.status)
+      return null
+    }
+
+    const data = await response.json()
+    return data.choices?.[0]?.message?.content || null
+  } catch (error) {
+    console.error('[Pipeline] LLM优化出错:', error)
+    return null
+  }
+}
+
 function buildMarkdown(info: DouyinVideoInfo, transcript: string): string {
   const durationText =
     info.duration > 0 ? `${info.duration.toFixed(1)}秒` : '未知时长'
@@ -528,7 +658,15 @@ export async function runDouyinPipeline(
           content: [
             {
               type: 'text',
-              text: '请转录这段音频的内容,只返回转录的文字,不要添加任何说明或解释。'
+              text: `这是一段抖音视频的音频转录任务。请仔细转录音频内容，注意以下要点：
+
+1. **准确识别**：尽可能准确地识别每个字词，特别注意处理方言口音和不标准发音
+2. **同音字辨析**：遇到同音字时，结合上下文语境选择正确的汉字
+3. **专业术语**：遇到行业术语、品牌名称或网络用语时，使用最常见的规范写法
+4. **保持原意**：完整转录说话内容，包括语气词（如"嗯"、"啊"、"哦"等）
+5. **纯文本输出**：只返回转录的文字，不要添加任何说明、解释或格式标记
+
+请开始转录：`
             },
             {
               type: 'input_audio',
@@ -743,8 +881,50 @@ export async function runDouyinPipeline(
       stepTimer.getDetail('transcribe-audio', '转录完成')
     )
 
-    await emitProgress(emit, 'optimize', 'active')
-    const optimizedTranscript = optimizeTranscript(transcript)
+    // 先做基础清理
+    await emitProgress(emit, 'optimize', 'active', '正在清理转录文本...')
+    const cleanedTranscript = optimizeTranscript(transcript)
+
+    // 使用LLM优化（结合视频元数据智能纠错）
+    await emitProgress(emit, 'optimize', 'active', '正在使用AI优化文案...')
+
+    // 提取视频元数据
+    const hashtags = awemeDetail.text_extra
+      ?.filter((item: any) => item.hashtag_name)
+      .map((item: any) => item.hashtag_name) || []
+
+    const videoTags = awemeDetail.video_tag
+      ?.map((tag: any) => tag.tag_name)
+      .filter(Boolean) || []
+
+    // 选择优化模型的API Key
+    const optimizeModelId = 'claude-sonnet-4-5-20250929'
+    const { apiKey: optimizeApiKey } = selectApiKey(optimizeModelId)
+
+    let optimizedTranscript = cleanedTranscript
+
+    if (optimizeApiKey) {
+      const llmOptimized = await optimizeTranscriptWithLLM(
+        cleanedTranscript,
+        optimizeApiKey,
+        optimizeModelId,
+        {
+          title: videoInfo.title,
+          author: videoInfo.author,
+          hashtags,
+          videoTags
+        }
+      )
+
+      if (llmOptimized) {
+        optimizedTranscript = llmOptimized
+      } else {
+        console.warn('[Pipeline] LLM优化失败，使用基础清理后的文本')
+      }
+    } else {
+      console.warn('[Pipeline] 未配置优化模型API Key，跳过LLM优化')
+    }
+
     await emitProgress(emit, 'optimize', 'completed')
 
     await emitProgress(emit, 'summarize', 'active')

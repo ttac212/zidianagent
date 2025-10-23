@@ -4,6 +4,38 @@ const VIDEO_ID_RE = /\/(?:video|note|slides)\/(\d{19})/;
 const USER_ID_RE = /\/user\/([A-Za-z0-9_-]+)/;
 const LIVE_REDIRECT_RE = /\/douyin\/webcast\/reflow\//;
 
+/**
+ * 抖音官方域名白名单
+ * 严格限制只允许抖音官方域名，防止SSRF攻击
+ */
+const ALLOWED_DOUYIN_DOMAINS = new Set([
+  'v.douyin.com',          // 短链接域名
+  'www.douyin.com',        // 主站域名
+  'douyin.com',            // 顶级域名
+  'm.douyin.com',          // 移动端域名
+  'www.iesdouyin.com',     // 视频服务域名（重定向目标）
+]);
+
+/**
+ * 验证URL是否属于抖音官方域名
+ * @throws Error 如果域名不在白名单中
+ */
+function validateDouyinDomain(url: string, context: string): void {
+  let hostname: string;
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    throw new Error(`${context}: URL格式无效`);
+  }
+
+  if (!ALLOWED_DOUYIN_DOMAINS.has(hostname)) {
+    throw new Error(
+      `${context}: 不允许的域名 "${hostname}"。\n` +
+      `出于安全考虑，仅支持抖音官方域名: ${Array.from(ALLOWED_DOUYIN_DOMAINS).join(', ')}`
+    );
+  }
+}
+
 export interface ShareLinkParseResult {
   originalUrl: string;
   resolvedUrl: string;
@@ -22,6 +54,9 @@ export async function parseDouyinVideoShare(
   text: string
 ): Promise<ShareLinkParseResult> {
   const firstUrl = extractFirstUrl(text);
+  // 安全检查：验证初始URL域名
+  validateDouyinDomain(firstUrl, '初始链接校验');
+
   const resolvedUrl = await resolveRedirect(firstUrl);
   const ids = extractIdsFromUrl(resolvedUrl);
 
@@ -35,15 +70,25 @@ export async function parseDouyinVideoShare(
 /**
  * 解析抖音账号分享文案，返回账号ID等信息
  * 如果直接跳转到作品，会尝试回查作者sec_uid
+ *
+ * 处理策略：
+ * - 优先使用从URL提取的secUserId
+ * - 如果只有userId或videoId，尝试抓取页面获取secUserId
+ * - 确保同步路径稳定，不直接把userId当作sec_uid使用
  */
 export async function parseDouyinUserShare(
   text: string
 ): Promise<ShareLinkParseResult> {
   const firstUrl = extractFirstUrl(text);
+  // 安全检查：验证初始URL域名
+  validateDouyinDomain(firstUrl, '初始链接校验');
+
   const resolvedUrl = await resolveRedirect(firstUrl);
   const ids = extractIdsFromUrl(resolvedUrl);
 
-  if (!ids.userId && ids.videoId) {
+  // 如果没有直接获取到secUserId，尝试从页面抓取
+  // 这确保了无论是用户主页链接还是视频链接，都能获取到正确的secUserId
+  if (!ids.secUserId) {
     const secUid = await fetchAuthorSecUid(resolvedUrl);
     if (secUid) {
       ids.secUserId = secUid;
@@ -64,10 +109,20 @@ function extractFirstUrl(text: string): string {
     return urlMatch[0].replace(/[)"\u3002\uff01\uff1f\uff0c\uff1b\uff1a\uff09]+$/, '');
   }
 
-  // 尝试匹配其他抖音域名链接
-  const anyDouyinUrlMatch = text.match(/https?:\/\/[^\s]*douyin[^\s]*/);
-  if (anyDouyinUrlMatch) {
-    return anyDouyinUrlMatch[0].replace(/[)"\u3002\uff01\uff1f\uff0c\uff1b\uff1a\uff09]+$/, '');
+  // 尝试匹配其他抖音官方域名链接（仅白名单内的域名）
+  // 注意：这里只匹配URL模式，具体域名验证在 validateDouyinDomain 中进行
+  const anyUrlMatch = text.match(/https?:\/\/[^\s]+/);
+  if (anyUrlMatch) {
+    const url = anyUrlMatch[0].replace(/[)"\u3002\uff01\uff1f\uff0c\uff1b\uff1a\uff09]+$/, '');
+    // 验证是否为抖音官方域名
+    try {
+      const hostname = new URL(url).hostname;
+      if (ALLOWED_DOUYIN_DOMAINS.has(hostname)) {
+        return url;
+      }
+    } catch {
+      // URL格式无效，继续抛出原有错误
+    }
   }
 
   throw new Error(
@@ -92,6 +147,8 @@ async function resolveRedirect(url: string): Promise<string> {
   });
 
   if (headResponse.ok) {
+    // 安全检查：验证重定向后的最终URL域名
+    validateDouyinDomain(headResponse.url, '重定向结果校验');
     return headResponse.url;
   }
 
@@ -105,6 +162,9 @@ async function resolveRedirect(url: string): Promise<string> {
   if (!getResponse.ok) {
     throw new Error(`短链重定向失败: ${getResponse.status}`);
   }
+
+  // 安全检查：验证重定向后的最终URL域名
+  validateDouyinDomain(getResponse.url, '重定向结果校验');
 
   // 读取并丢弃body，避免资源未释放
   await getResponse.arrayBuffer();
@@ -152,6 +212,9 @@ function extractIdsFromUrl(
 
 async function fetchAuthorSecUid(url: string): Promise<string | undefined> {
   try {
+    // 安全检查：验证要抓取的URL域名
+    validateDouyinDomain(url, '抓取页面校验');
+
     const response = await fetch(url, {
       headers: { ...DOUYIN_DEFAULT_HEADERS },
     });

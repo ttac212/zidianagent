@@ -18,6 +18,7 @@ import type {
   MerchantSyncTask,
   BatchSyncConfig,
   DouyinVideo,
+  DouyinUserProfile,
 } from './types'
 import * as dt from '@/lib/utils/date-toolkit'
 
@@ -45,7 +46,23 @@ export async function syncMerchantData(
 
   try {
     // 1. 获取用户资料
-    const profile = await client.getUserProfile({ sec_uid: secUid })
+    let profile: DouyinUserProfile
+    try {
+      profile = await client.getUserProfile({ sec_uid: secUid })
+    } catch (error: any) {
+      if (error?.code === 404) {
+        // 尝试通过视频作者信息构建最小商家档案
+        const fallbackVideos = await client.getUserVideos({ sec_uid: secUid, count: 1 })
+        const fallbackVideo = fallbackVideos.aweme_list[0]
+        if (!fallbackVideo?.author) {
+          throw new Error('用户资料不存在，且无法通过作品补全作者信息')
+        }
+
+        profile = buildProfileFromVideoAuthor(fallbackVideo, secUid)
+      } else {
+        throw error
+      }
+    }
 
     // 2. 映射并验证商家数据
     const merchantData = mapUserProfileToMerchant(profile, {
@@ -201,6 +218,49 @@ export async function syncMerchantData(
       updatedVideos: 0,
       errors,
     }
+  }
+}
+
+/**
+ * 当TikHub无法按sec_uid返回资料时，根据视频作者兜底构建用户档案
+ */
+function buildProfileFromVideoAuthor(video: DouyinVideo, fallbackSecUid: string): DouyinUserProfile {
+  const author = video.author || {
+    uid: fallbackSecUid,
+    sec_uid: fallbackSecUid,
+    nickname: '未知商家',
+    unique_id: '',
+  }
+
+  return {
+    uid: author.uid || fallbackSecUid,
+    sec_uid: author.sec_uid || fallbackSecUid,
+    unique_id: author.unique_id || '',
+    nickname: author.nickname || '未知商家',
+    signature: video.desc || '',
+    avatar_thumb: { url_list: [] },
+    avatar_larger: { url_list: [] },
+    follower_count: 0,
+    following_count: 0,
+    total_favorited: 0,
+    aweme_count: 0,
+    favoriting_count: 0,
+    location: '',
+    province: '',
+    city: '',
+    district: '',
+    gender: 0,
+    birthday: '',
+    ip_location: '',
+    custom_verify: '',
+    enterprise_verify_reason: '',
+    is_enterprise_vip: false,
+    verification_type: 0,
+    verification_badge_url: [],
+    school_name: '',
+    live_agreement: 0,
+    live_commerce: false,
+    forward_count: 0,
   }
 }
 

@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
           });
 
           // 5. 使用 GPT-4o Audio Preview 转录
-          sendEvent('progress', { stage: 'transcribing', message: '正在使用GPT-4o转录语音...', percent: 60 });
+          sendEvent('progress', { stage: 'transcribing', message: '正在转录语音...', percent: 60 });
 
           const base64Audio = audioBuffer.toString('base64');
 
@@ -162,7 +162,15 @@ export async function POST(req: NextRequest) {
                   content: [
                     {
                       type: 'text',
-                      text: '请转录这段音频的内容,只返回转录的文字,不要添加任何说明或解释。',
+                      text: `这是一段抖音视频的音频转录任务。请仔细转录音频内容，注意以下要点：
+
+1. **准确识别**：尽可能准确地识别每个字词，特别注意处理方言口音和不标准发音
+2. **同音字辨析**：遇到同音字时，结合上下文语境选择正确的汉字
+3. **专业术语**：遇到行业术语、品牌名称或网络用语时，使用最常见的规范写法
+4. **保持原意**：完整转录说话内容，包括语气词（如"嗯"、"啊"、"哦"等）
+5. **纯文本输出**：只返回转录的文字，不要添加任何说明、解释或格式标记
+
+请开始转录：`,
                     },
                     {
                       type: 'input_audio',
@@ -200,7 +208,21 @@ export async function POST(req: NextRequest) {
           // 6. 使用LLM优化文案
           sendEvent('progress', { stage: 'optimizing', message: '正在优化文案...', percent: 90 });
 
-          const optimizedText = await optimizeTextWithLLM(transcribedText, apiKey);
+          // 提取视频元数据
+          const hashtags = awemeDetail.text_extra
+            ?.filter((item: any) => item.hashtag_name)
+            .map((item: any) => item.hashtag_name) || []
+
+          const videoTags = awemeDetail.video_tag
+            ?.map((tag: any) => tag.tag_name)
+            .filter(Boolean) || []
+
+          const optimizedText = await optimizeTextWithLLM(transcribedText, apiKey, {
+            title: awemeDetail.desc || '未知标题',
+            author: awemeDetail.author?.nickname || '未知作者',
+            hashtags,
+            videoTags
+          });
 
           // 7. 返回最终结果
           sendEvent('done', {
@@ -286,8 +308,33 @@ function normalizeDurationSeconds(duration?: number | null): number {
   return duration >= 1000 ? duration / 1000 : duration;
 }
 
-async function optimizeTextWithLLM(text: string, apiKey: string): Promise<string | null> {
+async function optimizeTextWithLLM(
+  text: string,
+  apiKey: string,
+  videoInfo: {
+    title: string
+    author: string
+    hashtags?: string[]
+    videoTags?: string[]
+  }
+): Promise<string | null> {
   try {
+    // 构建视频上下文信息
+    const contextParts = [
+      `视频标题：${videoInfo.title}`,
+      `作者：${videoInfo.author}`
+    ]
+
+    if (videoInfo.hashtags && videoInfo.hashtags.length > 0) {
+      contextParts.push(`话题标签：${videoInfo.hashtags.join('、')}`)
+    }
+
+    if (videoInfo.videoTags && videoInfo.videoTags.length > 0) {
+      contextParts.push(`视频标签：${videoInfo.videoTags.join('、')}`)
+    }
+
+    const contextInfo = contextParts.join('\n')
+
     const response = await fetch('https://api.302.ai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -295,20 +342,79 @@ async function optimizeTextWithLLM(text: string, apiKey: string): Promise<string
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'claude-3-5-haiku-20241022',
+        model: 'claude-sonnet-4-5-20250929',
         messages: [
           {
             role: 'system',
-            content:
-              '你是一个专业的文案编辑。请对用户提供的视频转录文本进行优化：\n1. 修正明显的语音识别错误\n2. 添加适当的标点符号和段落\n3. 保持原意，不要添加原文没有的内容\n4. 直接返回优化后的文本，不要添加任何说明',
+            content: `你是一个专业的抖音视频文案编辑。你的核心任务是利用视频的标题、标签等上下文信息，修正语音转录中的同音字错误和识别错误。
+
+**工作流程：**
+1. **仔细阅读视频上下文信息**（标题、作者、标签），理解视频主题
+2. **识别关键词**：从标题和标签中提取地名、人名、品牌、专业术语等关键信息
+3. **逐句核对转录文本**：检查是否有与关键词发音相同但字形错误的内容
+4. **修正错误**：
+   - 地名错误：如"南京"→"南宁"（根据标题确认）
+   - 人名错误：如"金姐"→"君姐"（根据作者名确认）
+   - 品牌/术语错误：根据标签中的规范写法修正
+5. **添加标点**：为文本添加适当的标点符号和段落
+6. **保持原意**：只修正错误，不添加原文没有的内容
+
+**重要原则：**
+- ⚠️ **优先使用视频标题和标签中的词语**：如果转录文本中出现与标题/标签发音相似的词，必须以标题/标签为准
+- ⚠️ **地名、人名必须严格核对**：这类错误最常见，必须仔细比对
+- ⚠️ **专业术语以标签为准**：标签中的写法通常是规范的
+- 直接输出优化后的文本，不要添加任何说明`,
           },
           {
             role: 'user',
-            content: text,
+            content: `【示例1：地名和人名纠错】
+视频信息：
+标题：君姐在南宁做旧房改造
+作者：君姐改旧房
+
+转录文本：
+"金姐在南京做了15年旧房改造..."
+
+正确修正：
+"君姐在南宁做了15年旧房改造..."
+
+---
+
+【示例2：专业术语纠错】
+视频信息：
+标题：iPhone 15 Pro Max 开箱
+话题标签：#苹果手机 #iPhone15ProMax
+
+转录文本：
+"今天给大家开箱爱疯15 Pro Max..."
+
+正确修正：
+"今天给大家开箱iPhone 15 Pro Max..."
+
+---
+
+现在请你修正以下视频的转录文本：`,
+          },
+          {
+            role: 'user',
+            content: `${contextInfo}
+
+---
+
+**转录文本：**
+${text}
+
+---
+
+**修正要求：**
+1. 检查转录文本中是否有与标题、作者、标签发音相同但写法不同的词语，如有则修正为标题/标签中的写法
+2. 特别注意地名、人名、品牌名的正确性
+3. 添加标点符号，使文本更易读
+4. 直接返回修正后的文本，不要任何解释`,
           },
         ],
         max_tokens: 4000,
-        temperature: 0.3,
+        temperature: 0.2,
       }),
     });
 

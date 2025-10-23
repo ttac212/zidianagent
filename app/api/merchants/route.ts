@@ -61,10 +61,8 @@ export async function GET(request: NextRequest) {
     
     if (filters.status) {
       where.status = filters.status
-    } else {
-      // 默认只显示活跃的商家
-      where.status = { in: ['ACTIVE'] }
     }
+    // 不再默认过滤状态，显示所有商家（包括ACTIVE、SUSPENDED等）
 
     // 排序配置
     const orderBy: any = {}
@@ -125,11 +123,13 @@ export async function GET(request: NextRequest) {
     }
 
     const jsonResponse = NextResponse.json(response)
-    
-    // 添加缓存头以优化性能
-    jsonResponse.headers.set('Cache-Control', 'public, max-age=600, stale-while-revalidate=1800')
-    jsonResponse.headers.set('CDN-Cache-Control', 'public, max-age=600')
-    
+
+    // 禁用缓存，确保每次都获取最新数据
+    // 商家数据可能频繁变化（添加/删除/同步），不应该缓存
+    jsonResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+    jsonResponse.headers.set('Pragma', 'no-cache')
+    jsonResponse.headers.set('Expires', '0')
+
     return jsonResponse
     
   } catch (error) {

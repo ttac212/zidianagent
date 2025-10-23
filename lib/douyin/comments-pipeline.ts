@@ -6,6 +6,7 @@
 import { parseDouyinVideoShare } from '@/lib/douyin/share-link'
 import { getTikHubClient } from '@/lib/tikhub'
 import type { DouyinComment } from '@/lib/tikhub/types'
+import { selectApiKey } from '@/lib/ai/key-manager'
 import {
   DOUYIN_COMMENTS_PIPELINE_STEPS,
   type DouyinCommentsPipelineStep,
@@ -182,6 +183,7 @@ function buildMarkdown(
 async function analyzeWithLLM(
   data: DouyinCommentsAnalysisData,
   apiKey: string,
+  modelId: string,
   emit: DouyinCommentsPipelineEmitter,
   signal?: AbortSignal
 ): Promise<string> {
@@ -211,21 +213,20 @@ ${data.locationStats.map(({ location, count }) => `- ${location}: ${count}条`).
 
 
 
-## 2. 核心关注点（按权重排序）
-- 用户最关心的3-5个话题
-- 每个话题的关注度（高/中/低）
+  ## 1. 具体需求分析
 
-## 3. 具体需求分析
-- 用户询问的具体问题
-- 明确表达的需求
+  - 用户询问的具体问题
+  - 明确表达的需求
 
-## 4. 用户画像
-- 地域分布特征及分析
-- 用户特征（身份、年龄层、消费能力推测）
-- 消费心理（价格敏感度、决策因素）
+  ## 2. 用户画像
 
-## 5. 潜在问题或改进建议
-- 用户反馈的问题
+  - 地域分布特征及分析
+  - 用户特征（身份、年龄层、消费能力推测）
+  - 消费心理（价格敏感度、决策因素）
+
+  ## 3. 用户反馈的问题
+
+  - 用户反馈的问题
 
 请用中文简洁地输出分析结果，使用markdown格式。`
 
@@ -236,7 +237,7 @@ ${data.locationStats.map(({ location, count }) => `- ${location}: ${count}条`).
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'claude-3-5-haiku-20241022',
+      model: modelId,  // 使用上面定义的modelId
       messages: [
         {
           role: 'user',
@@ -251,8 +252,27 @@ ${data.locationStats.map(({ location, count }) => `- ${location}: ${count}条`).
   })
 
   if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`LLM API错误: ${response.status} - ${errorText}`)
+    let errorText = ''
+    let errorDetail = ''
+
+    try {
+      errorText = await response.text()
+      // 尝试解析JSON错误
+      try {
+        const errorJson = JSON.parse(errorText)
+        errorDetail = errorJson.error?.message || errorJson.message || errorText
+      } catch {
+        errorDetail = errorText
+      }
+    } catch {
+      errorDetail = '无法读取错误详情'
+    }
+
+    const errorMessage = errorDetail
+      ? `LLM API错误: ${response.status} - ${errorDetail}`
+      : `LLM API错误: HTTP ${response.status} ${response.statusText}`
+
+    throw new Error(errorMessage)
   }
 
   // 处理流式响应
@@ -323,10 +343,16 @@ export async function runDouyinCommentsPipeline(
   const maxComments = options.maxComments || 100
   const maxPages = options.maxPages || 5
 
-  const apiKey = process.env.LLM_API_KEY || process.env.LLM_CLAUDE_API_KEY
+  // 使用Key Manager选择合适的API Key
+  // 使用claude-sonnet-4-5（从MODEL_ALLOWLIST中选择可用模型）
+  const modelId = 'claude-sonnet-4-5-20250929'
+  const { apiKey } = selectApiKey(modelId)
 
   if (!apiKey) {
-    const error = new DouyinCommentsPipelineStepError('未配置 LLM API 密钥', 'parse-link')
+    const error = new DouyinCommentsPipelineStepError(
+      `未配置 ${modelId} 模型的 API 密钥，请检查环境变量 LLM_CLAUDE_API_KEY 或 LLM_API_KEY`,
+      'parse-link'
+    )
     await emit({
       type: 'error',
       message: error.message,
@@ -548,7 +574,7 @@ export async function runDouyinCommentsPipeline(
 
     let analysisText: string
     try {
-      analysisText = await analyzeWithLLM(analysisData, apiKey, emit, signal)
+      analysisText = await analyzeWithLLM(analysisData, apiKey, modelId, emit, signal)
     } catch (error) {
       throw new DouyinCommentsPipelineStepError(
         error instanceof Error ? error.message : 'LLM 分析失败',

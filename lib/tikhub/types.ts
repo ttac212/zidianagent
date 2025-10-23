@@ -117,6 +117,7 @@ export interface DouyinUserVideosResponse {
   min_cursor: number
   has_more: boolean
   status_code: number
+  sec_uid?: string
 }
 
 /**
@@ -213,6 +214,7 @@ export interface GetUserVideosParams {
   sec_uid: string
   max_cursor?: number
   count?: number // 每页数量，默认20
+  sort_type?: 0 | 1
 }
 
 /**

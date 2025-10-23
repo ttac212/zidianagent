@@ -5,6 +5,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useSession } from 'next-auth/react'
 import { Header } from '@/components/header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -12,7 +13,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { 
+import { AddMerchantDialog } from '@/components/merchants/add-merchant-dialog'
+import {
   Filter,
   Building2,
   MapPin,
@@ -20,24 +22,27 @@ import {
   Eye,
   Heart,
   MessageCircle,
-  Share2
+  Share2,
+  RefreshCw
 } from 'lucide-react'
-import type { 
-  MerchantListItem, 
-  MerchantCategory, 
+import type {
+  MerchantListItem,
+  MerchantCategory,
   MerchantStats,
   MerchantFilters
 } from '@/types/merchant'
 import {
   BUSINESS_TYPE_LABELS,
-  MERCHANT_STATUS_LABELS 
+  MERCHANT_STATUS_LABELS
 } from '@/types/merchant'
 
 export default function MerchantsPage() {
+  const { data: session } = useSession()
   const [merchants, setMerchants] = useState<MerchantListItem[]>([])
   const [categories, setCategories] = useState<MerchantCategory[]>([])
   const [stats, setStats] = useState<MerchantStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [filters, setFilters] = useState<MerchantFilters>({
     search: '',
     categoryId: '',
@@ -48,6 +53,9 @@ export default function MerchantsPage() {
     limit: 20
   })
   const [total, setTotal] = useState(0)
+
+  // 判断用户是否有权限添加商家（仅管理员可添加）
+  const canAddMerchant = session?.user?.role === 'ADMIN'
 
   // 获取商家列表
   const fetchMerchants = useCallback(async () => {
@@ -61,7 +69,12 @@ export default function MerchantsPage() {
         }
       })
 
-      const response = await fetch(`/api/merchants?${params.toString()}`)
+      // 添加时间戳防止浏览器缓存
+      params.append('_t', Date.now().toString())
+
+      const response = await fetch(`/api/merchants?${params.toString()}`, {
+        cache: 'no-store', // 禁用 Next.js fetch 缓存
+      })
       if (!response.ok) {
         console.error('获取商户列表失败', await response.text())
         return
@@ -80,21 +93,34 @@ export default function MerchantsPage() {
   const fetchData = async () => {
     try {
       const [categoriesRes, statsRes] = await Promise.all([
-        fetch('/api/merchants/categories'),
-        fetch('/api/merchants/stats')
+        fetch('/api/merchants/categories', { cache: 'no-store' }),
+        fetch('/api/merchants/stats', { cache: 'no-store' })
       ])
-      
+
       if (categoriesRes.ok) {
         const categoriesData = await categoriesRes.json()
         setCategories(categoriesData)
       }
-      
+
       if (statsRes.ok) {
         const statsData = await statsRes.json()
         setStats(statsData.stats)
       }
     } catch (_error) {
       }
+  }
+
+  // 强制刷新所有数据
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    try {
+      await Promise.all([
+        fetchMerchants(),
+        fetchData()
+      ])
+    } finally {
+      setRefreshing(false)
+    }
   }
 
   useEffect(() => {
@@ -135,9 +161,30 @@ export default function MerchantsPage() {
             支点有星辰合作数据
           </p>
         </div>
-        <Badge variant="outline" className="px-3 py-1">
-          共 {total} 家商家
-        </Badge>
+        <div className="flex items-center gap-3">
+          <Badge variant="outline" className="px-3 py-1">
+            共 {total} 家商家
+          </Badge>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? '刷新中...' : '刷新'}
+          </Button>
+          {canAddMerchant && (
+            <AddMerchantDialog
+              categories={categories}
+              onSuccess={() => {
+                fetchMerchants()
+                fetchData()
+              }}
+            />
+          )}
+        </div>
       </div>
 
       {/* 统计概览 */}
