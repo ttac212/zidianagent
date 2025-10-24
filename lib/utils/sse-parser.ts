@@ -9,6 +9,7 @@ export interface SSEMessage {
   event?: string
   payload?: unknown
   content?: string
+  reasoning?: string  // ZenMux 推理内容
   error?: string
   usage?: {
     prompt_tokens: number
@@ -69,12 +70,18 @@ function normalizePayload(raw: unknown): SSEMessage | null {
   if (!message.content && obj.choices?.[0]) {
     const choice = obj.choices[0]
 
+    // 提取内容
     if (choice.delta?.content) {
       message.content = choice.delta.content
     }
 
     if (choice.message?.content) {
       message.content = choice.message.content
+    }
+
+    // 提取推理内容（ZenMux 推理模型）
+    if (choice.delta?.reasoning) {
+      message.reasoning = choice.delta.reasoning
     }
 
     if (choice.finish_reason) {

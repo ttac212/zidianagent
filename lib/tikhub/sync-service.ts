@@ -5,12 +5,12 @@
  */
 
 import { Prisma } from '@prisma/client'
+import { randomUUID } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import { TikHubClient, getTikHubClient } from './client'
 import {
   mapUserProfileToMerchant,
-  mapVideosToMerchantContents,
-  aggregateMerchantStats,
+  mapVideoToMerchantContent,
   validateMerchantData,
   validateContentData,
 } from './mapper'
@@ -43,28 +43,10 @@ export async function syncMerchantData(
 }> {
   const client = options.client || getTikHubClient()
   const errors: string[] = []
+  const maxVideos = options.maxVideos ?? 100
 
   try {
-    // 1. 获取用户资料
-    let profile: DouyinUserProfile
-    try {
-      profile = await client.getUserProfile({ sec_uid: secUid })
-    } catch (error: any) {
-      if (error?.code === 404) {
-        // 尝试通过视频作者信息构建最小商家档案
-        const fallbackVideos = await client.getUserVideos({ sec_uid: secUid, count: 1 })
-        const fallbackVideo = fallbackVideos.aweme_list[0]
-        if (!fallbackVideo?.author) {
-          throw new Error('用户资料不存在，且无法通过作品补全作者信息')
-        }
-
-        profile = buildProfileFromVideoAuthor(fallbackVideo, secUid)
-      } else {
-        throw error
-      }
-    }
-
-    // 2. 映射并验证商家数据
+    const profile = await fetchMerchantProfile(client, secUid)
     const merchantData = mapUserProfileToMerchant(profile, {
       categoryId: options.categoryId,
       businessType: options.businessType,
@@ -75,136 +57,25 @@ export async function syncMerchantData(
       throw new Error(`商家数据验证失败: ${validation.errors.join(', ')}`)
     }
 
-    // 3. 创建或更新商家
-    const { categoryId, ...merchantBase } = merchantData
+    const merchant = await upsertMerchant(merchantData)
 
-    const merchantCreateData: Prisma.MerchantCreateInput = {
-      ...merchantBase,
-      contactInfo: merchantData.contactInfo as Prisma.InputJsonValue,
-      ...(categoryId && {
-        category: {
-          connect: { id: categoryId }
-        }
-      })
+    const videos = await collectMerchantVideos(client, secUid, maxVideos)
+    const { contents, errors: contentErrors } = prepareContentPayloads(merchant.id, videos)
+    if (contentErrors.length) {
+      errors.push(...contentErrors)
     }
 
-    const merchantUpdateData: Prisma.MerchantUpdateInput = {
-      name: merchantData.name,
-      description: merchantData.description,
-      location: merchantData.location,
-      address: merchantData.address,
-      contactInfo: merchantData.contactInfo as Prisma.InputJsonValue,
-      businessType: merchantData.businessType,
-      isVerified: merchantData.isVerified,
-      lastCollectedAt: dt.now(),
-      ...(options.categoryId && {
-        category: {
-          connect: { id: options.categoryId },
-        },
-      }),
-    }
+    const { rows, newVideos, updatedVideos } = await prepareContentSyncRows(
+      merchant.id,
+      contents
+    )
 
-    const merchant = await prisma.merchant.upsert({
-      where: { uid: merchantData.uid },
-      update: merchantUpdateData,
-      create: merchantCreateData,
-    })
-
-    // 4. 获取视频列表
-    let allVideos: DouyinVideo[] = []
-    let processedCount = 0
-    const maxVideos = options.maxVideos || 100
-
-    for await (const batch of client.getAllUserVideos({ sec_uid: secUid, count: 20 })) {
-      allVideos.push(...batch.aweme_list)
-      processedCount += batch.aweme_list.length
-
-      if (processedCount >= maxVideos) {
-        allVideos = allVideos.slice(0, maxVideos)
-        break
-      }
-
-      if (!batch.has_more) break
-    }
-
-    // 5. 同步视频数据
-    let newVideos = 0
-    let updatedVideos = 0
-
-    for (const video of allVideos) {
-      try {
-        const contentData = mapVideosToMerchantContents(
-          { aweme_list: [video], has_more: false, max_cursor: 0, min_cursor: 0, status_code: 0 },
-          merchant.id
-        )[0]
-
-        const validation = validateContentData(contentData)
-        if (!validation.valid) {
-          errors.push(`视频 ${video.aweme_id} 数据验证失败: ${validation.errors.join(', ')}`)
-          continue
-        }
-
-        // 检查是否已存在
-        const existing = await prisma.merchantContent.findUnique({
-          where: {
-            externalId_merchantId: {
-              externalId: contentData.externalId,
-              merchantId: merchant.id,
-            },
-          },
-        })
-
-        if (existing) {
-          // 更新现有记录
-          await prisma.merchantContent.update({
-            where: { id: existing.id },
-            data: {
-              title: contentData.title,
-              diggCount: contentData.diggCount,
-              commentCount: contentData.commentCount,
-              collectCount: contentData.collectCount,
-              shareCount: contentData.shareCount,
-              collectedAt: dt.now(),
-            },
-          })
-          updatedVideos++
-        } else {
-          // 创建新记录
-          await prisma.merchantContent.create({
-            data: contentData,
-          })
-          newVideos++
-        }
-      } catch (error: any) {
-        errors.push(`处理视频 ${video.aweme_id} 失败: ${error.message}`)
-      }
-    }
-
-    // 6. 更新商家聚合统计
-    const contents = await prisma.merchantContent.findMany({
-      where: { merchantId: merchant.id },
-      select: {
-        diggCount: true,
-        commentCount: true,
-        collectCount: true,
-        shareCount: true,
-      },
-    })
-
-    const stats = aggregateMerchantStats(contents)
-
-    await prisma.merchant.update({
-      where: { id: merchant.id },
-      data: {
-        totalContentCount: contents.length,
-        ...stats,
-      },
-    })
+    await persistMerchantSync(merchant.id, rows)
 
     return {
       success: true,
       merchantId: merchant.id,
-      totalVideos: allVideos.length,
+      totalVideos: videos.length,
       newVideos,
       updatedVideos,
       errors,
@@ -222,49 +93,6 @@ export async function syncMerchantData(
 }
 
 /**
- * 当TikHub无法按sec_uid返回资料时，根据视频作者兜底构建用户档案
- */
-function buildProfileFromVideoAuthor(video: DouyinVideo, fallbackSecUid: string): DouyinUserProfile {
-  const author = video.author || {
-    uid: fallbackSecUid,
-    sec_uid: fallbackSecUid,
-    nickname: '未知商家',
-    unique_id: '',
-  }
-
-  return {
-    uid: author.uid || fallbackSecUid,
-    sec_uid: author.sec_uid || fallbackSecUid,
-    unique_id: author.unique_id || '',
-    nickname: author.nickname || '未知商家',
-    signature: video.desc || '',
-    avatar_thumb: { url_list: [] },
-    avatar_larger: { url_list: [] },
-    follower_count: 0,
-    following_count: 0,
-    total_favorited: 0,
-    aweme_count: 0,
-    favoriting_count: 0,
-    location: '',
-    province: '',
-    city: '',
-    district: '',
-    gender: 0,
-    birthday: '',
-    ip_location: '',
-    custom_verify: '',
-    enterprise_verify_reason: '',
-    is_enterprise_vip: false,
-    verification_type: 0,
-    verification_badge_url: [],
-    school_name: '',
-    live_agreement: 0,
-    live_commerce: false,
-    forward_count: 0,
-  }
-}
-
-/**
  * 批量同步商家数据
  */
 export async function batchSyncMerchants(
@@ -274,7 +102,6 @@ export async function batchSyncMerchants(
   const tasks: MerchantSyncTask[] = []
   const { merchantUids, maxConcurrent = 3, onProgress, onComplete } = config
 
-  // 创建任务
   for (const uid of merchantUids) {
     tasks.push({
       taskId: `sync-${uid}-${Date.now()}`,
@@ -288,7 +115,6 @@ export async function batchSyncMerchants(
     })
   }
 
-  // 分批处理
   for (let i = 0; i < tasks.length; i += maxConcurrent) {
     const batch = tasks.slice(i, i + maxConcurrent)
     const promises = batch.map(async (task) => {
@@ -299,11 +125,9 @@ export async function batchSyncMerchants(
       }
 
       try {
-        // 获取用户资料（先获取名称）
         const profile = await client.getUserProfile({ sec_uid: task.merchantUid })
         task.merchantName = profile.nickname
 
-        // 同步数据
         const result = await syncMerchantData(task.merchantUid, {
           maxVideos: 100,
           client,
@@ -319,7 +143,7 @@ export async function batchSyncMerchants(
           task.result = {
             newVideos: result.newVideos,
             updatedVideos: result.updatedVideos,
-            totalCost: result.totalVideos * 0.001, // 简化计费
+            totalCost: result.totalVideos * 0.001,
           }
         }
       } catch (error: any) {
@@ -335,7 +159,6 @@ export async function batchSyncMerchants(
 
     await Promise.all(promises)
 
-    // 批次间延迟
     if (i + maxConcurrent < tasks.length) {
       await new Promise((resolve) => setTimeout(resolve, 2000))
     }
@@ -368,7 +191,6 @@ export async function searchAndImportMerchant(
   const merchants: Array<{ uid: string; name: string; synced: boolean }> = []
 
   try {
-    // 搜索用户
     const searchResult = await client.searchUser({ keyword, count: 20 })
 
     for (const item of searchResult.user_list) {
@@ -379,7 +201,6 @@ export async function searchAndImportMerchant(
         synced: false,
       })
 
-      // 如果启用自动同步
       if (options.autoSync) {
         try {
           const result = await syncMerchantData(profile.sec_uid, {
@@ -431,7 +252,6 @@ export async function updateMerchantVideos(
   const errors: string[] = []
 
   try {
-    // 获取商家信息
     const merchant = await prisma.merchant.findUnique({
       where: { id: merchantId },
       include: {
@@ -446,23 +266,17 @@ export async function updateMerchantVideos(
       throw new Error('商家不存在')
     }
 
-    // 安全地提取 sec_uid，支持向后兼容
-    // 1. 优先从 contactInfo 中提取（新数据格式）
-    // 2. 如果 contactInfo 是字符串，先解析
-    // 3. 如果 contactInfo.sec_uid 不存在，回退到 merchant.uid（旧数据格式）
     let secUid: string | undefined
 
     try {
       const contactInfo = typeof merchant.contactInfo === 'string'
         ? JSON.parse(merchant.contactInfo)
-        : merchant.contactInfo as any
-
+        : (merchant.contactInfo as any)
       secUid = contactInfo?.sec_uid
     } catch (_e) {
-      // JSON 解析失败，忽略错误
+      // ignore parse errors
     }
 
-    // 回退策略：旧的 CSV 导入脚本可能直接将 sec_uid 存在 merchant.uid 中
     if (!secUid) {
       secUid = merchant.uid
     }
@@ -471,83 +285,33 @@ export async function updateMerchantVideos(
       throw new Error('商家缺少 sec_uid/uid 信息，无法同步视频')
     }
 
-    // 获取最新视频的发布时间
-    const latestPublishedAt = merchant.contents[0]?.publishedAt
-
-    // 获取用户视频
     const videosResponse = await client.getUserVideos({
       sec_uid: secUid,
       count: options.limit || 20,
     })
 
-    let newVideos = 0
-    let updatedVideos = 0
-
-    for (const video of videosResponse.aweme_list) {
-      const videoPublishedAt = dt.parse(new Date(video.create_time * 1000).toISOString())
-
-      // 如果视频早于最新记录，跳过（已经同步过）
-      if (latestPublishedAt && videoPublishedAt && videoPublishedAt <= latestPublishedAt) {
-        continue
-      }
-
-      const contentData = mapVideosToMerchantContents(
-        { aweme_list: [video], has_more: false, max_cursor: 0, min_cursor: 0, status_code: 0 },
-        merchantId
-      )[0]
-
-      try {
-        const existing = await prisma.merchantContent.findUnique({
-          where: {
-            externalId_merchantId: {
-              externalId: contentData.externalId,
-              merchantId,
-            },
-          },
+    const latestPublishedAt = merchant.contents[0]?.publishedAt || null
+    const filteredVideos = latestPublishedAt
+      ? videosResponse.aweme_list.filter((video) => {
+          const timestamp = video.create_time ? new Date(video.create_time * 1000) : null
+          return !timestamp || timestamp > latestPublishedAt
         })
+      : videosResponse.aweme_list
 
-        if (existing) {
-          await prisma.merchantContent.update({
-            where: { id: existing.id },
-            data: {
-              diggCount: contentData.diggCount,
-              commentCount: contentData.commentCount,
-              collectCount: contentData.collectCount,
-              shareCount: contentData.shareCount,
-              collectedAt: dt.now(),
-            },
-          })
-          updatedVideos++
-        } else {
-          await prisma.merchantContent.create({ data: contentData })
-          newVideos++
-        }
-      } catch (error: any) {
-        errors.push(`处理视频 ${video.aweme_id} 失败: ${error.message}`)
-      }
+    const { contents, errors: contentErrors } = prepareContentPayloads(
+      merchantId,
+      filteredVideos,
+    )
+    if (contentErrors.length) {
+      errors.push(...contentErrors)
     }
 
-    // 更新商家统计
-    const contents = await prisma.merchantContent.findMany({
-      where: { merchantId },
-      select: {
-        diggCount: true,
-        commentCount: true,
-        collectCount: true,
-        shareCount: true,
-      },
-    })
+    const { rows, newVideos, updatedVideos } = await prepareContentSyncRows(
+      merchantId,
+      contents
+    )
 
-    const stats = aggregateMerchantStats(contents)
-
-    await prisma.merchant.update({
-      where: { id: merchantId },
-      data: {
-        totalContentCount: contents.length,
-        lastCollectedAt: dt.now(),
-        ...stats,
-      },
-    })
+    await persistMerchantSync(merchantId, rows)
 
     return {
       success: true,
@@ -556,12 +320,338 @@ export async function updateMerchantVideos(
       errors,
     }
   } catch (error: any) {
+    errors.push(error.message)
     return {
       success: false,
       newVideos: 0,
       updatedVideos: 0,
-      errors: [error.message],
+      errors,
     }
   }
 }
 
+async function fetchMerchantProfile(
+  client: TikHubClient,
+  secUid: string
+): Promise<DouyinUserProfile> {
+  try {
+    return await client.getUserProfile({ sec_uid: secUid })
+  } catch (error: any) {
+    if (error?.code === 404) {
+      const fallbackVideos = await client.getUserVideos({ sec_uid: secUid, count: 1 })
+      const fallbackVideo = fallbackVideos.aweme_list[0]
+      if (!fallbackVideo?.author) {
+        throw new Error('用户资料不存在，且无法通过作品补全作者信息')
+      }
+      return buildProfileFromVideoAuthor(fallbackVideo, secUid)
+    }
+    throw error
+  }
+}
+
+async function upsertMerchant(
+  merchantData: ReturnType<typeof mapUserProfileToMerchant>
+) {
+  const { categoryId, contactInfo, ...merchantBase } = merchantData
+
+  const merchantCreateData: Prisma.MerchantCreateInput = {
+    ...merchantBase,
+    contactInfo: contactInfo as Prisma.InputJsonValue,
+    ...(categoryId && {
+      category: {
+        connect: { id: categoryId },
+      },
+    }),
+  }
+
+  const merchantUpdateData: Prisma.MerchantUpdateInput = {
+    name: merchantData.name,
+    description: merchantData.description,
+    location: merchantData.location,
+    address: merchantData.address,
+    contactInfo: contactInfo as Prisma.InputJsonValue,
+    businessType: merchantData.businessType,
+    isVerified: merchantData.isVerified,
+    lastCollectedAt: dt.now(),
+    totalDiggCount: merchantData.totalDiggCount,
+    totalCommentCount: merchantData.totalCommentCount,
+    totalCollectCount: merchantData.totalCollectCount,
+    totalShareCount: merchantData.totalShareCount,
+    totalContentCount: merchantData.totalContentCount,
+    totalEngagement: merchantData.totalEngagement ?? 0,
+    ...(categoryId && {
+      category: {
+        connect: { id: categoryId },
+      },
+    }),
+  }
+
+  return prisma.merchant.upsert({
+    where: { uid: merchantData.uid },
+    update: merchantUpdateData,
+    create: merchantCreateData,
+  })
+}
+
+async function collectMerchantVideos(
+  client: TikHubClient,
+  secUid: string,
+  maxVideos: number
+): Promise<DouyinVideo[]> {
+  const videos: DouyinVideo[] = []
+  let processed = 0
+
+  for await (const batch of client.getAllUserVideos({ sec_uid: secUid, count: 20 })) {
+    videos.push(...batch.aweme_list)
+    processed += batch.aweme_list.length
+
+    if (processed >= maxVideos) {
+      return videos.slice(0, maxVideos)
+    }
+
+    if (!batch.has_more) {
+      break
+    }
+  }
+
+  return videos.slice(0, maxVideos)
+}
+
+function prepareContentPayloads(
+  merchantId: string,
+  videos: DouyinVideo[],
+): {
+  contents: Array<ReturnType<typeof mapVideoToMerchantContent>>
+  errors: string[]
+} {
+  const errors: string[] = []
+  const contents: Array<ReturnType<typeof mapVideoToMerchantContent>> = []
+
+  videos.forEach((video) => {
+    const content = mapVideoToMerchantContent(video, merchantId)
+    const validation = validateContentData(content)
+    if (!validation.valid) {
+      errors.push(`视频 ${video.aweme_id} 数据验证失败: ${validation.errors.join(', ')}`)
+      return
+    }
+    contents.push(content)
+  })
+
+  return { contents, errors }
+}
+
+async function prepareContentSyncRows(
+  merchantId: string,
+  contents: Array<ReturnType<typeof mapVideoToMerchantContent>>
+): Promise<{
+  rows: PreparedContentRow[]
+  newVideos: number
+  updatedVideos: number
+}> {
+  if (!contents.length) {
+    return { rows: [], newVideos: 0, updatedVideos: 0 }
+  }
+
+  const deduped = dedupeByExternalId(contents)
+  const externalIds = deduped.map((content) => content.externalId)
+
+  const existing = await prisma.merchantContent.findMany({
+    where: {
+      merchantId,
+      externalId: { in: externalIds },
+    },
+    select: { id: true, externalId: true },
+  })
+
+  const existingMap = new Map(existing.map((item) => [item.externalId, item.id]))
+  const now = dt.now()
+  let newVideos = 0
+  let updatedVideos = 0
+
+  const rows: PreparedContentRow[] = deduped.map((content) => {
+    const existingId = existingMap.get(content.externalId)
+    if (existingId) {
+      updatedVideos += 1
+    } else {
+      newVideos += 1
+    }
+
+    return {
+      ...content,
+      id: existingId ?? randomUUID(),
+      createdAt: content.collectedAt ?? now,
+      updatedAt: now,
+    }
+  })
+
+  return { rows, newVideos, updatedVideos }
+}
+
+async function persistMerchantSync(
+  merchantId: string,
+  rows: PreparedContentRow[],
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    if (rows.length) {
+      await bulkUpsertMerchantContents(tx, rows)
+    }
+    await updateMerchantAggregates(tx, merchantId)
+  })
+}
+
+async function bulkUpsertMerchantContents(
+  tx: Prisma.TransactionClient,
+  rows: PreparedContentRow[],
+): Promise<void> {
+  if (!rows.length) {
+    return
+  }
+
+  const values = rows.map((row) =>
+    Prisma.sql`(${row.id}, ${row.merchantId}, ${row.externalId}, ${row.title}, ${row.content ?? null}, ${row.transcript ?? null}, ${row.contentType}, ${row.duration ?? null}, ${row.shareUrl ?? null}, ${row.hasTranscript}, ${row.diggCount}, ${row.commentCount}, ${row.collectCount}, ${row.shareCount}, ${row.tags}, ${row.textExtra}, ${row.publishedAt ?? null}, ${row.collectedAt}, ${row.externalCreatedAt ?? null}, ${row.createdAt}, ${row.updatedAt})`
+  )
+
+  const query = Prisma.sql`
+    INSERT INTO "merchant_contents" (
+      "id",
+      "merchantId",
+      "externalId",
+      "title",
+      "content",
+      "transcript",
+      "contentType",
+      "duration",
+      "shareUrl",
+      "hasTranscript",
+      "diggCount",
+      "commentCount",
+      "collectCount",
+      "shareCount",
+      "tags",
+      "textExtra",
+      "publishedAt",
+      "collectedAt",
+      "externalCreatedAt",
+      "createdAt",
+      "updatedAt"
+    )
+    VALUES ${Prisma.join(values, Prisma.sql`, `)}
+    ON CONFLICT("externalId", "merchantId") DO UPDATE SET
+      "title" = excluded."title",
+      "content" = excluded."content",
+      "transcript" = excluded."transcript",
+      "contentType" = excluded."contentType",
+      "duration" = excluded."duration",
+      "shareUrl" = excluded."shareUrl",
+      "hasTranscript" = excluded."hasTranscript",
+      "diggCount" = excluded."diggCount",
+      "commentCount" = excluded."commentCount",
+      "collectCount" = excluded."collectCount",
+      "shareCount" = excluded."shareCount",
+      "tags" = excluded."tags",
+      "textExtra" = excluded."textExtra",
+      "publishedAt" = excluded."publishedAt",
+      "collectedAt" = excluded."collectedAt",
+      "externalCreatedAt" = excluded."externalCreatedAt",
+      "updatedAt" = excluded."updatedAt"
+  `
+
+  await tx.$executeRaw(query)
+}
+
+async function updateMerchantAggregates(
+  tx: Prisma.TransactionClient,
+  merchantId: string,
+): Promise<void> {
+  const aggregates = await tx.merchantContent.aggregate({
+    where: { merchantId },
+    _count: { _all: true },
+    _sum: {
+      diggCount: true,
+      commentCount: true,
+      collectCount: true,
+      shareCount: true,
+    },
+  })
+
+  const totalContentCount = aggregates._count?._all ?? 0
+  const totalDiggCount = aggregates._sum?.diggCount ?? 0
+  const totalCommentCount = aggregates._sum?.commentCount ?? 0
+  const totalCollectCount = aggregates._sum?.collectCount ?? 0
+  const totalShareCount = aggregates._sum?.shareCount ?? 0
+  const totalEngagement =
+    totalDiggCount + totalCommentCount + totalCollectCount + totalShareCount
+
+  await tx.merchant.update({
+    where: { id: merchantId },
+    data: {
+      totalContentCount,
+      totalDiggCount,
+      totalCommentCount,
+      totalCollectCount,
+      totalShareCount,
+      totalEngagement,
+      lastCollectedAt: dt.now(),
+    },
+  })
+}
+
+function dedupeByExternalId(
+  contents: Array<ReturnType<typeof mapVideoToMerchantContent>>,
+): Array<ReturnType<typeof mapVideoToMerchantContent>> {
+  const map = new Map<string, ReturnType<typeof mapVideoToMerchantContent>>()
+  for (const content of contents) {
+    map.set(content.externalId, content)
+  }
+  return Array.from(map.values())
+}
+
+/**
+ * 当TikHub无法按sec_uid返回资料时，根据视频作者兜底构建用户档案
+ */
+function buildProfileFromVideoAuthor(video: DouyinVideo, fallbackSecUid: string): DouyinUserProfile {
+  const author = video.author || {
+    uid: fallbackSecUid,
+    sec_uid: fallbackSecUid,
+    nickname: '未知商家',
+    unique_id: '',
+  }
+
+  return {
+    uid: author.uid || fallbackSecUid,
+    sec_uid: author.sec_uid || fallbackSecUid,
+    unique_id: author.unique_id || '',
+    nickname: author.nickname || '未知商家',
+    signature: video.desc || '',
+    avatar_thumb: { url_list: [] },
+    avatar_larger: { url_list: [] },
+    follower_count: 0,
+    following_count: 0,
+    total_favorited: 0,
+    aweme_count: 0,
+    favoriting_count: 0,
+    location: '',
+    province: '',
+    city: '',
+    district: '',
+    gender: 0,
+    birthday: '',
+    ip_location: '',
+    custom_verify: '',
+    enterprise_verify_reason: '',
+    is_enterprise_vip: false,
+    verification_type: 0,
+    verification_badge_url: [],
+    school_name: '',
+    live_agreement: 0,
+    live_commerce: false,
+    forward_count: 0,
+  }
+}
+
+interface PreparedContentRow
+  extends ReturnType<typeof mapVideoToMerchantContent> {
+  id: string
+  createdAt: Date
+  updatedAt: Date
+}

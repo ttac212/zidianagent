@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
     // 排序配置
     const orderBy: any = {}
     if (filters.sortBy === 'totalEngagement') {
-      orderBy.totalDiggCount = filters.sortOrder
+      orderBy.totalEngagement = filters.sortOrder
     } else {
       orderBy[filters.sortBy || 'createdAt'] = filters.sortOrder
     }
@@ -112,6 +112,7 @@ export async function GET(request: NextRequest) {
         totalCommentCount: merchant.totalCommentCount,
         totalCollectCount: merchant.totalCollectCount,
         totalShareCount: merchant.totalShareCount,
+        totalEngagement: merchant.totalEngagement,
         lastCollectedAt: merchant.lastCollectedAt,
         createdAt: merchant.createdAt,
         category: merchant.category,

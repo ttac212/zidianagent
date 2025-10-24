@@ -6,7 +6,7 @@
 import { NextRequest } from "next/server"
 import { getToken } from "next-auth/jwt"
 import { prisma } from "@/lib/prisma"
-import { selectApiKey } from "@/lib/ai/key-manager"
+import { selectProvider, buildChatRequest } from "@/lib/ai/provider-manager"
 import {
   createSSETransformStream,
   isTransformStreamSupported,
@@ -32,9 +32,6 @@ import {
 } from "@/lib/douyin/link-detector"
 import { runDouyinPipeline } from "@/lib/douyin/pipeline"
 import { runDouyinCommentsPipeline } from "@/lib/douyin/comments-pipeline"
-
-
-const API_BASE = process.env.LLM_API_BASE || "https://api.302.ai/v1"
 
 export async function POST(request: NextRequest) {
   try {
@@ -62,7 +59,9 @@ export async function POST(request: NextRequest) {
     messages,
     model = DEFAULT_MODEL,
     temperature = 0.7,
-    creativeMode = false  // 创作模式：启用长文本优化
+    creativeMode = false,  // 创作模式：启用长文本优化
+    reasoning_effort,      // ZenMux 推理强度：low/medium/high
+    reasoning,             // ZenMux 推理参数对象
   } = body
 
   // SECURITY: 强制模型白名单验证
@@ -465,25 +464,54 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 5. 根据模型选择API Key
-  const { apiKey, provider } = selectApiKey(model)
+  // 5. 使用 Provider Manager 选择提供商
+  const provider = selectProvider(model)
 
-  if (!apiKey) {
+  if (!provider) {
     // 释放预留的配额
     await QuotaManager.releaseTokens(userId, estimatedTokens)
-    return Response.json({
-      error: `缺少${provider}模型的API Key，请在.env.local中配置对应的Key`
-    }, { status: 500 })
+    return error('没有可用的 AI 提供商，请检查环境配置', { status: 500 })
   }
+
+  console.log(`[Chat] Using provider: ${provider.name}`)
 
   // 6. 调用 AI - 添加max_tokens参数支持Extended Thinking模式和创作模式
   const modelConfig = getModelContextConfig(model, creativeMode)
   const maxTokens = modelConfig.outputMaxTokens || 8000
 
+  // 构建请求体（基础参数）
+  const requestOptions: Record<string, any> = {
+    temperature,
+    max_tokens: maxTokens,
+    stream: true
+  }
+
+  // ZenMux 推理参数支持（根据官方文档）
+  if (reasoning?.enabled === false) {
+    // 明确禁用推理
+    requestOptions.reasoning = { enabled: false }
+  } else if (reasoning_effort || reasoning) {
+    // 启用推理模式
+    if (reasoning_effort) {
+      requestOptions.reasoning_effort = reasoning_effort
+    }
+
+    if (reasoning) {
+      requestOptions.reasoning = {
+        ...reasoning,
+        enabled: reasoning.enabled !== false,
+      }
+    }
+
+    // Claude 模型推理模式要求 temperature 必须为 1
+    if (model.includes('claude')) {
+      requestOptions.temperature = 1
+    }
+  }
+
   // Prompt Caching支持（仅Claude模型）
   const isClaudeModel = model.includes('claude')
   const headers: Record<string, string> = {
-    "Authorization": `Bearer ${apiKey}`,
     "Content-Type": "application/json",
   }
 
@@ -492,41 +520,49 @@ export async function POST(request: NextRequest) {
     headers["anthropic-beta"] = "prompt-caching-2024-07-31"
   }
 
-  // 构建请求体
-  const requestBody: Record<string, any> = {
-    model,
-    messages: finalMessages,
-    temperature,
-    max_tokens: maxTokens,
-    stream: true
-  }
-
   // Prompt Caching：标记可缓存的消息
   if (isClaudeModel && finalMessages.length > 10) {
     // 对于长对话，缓存前面的消息历史
-    requestBody.messages = finalMessages.map((msg, index) => {
+    finalMessages.forEach((msg, index) => {
       // 缓存前N-5条消息（保留最近5条为动态内容）
       const shouldCache = index < finalMessages.length - 5
       if (shouldCache) {
-        return {
-          ...msg,
-          cache_control: { type: "ephemeral" }
-        }
+        (msg as any).cache_control = { type: "ephemeral" }
       }
-      return msg
     })
   }
 
-  const aiResponse = await fetch(`${API_BASE}/chat/completions`, {
+  // 使用 buildChatRequest 构建完整请求
+  const chatRequest = buildChatRequest(
+    provider,
+    model,
+    finalMessages,
+    requestOptions
+  )
+
+  // 调试日志：打印请求信息
+  console.log('[Chat] Request URL:', chatRequest.url)
+  console.log('[Chat] Model:', chatRequest.body.model)
+  console.log('[Chat] Request options:', JSON.stringify({
+    temperature: chatRequest.body.temperature,
+    max_tokens: chatRequest.body.max_tokens,
+    stream: chatRequest.body.stream,
+    reasoning_effort: chatRequest.body.reasoning_effort,
+    reasoning: chatRequest.body.reasoning,
+  }, null, 2))
+
+  const aiResponse = await fetch(chatRequest.url, {
     method: "POST",
-    headers,
-    body: JSON.stringify(requestBody)
+    headers: { ...chatRequest.headers, ...headers },
+    body: JSON.stringify(chatRequest.body)
   })
 
   if (!aiResponse.ok) {
     // 释放预留的配额
     await QuotaManager.releaseTokens(userId, estimatedTokens)
-    return Response.json({ error: `AI错误: ${aiResponse.status}` }, { status: aiResponse.status })
+    const errorText = await aiResponse.text()
+    console.error('[Chat] AI API error:', aiResponse.status, errorText)
+    return Response.json({ error: `AI错误: ${aiResponse.status} - ${errorText}` }, { status: aiResponse.status })
   }
 
   // 7. 使用现成SSE解析工具，修复数据丢失问题

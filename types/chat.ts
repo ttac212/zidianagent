@@ -24,6 +24,7 @@ export interface ChatMessage {
   id: string
   role: 'user' | 'assistant' | 'system' | 'function' | 'tool' | string // 支持未来扩展
   content: string
+  reasoning?: string // 推理内容（ZenMux 推理模型）
   timestamp: number
   tokens?: number
   metadata?: MessageMetadata
@@ -91,6 +92,10 @@ export interface ChatSettings {
   maxTokens?: number
   systemPrompt?: string
   creativeMode?: boolean  // 创作模式：启用长文本优化，使用90%的模型上下文容量
+  reasoning_effort?: 'low' | 'medium' | 'high'  // ZenMux 推理强度（仅推理模型支持）
+  reasoning?: {
+    enabled: boolean  // 是否启用推理模式
+  }
 }
 
 // 新版聊天状态
@@ -355,6 +360,8 @@ export interface ChatEventProtocol {
     delta?: string
     /** 完整内容（优化后使用此字段，避免频繁增量更新） */
     content?: string
+    /** 推理内容（ZenMux 推理模型） */
+    reasoning?: string
     pendingAssistantId: string
   }
   done: {

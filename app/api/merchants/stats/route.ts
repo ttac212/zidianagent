@@ -87,20 +87,13 @@ export async function GET(request: NextRequest) {
       // 互动统计
       prisma.merchant.aggregate({
         _sum: {
-          totalDiggCount: true,
-          totalCommentCount: true,
-          totalCollectCount: true,
-          totalShareCount: true
+          totalEngagement: true
         }
       })
     ])
 
     // 计算总互动数
-    const totalEngagement = 
-      (engagementStats._sum.totalDiggCount || 0) +
-      (engagementStats._sum.totalCommentCount || 0) +
-      (engagementStats._sum.totalCollectCount || 0) +
-      (engagementStats._sum.totalShareCount || 0)
+    const totalEngagement = engagementStats._sum.totalEngagement || 0
 
     // 格式化响应数据
     const stats = {

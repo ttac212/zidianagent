@@ -581,8 +581,12 @@ export default function MerchantDetailPage() {
                   <span className="font-medium">
                     {merchant.totalContentCount > 0 
                       ? Math.round(
-                          (merchant.totalDiggCount + merchant.totalCommentCount + merchant.totalCollectCount + merchant.totalShareCount) 
-                          / merchant.totalContentCount
+                          (merchant.totalEngagement ?? (
+                            merchant.totalDiggCount +
+                            merchant.totalCommentCount +
+                            merchant.totalCollectCount +
+                            merchant.totalShareCount
+                          )) / merchant.totalContentCount
                         ).toLocaleString()
                       : 0
                     }

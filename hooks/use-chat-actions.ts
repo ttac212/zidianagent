@@ -8,7 +8,8 @@ import type {
   DouyinInfoEventPayload,
   DouyinPartialEventPayload,
   DouyinProgressEventPayload,
-  DouyinCommentsPartialEventPayload
+  DouyinCommentsPartialEventPayload,
+  ChatSettings
 } from '@/types/chat'
 import type { DouyinPipelineStep } from '@/lib/douyin/pipeline-steps'
 import { useQueryClient } from '@tanstack/react-query'
@@ -25,12 +26,14 @@ export function useChatActions({
   conversationId,
   onEvent,
   messages = [],
-  model = DEFAULT_MODEL
+  model = DEFAULT_MODEL,
+  settings
 }: {
   conversationId?: string
   onEvent?: (event: ChatEvent) => void
   messages?: ChatMessage[]
   model?: string
+  settings?: ChatSettings
 }) {
   const abortRef = useRef<AbortController | null>(null)
   const queryClient = useQueryClient()
@@ -96,14 +99,30 @@ export function useChatActions({
         throw new Error('您的输入过长，超出了单次对话的token限制。请尝试缩短消息内容或分段发送。')
       }
 
+      // 构建API请求体
+      const requestBody: Record<string, any> = {
+        conversationId: activeConversationId,
+        messages: trimResult.messages,
+        model
+      }
+
+      // 添加推理参数（如果设置了）
+      if (settings?.reasoning_effort) {
+        requestBody.reasoning_effort = settings.reasoning_effort
+      }
+      if (settings?.reasoning) {
+        requestBody.reasoning = settings.reasoning
+      }
+
+      // 添加创作模式参数
+      if (settings?.creativeMode) {
+        requestBody.creativeMode = settings.creativeMode
+      }
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          conversationId: activeConversationId,
-          messages: trimResult.messages,
-          model
-        }),
+        body: JSON.stringify(requestBody),
         signal: currentController.signal
       })
 
@@ -119,14 +138,16 @@ export function useChatActions({
       let douyinFinalMarkdown: string | null = null
       let douyinError: string | null = null
       let douyinResultPayload: DouyinDoneEventPayload | null = null
+      let fullReasoning = ''  // 累积推理内容
 
       // 创建节流器 - 使用requestIdleCallback优化增量更新性能
       // 保留完整字符串，只节流UI更新频率
-      const contentThrottle = createStreamThrottle((fullContent: string) => {
+      const contentThrottle = createStreamThrottle((fullContent: string, fullReasoning?: string) => {
         onEvent?.({
           type: 'chunk',
           requestId,
           content: fullContent,  // 传递完整内容而不是delta
+          reasoning: fullReasoning,  // 传递推理内容
           pendingAssistantId
         })
       }, { maxWait: 16 })  // 60fps
@@ -181,6 +202,11 @@ export function useChatActions({
 
       const fullContent = await processSSEStream(reader, {
         onMessage: (message) => {
+          // 累积推理内容
+          if (message.reasoning) {
+            fullReasoning += message.reasoning
+          }
+
           if (!message.event) return
 
           // 识别抖音相关事件（包括视频和评论）
@@ -335,8 +361,8 @@ export function useChatActions({
           }
         },
         onContent: (_delta, fullContent) => {
-          // 使用节流器批量更新UI，保留完整内容
-          contentThrottle(fullContent)
+          // 使用节流器批量更新UI，保留完整内容和推理
+          contentThrottle(fullContent, fullReasoning || undefined)
         },
         onError: (error) => {
           // 处理流内部错误（如服务端警告）
@@ -371,6 +397,7 @@ export function useChatActions({
         id: isDouyinFlow ? `${pendingAssistantId}_result` : pendingAssistantId,
         role: 'assistant',
         content: finalContent,
+        reasoning: fullReasoning || undefined,  // 添加推理内容
         timestamp: dt.timestamp(),
         metadata: assistantMetadata,
         status: 'completed' // 助手消息流式完成后设为completed
@@ -570,7 +597,7 @@ export function useChatActions({
 
       toast.error(errorMessage)
     }
-  }, [conversationId, onEvent, messages, model, queryClient])
+  }, [conversationId, onEvent, messages, model, settings, queryClient])
 
   const stopGeneration = useCallback(() => {
     // 原子化停止生成 - 避免竞态条件

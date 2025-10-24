@@ -1,6 +1,6 @@
 /**
  * 聊天输入框 - 重写完成版
- * 支持键盘快捷键、流式响应、移动端优化
+ * 支持键盘快捷键、流式响应、移动端优化、推理模式设置
  */
 
 import React, {
@@ -13,11 +13,16 @@ import React, {
 } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Send, Square, X, Sparkles } from 'lucide-react'
+import { Send, Square, X, Sparkles, Brain } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ChatInputProps } from '@/types/chat'
-import { ModelSelectorAnimated } from './model-selector-animated'
 import { CHAT_CONTAINER_MAX_WIDTH } from '@/lib/config/layout-config'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 const MAX_LENGTH = 100_000
 const MIN_HEIGHT = 56
@@ -114,24 +119,22 @@ const ChatInputComponent = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
     })
   }
 
-  const handleModelChange = (modelId: string) => {
-    onSettingsChange({ modelId })
-    requestAnimationFrame(() => {
-      internalRef.current?.focus()
-    })
-  }
-
   const charCount = input.length
   const hasInput = input.trim().length > 0
   const isAtLimit = charCount >= MAX_LENGTH
   const isNearLimit = !isAtLimit && charCount >= Math.floor(MAX_LENGTH * 0.9)
   const remaining = Math.max(MAX_LENGTH - charCount, 0)
 
+  // 推理强度标签映射
+  const reasoningEffortLabels = {
+    low: '低',
+    medium: '中',
+    high: '高'
+  } as const
+
   const helperMessage = isAtLimit
     ? `已达到 ${MAX_LENGTH.toLocaleString()} 字符上限，请删减后再发送`
     : 'Enter 发送 · Shift+Enter 换行 · Esc 停止'
-
-  const modelSelectorLabel = `当前选择模型: ${settings.modelId}，点击切换模型`
 
   const cardClassName = cn(
     'group relative w-full rounded-2xl border transition-all duration-300 ease-out',
@@ -281,17 +284,11 @@ const ChatInputComponent = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                   </span>
                 </div>
 
-                {/* 模型选择器 - 移到这里，避免挤压输入框空间 */}
-                <ModelSelectorAnimated
-                  modelId={settings.modelId}
-                  onChange={handleModelChange}
-                  disabled={isLoading}
-                  className="h-6 px-2 text-xs font-medium shrink-0"
-                  buttonProps={{
-                    'aria-label': modelSelectorLabel,
-                    title: '选择AI模型'
-                  }}
-                />
+                {/* 模型标识（固定显示，不可点击） */}
+                <div className="h-6 px-2 text-xs font-medium shrink-0 flex items-center gap-1.5 text-muted-foreground">
+                  <Sparkles className="h-3 w-3" />
+                  <span className="hidden sm:inline">Sonnet 4.5</span>
+                </div>
 
                 {/* 创作模式切换 */}
                 <Button
@@ -318,6 +315,57 @@ const ChatInputComponent = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                     {settings.creativeMode ? '创作' : '标准'}
                   </span>
                 </Button>
+
+                {/* 推理强度选择器（总是显示） */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={isLoading}
+                      className={cn(
+                        'h-6 px-2 text-xs gap-1 transition-all shrink-0',
+                        settings.reasoning_effort
+                          ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20'
+                          : 'text-muted-foreground hover:text-foreground'
+                      )}
+                      aria-label={`推理强度: ${settings.reasoning_effort ? reasoningEffortLabels[settings.reasoning_effort] : '关闭'}`}
+                      title="设置推理强度"
+                    >
+                      <Brain className={cn('h-3 w-3', settings.reasoning_effort && 'fill-current')} />
+                      <span className="hidden sm:inline">
+                        {settings.reasoning_effort ? reasoningEffortLabels[settings.reasoning_effort] : '思考'}
+                      </span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-32">
+                    <DropdownMenuItem
+                      onClick={() => onSettingsChange({ reasoning_effort: undefined, reasoning: { enabled: false } })}
+                      className={cn(!settings.reasoning_effort && 'bg-accent')}
+                    >
+                      <span className="w-full">关闭</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => onSettingsChange({ reasoning_effort: 'low', reasoning: { enabled: true } })}
+                      className={cn(settings.reasoning_effort === 'low' && 'bg-accent')}
+                    >
+                      <span className="w-full">低强度</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => onSettingsChange({ reasoning_effort: 'medium', reasoning: { enabled: true } })}
+                      className={cn(settings.reasoning_effort === 'medium' && 'bg-accent')}
+                    >
+                      <span className="w-full">中强度</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => onSettingsChange({ reasoning_effort: 'high', reasoning: { enabled: true } })}
+                      className={cn(settings.reasoning_effort === 'high' && 'bg-accent')}
+                    >
+                      <span className="w-full">高强度</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
 
               <div

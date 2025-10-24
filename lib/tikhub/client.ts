@@ -134,20 +134,30 @@ export class TikHubClient {
       clearTimeout(timeoutId)
 
       // 解析响应
-      const data: TikHubBaseResponse<T> = await response.json()
+      let data: TikHubBaseResponse<T> | null = null
+      try {
+        // TikHub所有返回都使用JSON包裹code/message/data
+        data = (await response.json()) as TikHubBaseResponse<T>
+      } catch (_parseError) {
+        data = null
+      }
 
-      // 检查响应状态
-      if (response.status === TIKHUB_ERROR_CODES.SUCCESS) {
+      // 优先判断TikHub业务状态码，TikHub常以HTTP 200返回业务错误
+      const dataCode = data?.code
+      const isHttpSuccess = response.status === TIKHUB_ERROR_CODES.SUCCESS
+      const isBusinessSuccess = dataCode === TIKHUB_ERROR_CODES.SUCCESS
+
+      if (isHttpSuccess && isBusinessSuccess && data) {
         return data
       }
 
-      // 处理错误响应
+      // 处理错误响应（支持HTTP错误或业务错误）
       const error: TikHubApiError = {
-        code: response.status,
-        message: data.message || response.statusText,
+        code: dataCode ?? response.status,
+        message: data?.message || response.statusText || 'TikHub API error',
         endpoint,
         timestamp: Date.now(),
-        details: data,
+        details: data ?? undefined,
       }
 
       // 可重试的错误
@@ -158,7 +168,7 @@ export class TikHubClient {
       ]
 
       const isRetryable = retryableErrors.includes(
-        response.status as (typeof retryableErrors)[number]
+        (dataCode ?? response.status) as (typeof retryableErrors)[number]
       )
 
       if (isRetryable && retryCount < this.maxRetries) {

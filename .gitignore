@@ -34,3 +34,7 @@ playwright/.cache/
 *.db
 *.db-shm
 *.db-wal
+
+# Backups and reports (temporary data)
+/backups/
+/reports/

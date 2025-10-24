@@ -211,6 +211,7 @@ model Merchant {
   totalCommentCount Int               @default(0)
   totalCollectCount Int               @default(0)
   totalShareCount   Int               @default(0)
+  totalEngagement   Int               @default(0)
   totalContentCount Int               @default(0)
   dataSource        String            @default("douyin")
   lastCollectedAt   DateTime?

@@ -8,8 +8,10 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu"
-import { ChevronDown, Check } from "lucide-react"
+import { ChevronDown, Check, Sparkles, Brain } from "lucide-react"
 import { ALLOWED_MODELS } from "@/lib/ai/models"
 import { cn } from "@/lib/utils"
 import { AnimatePresence, motion } from "framer-motion"
@@ -33,6 +35,11 @@ export function ModelSelectorAnimated({
   const isEmpty = ALLOWED_MODELS.length === 0
   const [open, setOpen] = React.useState(false)
 
+  // 简化显示名称（只保留核心信息）
+  const getDisplayName = (model: typeof ALLOWED_MODELS[0]) => {
+    return 'Sonnet 4.5'  // 统一显示为 Sonnet 4.5
+  }
+
   const button = (
     <Button
       type="button"
@@ -40,7 +47,7 @@ export function ModelSelectorAnimated({
       disabled={disabled}
       data-state={disabled ? undefined : (open ? "open" : "closed")}
       className={cn(
-        "flex items-center gap-1 h-8 px-2 text-xs rounded-md font-medium",
+        "flex items-center gap-1.5 h-8 px-3 text-xs rounded-md font-medium",
         "border border-border",
         "transition-all duration-200",
         "hover:bg-secondary/80 hover:border-ring/60",
@@ -57,9 +64,19 @@ export function ModelSelectorAnimated({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 5 }}
           transition={{ duration: 0.15 }}
-          className="flex items-center gap-1"
+          className="flex items-center gap-1.5"
         >
-          <span className="text-secondary-foreground">{current?.name || modelId}</span>
+          {/* 模型图标 */}
+          {current?.capabilities.supportsReasoning ? (
+            <Brain className="w-3.5 h-3.5 text-purple-500" aria-hidden="true" />
+          ) : (
+            <Sparkles className="w-3.5 h-3.5 text-primary" aria-hidden="true" />
+          )}
+
+          <span className="text-secondary-foreground">
+            {current ? getDisplayName(current) : modelId}
+          </span>
+
           <ChevronDown
             className={cn(
               "w-3 h-3 text-muted-foreground transition-transform duration-200",
@@ -83,29 +100,57 @@ export function ModelSelectorAnimated({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         className={cn(
-          "min-w-[12rem]",
+          "min-w-[16rem]",
           "border border-border",
           "bg-popover text-popover-foreground"
         )}
         align="start"
       >
+        <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+          选择模型模式
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+
         {isEmpty ? (
           <DropdownMenuItem disabled className="text-muted-foreground">
-            ���޿���ģ�ͣ�����ϵ����Ա���� MODEL_ALLOWLIST
+            无可用模型，请联系管理员配置 MODEL_ALLOWLIST
           </DropdownMenuItem>
         ) : (
-          ALLOWED_MODELS.map((m) => (
-            <DropdownMenuItem
-              key={m.id}
-              onSelect={() => onChange(m.id)}
-              className="flex items-center justify-between gap-2"
-            >
-              <span className="inline-flex items-center gap-2">
-                <span>{m.name}</span>
-              </span>
-              {modelId === m.id && <Check className="w-4 h-4 text-primary" aria-hidden="true" />}
-            </DropdownMenuItem>
-          ))
+          ALLOWED_MODELS.map((m) => {
+            const isThinking = m.id.includes(':thinking')
+            return (
+              <DropdownMenuItem
+                key={m.id}
+                onSelect={() => onChange(m.id)}
+                className="flex items-start gap-3 py-2.5 cursor-pointer"
+              >
+                <div className="flex items-center justify-center w-8 h-8 rounded-md bg-muted/50 flex-shrink-0 mt-0.5">
+                  {isThinking ? (
+                    <Brain className="w-4 h-4 text-purple-500" aria-hidden="true" />
+                  ) : (
+                    <Sparkles className="w-4 h-4 text-primary" aria-hidden="true" />
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="font-medium text-sm">
+                      {isThinking ? '深度思考模式' : '标准模式'}
+                    </span>
+                    {modelId === m.id && (
+                      <Check className="w-3.5 h-3.5 text-primary flex-shrink-0" aria-hidden="true" />
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground line-clamp-2">
+                    {isThinking
+                      ? '启用深度推理，适合复杂问题和逻辑分析'
+                      : '快速响应，适合日常对话和简单任务'
+                    }
+                  </p>
+                </div>
+              </DropdownMenuItem>
+            )
+          })
         )}
       </DropdownMenuContent>
     </DropdownMenu>

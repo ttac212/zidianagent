@@ -22,6 +22,7 @@ interface MerchantExportData {
   totalCommentCount: number
   totalCollectCount: number
   totalShareCount: number
+  totalEngagement: number
   totalContentCount: number
   dataSource: string
   status: string
@@ -99,6 +100,7 @@ async function exportMerchantData(options: {
       totalCommentCount: merchant.totalCommentCount,
       totalCollectCount: merchant.totalCollectCount,
       totalShareCount: merchant.totalShareCount,
+      totalEngagement: merchant.totalEngagement,
       totalContentCount: merchant.totalContentCount,
       dataSource: merchant.dataSource,
       status: merchant.status,

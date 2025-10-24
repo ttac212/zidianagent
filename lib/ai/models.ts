@@ -1,36 +1,50 @@
 // 模型白名单来自环境变量 MODEL_ALLOWLIST，逗号分隔
-// 初始建议值来源于产品需求，最终以 /models 实查为准；若未配置，则使用安全的内置回退列表
+// 简化为单一模型，推理功能通过 reasoning_effort 参数控制
 
 const raw = (process.env.MODEL_ALLOWLIST || '').trim()
 const DEFAULT_ALLOWLIST = [
-  'claude-sonnet-4-5-20250929-thinking',
-  'claude-sonnet-4-5-20250929',
-  'claude-opus-4-1-20250805',
-  'gemini-2.5-pro',
+  'anthropic/claude-sonnet-4.5',  // ZenMux: Claude Sonnet 4.5（通过 reasoning_effort 控制推理）
 ]
 
 const allowlist = raw
   ? raw.split(',').map((s) => s.trim()).filter(Boolean)
   : DEFAULT_ALLOWLIST
 
-// 模型友好名称映射（简化版，避免名称过长）
+// 模型友好名称映射
 const MODEL_NAME_MAP: Record<string, string> = {
-  'claude-sonnet-4-5-20250929-thinking': 'Sonnet 4.5 (思考)',
-  'claude-sonnet-4-5-20250929': 'Sonnet 4.5',
-  'claude-opus-4-1-20250805': 'Opus 4.1',
-  'gemini-2.5-pro': 'Gemini 2.5 Pro',
+  'anthropic/claude-sonnet-4.5': 'Claude Sonnet 4.5',
+}
+
+// 模型能力元数据
+export interface ModelCapabilities {
+  supportsReasoning: boolean       // 是否支持推理模式
+  provider: 'ZenMux' | '302.AI'    // 提供商
+  family: 'claude' | 'gemini'      // 模型家族
+}
+
+const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
+  'anthropic/claude-sonnet-4.5': {
+    supportsReasoning: true,  // 支持推理，通过 reasoning_effort 参数控制
+    provider: 'ZenMux',
+    family: 'claude'
+  },
 }
 
 // 导出格式化的模型列表（前端使用）
 export const ALLOWED_MODELS = allowlist.map(id => ({
   id,
-  name: MODEL_NAME_MAP[id] || id
+  name: MODEL_NAME_MAP[id] || id,
+  capabilities: MODEL_CAPABILITIES[id] || {
+    supportsReasoning: true,
+    provider: 'ZenMux',
+    family: 'claude'
+  }
 }))
 
 // 导出简单数组（后端验证使用）
 export const ALLOWED_MODEL_IDS = allowlist
 
-// 默认模型为白名单首项，避免使用友好名称作为ID导致不一致
+// 默认模型为白名单首项
 export const DEFAULT_MODEL = ALLOWED_MODEL_IDS[0]
 
 export function isAllowed(model?: string) {
@@ -38,5 +52,12 @@ export function isAllowed(model?: string) {
   return ALLOWED_MODEL_IDS.includes(model)
 }
 
-
+// 获取模型能力
+export function getModelCapabilities(modelId: string): ModelCapabilities {
+  return MODEL_CAPABILITIES[modelId] || {
+    supportsReasoning: true,
+    provider: 'ZenMux',
+    family: 'claude'
+  }
+}
 

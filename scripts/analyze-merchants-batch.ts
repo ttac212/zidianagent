@@ -164,10 +164,11 @@ function calculateContentDistribution(merchant: MerchantExportData): string {
 function calculateEngagementRate(merchant: MerchantExportData): string {
   const totalContent = merchant.totalContentCount || 1
   const totalEngagement =
+    merchant.totalEngagement ??
     merchant.totalDiggCount +
-    merchant.totalCommentCount +
-    merchant.totalCollectCount +
-    merchant.totalShareCount
+      merchant.totalCommentCount +
+      merchant.totalCollectCount +
+      merchant.totalShareCount
 
   const rate = totalEngagement / totalContent
 

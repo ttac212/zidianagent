@@ -106,8 +106,10 @@ export async function GET(
       filename = `${merchant.name}_分析数据_${dt.toISO().split('T')[0]}.csv`
       
       // 计算分析数据
-      const totalEngagement = merchant.totalDiggCount + merchant.totalCommentCount + 
-                             merchant.totalCollectCount + merchant.totalShareCount
+      const totalEngagement = merchant.totalEngagement ?? (
+        merchant.totalDiggCount + merchant.totalCommentCount +
+        merchant.totalCollectCount + merchant.totalShareCount
+      )
       const avgEngagement = merchant.totalContentCount > 0 ? 
                             Math.round(totalEngagement / merchant.totalContentCount) : 0
       

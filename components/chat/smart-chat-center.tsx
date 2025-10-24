@@ -594,7 +594,8 @@ function SmartChatCenterInternal({
     conversationId: conversation?.id,
     onEvent: handleChatEvent,
     messages,
-    model: composerSettings.modelId || currentModel
+    model: composerSettings.modelId || currentModel,
+    settings: composerSettings
   })
 
   // 停止生成的处理 - 确保重置全局状态
@@ -732,6 +733,28 @@ function SmartChatCenterInternal({
     if (settings.modelId) {
       setSelectedModel(settings.modelId)
 
+      // 如果切换到深度思考模式，自动启用中等推理强度
+      if (settings.modelId.includes(':thinking') && !composerSettings.reasoning_effort) {
+        dispatch({
+          type: 'SET_SETTINGS',
+          payload: {
+            reasoning_effort: 'medium',
+            reasoning: { enabled: true }
+          }
+        })
+      }
+
+      // 如果切换到标准模式，禁用推理
+      if (!settings.modelId.includes(':thinking') && composerSettings.reasoning_effort) {
+        dispatch({
+          type: 'SET_SETTINGS',
+          payload: {
+            reasoning_effort: undefined,
+            reasoning: { enabled: false }
+          }
+        })
+      }
+
       // 如果是在现有对话中切换模型，持久化到后端
       if (conversationId && onUpdateConversation) {
         try {
@@ -756,7 +779,7 @@ function SmartChatCenterInternal({
         }
       }
     }
-  }, [setSelectedModel, conversationId, onUpdateConversation, conversation, queryClient, dispatch])
+  }, [setSelectedModel, conversationId, onUpdateConversation, conversation, queryClient, dispatch, composerSettings])
 
   // 滚动管理
   const { scrollAreaRef, scrollToBottom: _scrollToBottom } = useChatScroll({

@@ -49,8 +49,12 @@ export async function GET(
     }
 
     // 计算互动统计
-    const totalEngagement = merchant.totalDiggCount + merchant.totalCommentCount +
-                           merchant.totalCollectCount + merchant.totalShareCount
+    const totalEngagement = merchant.totalEngagement ?? (
+      merchant.totalDiggCount +
+      merchant.totalCommentCount +
+      merchant.totalCollectCount +
+      merchant.totalShareCount
+    )
     const avgEngagementPerContent = merchant.totalContentCount > 0
       ? Math.round(totalEngagement / merchant.totalContentCount)
       : 0

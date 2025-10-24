@@ -51,6 +51,10 @@ export function mapUserProfileToMerchant(
     totalCollectCount: profile.favoriting_count || 0,
     totalShareCount: profile.forward_count || 0,
     totalContentCount: profile.aweme_count || 0,
+    totalEngagement:
+      (profile.total_favorited || 0) +
+      (profile.favoriting_count || 0) +
+      (profile.forward_count || 0),
     dataSource: 'douyin',
     lastCollectedAt: dt.now(),
     status: 'ACTIVE',
@@ -143,6 +147,7 @@ export function aggregateMerchantStats(
   totalCommentCount: number
   totalCollectCount: number
   totalShareCount: number
+  totalEngagement: number
 } {
   return contents.reduce(
     (acc, content) => ({
@@ -150,12 +155,19 @@ export function aggregateMerchantStats(
       totalCommentCount: acc.totalCommentCount + content.commentCount,
       totalCollectCount: acc.totalCollectCount + content.collectCount,
       totalShareCount: acc.totalShareCount + content.shareCount,
+      totalEngagement:
+        acc.totalEngagement +
+        content.diggCount +
+        content.commentCount +
+        content.collectCount +
+        content.shareCount,
     }),
     {
       totalDiggCount: 0,
       totalCommentCount: 0,
       totalCollectCount: 0,
       totalShareCount: 0,
+      totalEngagement: 0,
     }
   )
 }
