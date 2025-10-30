@@ -5,7 +5,7 @@
 
 "use client"
 
-import React, { useCallback, useRef } from 'react'
+import React, { useCallback, useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { ChatHeader } from './chat-header'
 import { ChatMessages } from './chat-messages'
@@ -17,6 +17,8 @@ import { useChatScroll } from '@/hooks/use-chat-scroll'
 import { useChatKeyboard } from '@/hooks/use-chat-keyboard'
 import { useChatFocus } from '@/hooks/use-chat-focus'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
+import { PipelineStateProvider } from '@/hooks/use-pipeline-handler'
+import { loadChatSettings, saveChatSettings } from '@/lib/utils/settings-storage'
 import type {
   Conversation,
   ChatEvent,
@@ -71,13 +73,15 @@ export function SmartChatCenter({
         </div>
       </div>
     }>
-      <SmartChatCenterInternal
-        conversationId={conversationId}
-        onUpdateConversation={onUpdateConversation}
-        onCreateConversation={onCreateConversation}
-        onSelectConversation={_onSelectConversation}
-        onDeleteConversation={onDeleteConversation}
-      />
+      <PipelineStateProvider>
+        <SmartChatCenterInternal
+          conversationId={conversationId}
+          onUpdateConversation={onUpdateConversation}
+          onCreateConversation={onCreateConversation}
+          onSelectConversation={_onSelectConversation}
+          onDeleteConversation={onDeleteConversation}
+        />
+      </PipelineStateProvider>
     </ErrorBoundary>
   )
 }
@@ -92,6 +96,8 @@ function SmartChatCenterInternal({
   const queryClient = useQueryClient()
   const { state, dispatch } = useChatState()
   const streamedResultMessageIds = useRef<Set<string>>(new Set())
+  const resetReasoningHistoryRef = useRef<Set<string>>(new Set())
+  const isFirstMountRef = useRef(true) // 跟踪首次挂载
   const { selectedModel: currentModel, setSelectedModel } = useModelState()
   const detailParams = React.useMemo(() => ({ take: CHAT_HISTORY_CONFIG.initialWindow }), [])
 
@@ -100,6 +106,8 @@ function SmartChatCenterInternal({
   const messages = selectMessages(state)
   const composerInput = selectComposerInput(state)
   const composerSettings = selectComposerSettings(state)
+  const composerReasoningEffort = composerSettings.reasoning_effort
+  const composerReasoningEnabled = composerSettings.reasoning?.enabled ?? false
   const editingTitle = selectComposerEditingTitle(state)
   const tempTitle = selectComposerTempTitle(state)
   const hasMoreBefore = selectHistoryHasMoreBefore(state)
@@ -120,6 +128,47 @@ function SmartChatCenterInternal({
   React.useEffect(() => {
     streamedResultMessageIds.current.clear()
   }, [conversationId])
+
+  // 组件挂载时加载保存的设置
+  React.useEffect(() => {
+    const savedSettings = loadChatSettings()
+
+    if (savedSettings.creativeMode !== undefined ||
+        savedSettings.reasoning_effort !== undefined ||
+        savedSettings.reasoning !== undefined) {
+      dispatch({
+        type: 'SET_SETTINGS',
+        payload: savedSettings
+      })
+    }
+
+    // 标记首次挂载已完成
+    setTimeout(() => {
+      isFirstMountRef.current = false
+    }, 100)
+  }, [dispatch]) // 只在挂载时执行一次
+
+  // 监听设置变化，自动保存
+  // 注意: 只监听需要持久化的字段,避免保存不必要的设置(如modelId等)
+  React.useEffect(() => {
+    // 跳过首次挂载时的保存，避免覆盖刚加载的设置
+    if (isFirstMountRef.current) {
+      console.log('[Settings] Skipping save on first mount')
+      return
+    }
+
+    // 只有在字段有值时才保存（避免保存undefined覆盖已有设置）
+    const hasValidSettings =
+      composerSettings.creativeMode !== undefined ||
+      composerSettings.reasoning_effort !== undefined ||
+      composerSettings.reasoning !== undefined
+
+    if (hasValidSettings) {
+      console.log('[Settings] Auto-saving settings')
+      saveChatSettings(composerSettings)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [composerSettings.creativeMode, composerSettings.reasoning_effort, composerSettings.reasoning])
 
   // 对话切换时重置本地状态，等待最新数据同步
   React.useEffect(() => {
@@ -191,6 +240,32 @@ function SmartChatCenterInternal({
     setSelectedModel
   ])
 
+  useEffect(() => {
+    if (!conversation || !conversation.id) {
+      return
+    }
+
+    const hasMessages = Array.isArray(conversation.messages) && conversation.messages.length > 0
+
+    if (hasMessages) {
+      resetReasoningHistoryRef.current.delete(conversation.id)
+      return
+    }
+
+    if (resetReasoningHistoryRef.current.has(conversation.id)) {
+      return
+    }
+
+    resetReasoningHistoryRef.current.add(conversation.id)
+
+    if (composerReasoningEffort || composerReasoningEnabled) {
+      dispatch({
+        type: 'SET_SETTINGS',
+        payload: { reasoning_effort: undefined, reasoning: { enabled: false } }
+      })
+    }
+  }, [conversation, dispatch, composerReasoningEffort, composerReasoningEnabled])
+
   // 事件处理函数 - 简化版本，使用统一的UPDATE_MESSAGE_STREAM
   const handleChatEvent = useCallback((event: ChatEvent) => {
     switch (event.type) {
@@ -206,7 +281,13 @@ function SmartChatCenterInternal({
           role: 'assistant',
           content: '',
           timestamp: dt.timestamp(),
-          status: 'pending'
+          status: 'pending',
+          metadata: {
+            model: composerSettings.modelId || currentModel,
+            ...(composerSettings.reasoning_effort
+              ? { reasoningEffort: composerSettings.reasoning_effort }
+              : {})
+          }
         }
         dispatch({ type: 'ADD_MESSAGE', payload: pendingMessage })
         // 保持 requesting 阶段，等待首个chunk
@@ -226,25 +307,13 @@ function SmartChatCenterInternal({
             // 支持新的content字段（完整内容）和旧的delta字段（增量）
             content: event.content,
             delta: event.delta,
-            status: 'streaming'
+            status: 'streaming',
+            reasoning: event.reasoning
           }
         })
         break
 
       case 'done': {
-        const linkedProgressId = event.assistantMessage.metadata?.douyinProgressMessageId
-        const linkedResult = event.assistantMessage.metadata?.douyinResult
-
-        if (linkedProgressId && linkedResult) {
-          dispatch({
-            type: 'UPDATE_DOUYIN_DONE',
-            payload: {
-              messageId: linkedProgressId,
-              result: linkedResult
-            }
-          })
-        }
-
         if (messages.some(message => message.id === event.assistantMessage.id)) {
           dispatch({
             type: 'UPDATE_MESSAGE_STREAM',
@@ -252,7 +321,8 @@ function SmartChatCenterInternal({
               messageId: event.assistantMessage.id,
               content: event.assistantMessage.content,
               status: 'completed',
-              metadata: event.assistantMessage.metadata
+              metadata: event.assistantMessage.metadata,
+              reasoning: event.assistantMessage.reasoning
             }
           })
         } else {
@@ -282,9 +352,9 @@ function SmartChatCenterInternal({
           })
         } else {
           const targetMessage = messages.find(msg => msg.id === event.pendingAssistantId)
-          const isDouyinProgress = Boolean(targetMessage?.metadata?.douyinProgress)
+          const hasPipelineState = Boolean(targetMessage?.metadata?.pipelineStateId)
 
-          if (!isDouyinProgress) {
+          if (!hasPipelineState) {
             dispatch({
               type: 'REMOVE_MESSAGE',
               payload: { messageId: event.pendingAssistantId }
@@ -303,181 +373,196 @@ function SmartChatCenterInternal({
         })
         break
 
-      case 'douyin-progress':
+      case 'pipeline:update': {
+        const role = event.targetMessageId === event.pendingAssistantId ? 'progress' : 'result'
+        const exists = messages.some(message => message.id === event.targetMessageId)
+
+        if (!exists) {
+          const placeholderMetadata: ChatMessage['metadata'] = {
+            pipelineStateId: event.pipelineStateId,
+            pipelineSource: event.source,
+            pipelineRole: role,
+            ...(role === 'progress' && event.linkedMessageId ? { pipelineLinkedMessageId: event.linkedMessageId } : {}),
+            ...(role === 'result' ? { pipelineLinkedMessageId: event.pendingAssistantId } : {}),
+            ...(event.error ? { error: event.error } : {})
+          }
+
+          const placeholder: ChatMessage = {
+            id: event.targetMessageId,
+            role: 'assistant',
+            content: '',
+            timestamp: dt.timestamp(),
+            status: event.status,
+            metadata: placeholderMetadata
+          }
+          dispatch({ type: 'ADD_MESSAGE', payload: placeholder })
+          if (role === 'result') {
+            streamedResultMessageIds.current.add(event.targetMessageId)
+          }
+        }
+
         dispatch({
-          type: 'UPDATE_DOUYIN_PROGRESS',
+          type: 'UPDATE_PIPELINE_STATE',
           payload: {
-            messageId: event.pendingAssistantId,
-            progress: event.progress
+            messageId: event.targetMessageId,
+            pipelineStateId: event.pipelineStateId,
+            source: event.source,
+            role,
+            status: event.status,
+            error: event.error ?? null,
+            linkedMessageId: role === 'progress' ? event.linkedMessageId : event.pendingAssistantId
+          }
+        })
+
+        dispatch({
+          type: 'UPDATE_MESSAGE_STREAM',
+          payload: {
+            messageId: event.targetMessageId,
+            status: event.status,
+            metadata: event.error ? { error: event.error } : undefined
           }
         })
         break
+      }
 
-      case 'douyin-info':
-        dispatch({
-          type: 'UPDATE_DOUYIN_INFO',
-          payload: {
-            messageId: event.pendingAssistantId,
-            info: event.info
-          }
-        })
-        break
+      case 'pipeline:result-stream': {
+        const messageId = event.targetMessageId
 
-      case 'douyin-partial':
-        if (event.data.key === 'markdown') {
-          const resultMessageId = `${event.pendingAssistantId}_result`
-
-          if (!streamedResultMessageIds.current.has(resultMessageId)) {
-            streamedResultMessageIds.current.add(resultMessageId)
-
-            dispatch({
-              type: 'ADD_MESSAGE',
-              payload: {
-                id: resultMessageId,
-                role: 'assistant',
-                content: '',
-                timestamp: dt.timestamp(),
-                status: 'streaming',
-                metadata: {
-                  douyinProgressMessageId: event.pendingAssistantId
-                }
-              }
-            })
-          }
-
+        if (!messages.some(message => message.id === messageId)) {
           dispatch({
-            type: 'UPDATE_MESSAGE_STREAM',
+            type: 'ADD_MESSAGE',
             payload: {
-              messageId: resultMessageId,
-              ...(event.data.append ? { delta: event.data.data } : { content: event.data.data }),
-              status: 'streaming'
+              id: messageId,
+              role: 'assistant',
+              content: '',
+              timestamp: dt.timestamp(),
+              status: 'streaming',
+              metadata: {
+                pipelineStateId: event.pipelineStateId,
+                pipelineRole: 'result',
+                pipelineLinkedMessageId: event.pendingAssistantId
+              }
+            }
+          })
+          streamedResultMessageIds.current.add(messageId)
+        }
+
+        dispatch({
+          type: 'UPDATE_PIPELINE_STATE',
+          payload: {
+            messageId,
+            pipelineStateId: event.pipelineStateId,
+            role: 'result',
+            linkedMessageId: event.pendingAssistantId
+          }
+        })
+
+        dispatch({
+          type: 'UPDATE_MESSAGE_STREAM',
+          payload: {
+            messageId,
+            ...(event.append ? { delta: event.chunk } : { content: event.chunk }),
+            status: 'streaming'
+          }
+        })
+        break
+      }
+
+      case 'pipeline:result-finalize': {
+        const messageId = event.targetMessageId
+
+        if (!messages.some(message => message.id === messageId)) {
+          dispatch({
+            type: 'ADD_MESSAGE',
+            payload: {
+              id: messageId,
+              role: 'assistant',
+              content: '',
+              timestamp: dt.timestamp(),
+              status: 'pending',
+              metadata: {
+                pipelineStateId: event.pipelineStateId,
+                pipelineRole: 'result',
+                pipelineLinkedMessageId: event.pendingAssistantId
+              }
             }
           })
         }
 
         dispatch({
-          type: 'UPDATE_DOUYIN_PARTIAL',
+          type: 'UPDATE_PIPELINE_STATE',
           payload: {
-            messageId: event.pendingAssistantId,
-            data: event.data
+            messageId,
+            pipelineStateId: event.pipelineStateId,
+            role: 'result',
+            status: event.status,
+            linkedMessageId: event.pendingAssistantId
           }
         })
-        break
 
-      case 'douyin-done':
         dispatch({
-          type: 'UPDATE_DOUYIN_DONE',
+          type: 'UPDATE_MESSAGE_STREAM',
           payload: {
-            messageId: event.pendingAssistantId,
-            result: event.result
+            messageId,
+            content: event.content,
+            status: event.status,
+            metadata: event.metadata
           }
         })
 
-        streamedResultMessageIds.current.delete(`${event.pendingAssistantId}_result`)
+        streamedResultMessageIds.current.delete(messageId)
         break
+      }
 
-      case 'douyin-error':
-        dispatch({
-          type: 'UPDATE_DOUYIN_ERROR',
-          payload: {
-            messageId: event.pendingAssistantId,
-            error: event.error,
-            step: event.step
-          }
-        })
-        streamedResultMessageIds.current.delete(`${event.pendingAssistantId}_result`)
-        break
+      case 'pipeline:result-error': {
+        const messageId = event.targetMessageId
 
-      // === 抖音评论分析事件 ===
-      case 'comments-progress':
-        dispatch({
-          type: 'UPDATE_COMMENTS_PROGRESS',
-          payload: {
-            messageId: event.pendingAssistantId,
-            progress: event.progress
-          }
-        })
-        break
-
-      case 'comments-info':
-        dispatch({
-          type: 'UPDATE_COMMENTS_INFO',
-          payload: {
-            messageId: event.pendingAssistantId,
-            info: event.info
-          }
-        })
-        break
-
-      case 'comments-partial':
-        if (event.data.key === 'analysis') {
-          // 创建结果消息（如果还没有）
-          const resultMessageId = `${event.pendingAssistantId}_result`
-
-          if (!streamedResultMessageIds.current.has(resultMessageId)) {
-            streamedResultMessageIds.current.add(resultMessageId)
-
-            dispatch({
-              type: 'ADD_MESSAGE',
-              payload: {
-                id: resultMessageId,
-                role: 'assistant',
-                content: '',
-                timestamp: dt.timestamp(),
-                status: 'streaming',
-                metadata: {
-                  commentsProgressMessageId: event.pendingAssistantId
-                }
-              }
-            })
-          }
-
-          // 更新流式内容
+        if (!messages.some(message => message.id === messageId)) {
           dispatch({
-            type: 'UPDATE_MESSAGE_STREAM',
+            type: 'ADD_MESSAGE',
             payload: {
-              messageId: resultMessageId,
-              ...(event.data.append ? { delta: event.data.data } : { content: event.data.data }),
-              status: 'streaming'
+              id: messageId,
+              role: 'assistant',
+              content: '',
+              timestamp: dt.timestamp(),
+              status: 'error',
+              metadata: {
+                pipelineStateId: event.pipelineStateId,
+                pipelineRole: 'result',
+                pipelineLinkedMessageId: event.pendingAssistantId,
+                error: event.error
+              }
             }
           })
         }
 
-        // 更新预览
         dispatch({
-          type: 'UPDATE_COMMENTS_PARTIAL',
+          type: 'UPDATE_PIPELINE_STATE',
           payload: {
-            messageId: event.pendingAssistantId,
-            data: event.data
-          }
-        })
-        break
-
-      case 'comments-done':
-        dispatch({
-          type: 'UPDATE_COMMENTS_DONE',
-          payload: {
-            messageId: event.pendingAssistantId,
-            result: event.result
-          }
-        })
-
-        streamedResultMessageIds.current.delete(`${event.pendingAssistantId}_result`)
-        break
-
-      case 'comments-error':
-        dispatch({
-          type: 'UPDATE_COMMENTS_ERROR',
-          payload: {
-            messageId: event.pendingAssistantId,
+            messageId,
+            pipelineStateId: event.pipelineStateId,
+            role: 'result',
+            status: 'error',
             error: event.error,
-            step: event.step
+            linkedMessageId: event.pendingAssistantId
           }
         })
-        streamedResultMessageIds.current.delete(`${event.pendingAssistantId}_result`)
+
+        dispatch({
+          type: 'UPDATE_MESSAGE_STREAM',
+          payload: {
+            messageId,
+            status: 'error',
+            content: event.error,
+            metadata: { error: event.error }
+          }
+        })
+
+        streamedResultMessageIds.current.delete(messageId)
         break
+      }
     }
-  }, [dispatch, messages])
+  }, [composerSettings, currentModel, dispatch, messages])
 
   const handleLoadOlderMessages = useCallback(async () => {
     if (!conversation?.id) return
@@ -638,6 +723,15 @@ function SmartChatCenterInternal({
         if (onSelectConversation) {
           onSelectConversation(targetConversationId)
         }
+        if (newConversation?.id) {
+          resetReasoningHistoryRef.current.add(newConversation.id)
+          if (composerReasoningEffort || composerReasoningEnabled) {
+            dispatch({
+              type: 'SET_SETTINGS',
+              payload: { reasoning_effort: undefined, reasoning: { enabled: false } }
+            })
+          }
+        }
       } catch (_error) {
         toast.error('创建对话失败，请重试')
         dispatch({
@@ -676,6 +770,8 @@ function SmartChatCenterInternal({
     activeConversation,
     onCreateConversation,
     onSelectConversation,
+    composerReasoningEffort,
+    composerReasoningEnabled,
     currentModel,
     sendMessage,
     dispatch

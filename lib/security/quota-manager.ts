@@ -151,6 +151,8 @@ export class QuotaManager {
       role: 'USER' | 'ASSISTANT'
       content: string
       modelId: string
+      reasoning?: string  // ✅ 新增：推理内容
+      reasoningEffort?: 'low' | 'medium' | 'high'  // ✅ 新增：推理强度
     }
   ): Promise<boolean> {
     try {
@@ -158,6 +160,21 @@ export class QuotaManager {
       const adjustment = totalActual - estimatedTokens
 
       await prisma.$transaction(async (tx) => {
+        // 构建metadata对象
+        const metadata: Record<string, any> = {}
+
+        if (messageData.reasoning) {
+          metadata.reasoning = messageData.reasoning
+          console.log('[QuotaManager] Adding reasoning to metadata, length:', messageData.reasoning.length)
+        }
+
+        if (messageData.reasoningEffort) {
+          metadata.reasoningEffort = messageData.reasoningEffort
+          console.log('[QuotaManager] Adding reasoningEffort to metadata:', messageData.reasoningEffort)
+        }
+
+        console.log('[QuotaManager] Final metadata object:', metadata)
+
         // 创建消息记录
         await tx.message.create({
           data: {
@@ -167,9 +184,13 @@ export class QuotaManager {
             content: messageData.content,
             modelId: messageData.modelId,
             promptTokens: actualTokens.promptTokens,
-            completionTokens: actualTokens.completionTokens
+            completionTokens: actualTokens.completionTokens,
+            // ✅ 新增：保存metadata
+            metadata: Object.keys(metadata).length > 0 ? metadata : undefined
           }
         })
+
+        console.log('[QuotaManager] Message created with metadata:', Object.keys(metadata).length > 0)
 
         // 原子性调整用户使用量（统一使用条件更新逻辑）
         if (adjustment !== 0) {

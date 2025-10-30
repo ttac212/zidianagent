@@ -49,7 +49,21 @@ function normalizePayload(raw: unknown): SSEMessage | null {
 
   // 优先处理扁平格式（最简单的情况）
   if ('content' in obj) {
-    message.content = obj.content
+    // 处理Anthropic的content blocks格式
+    if (Array.isArray(obj.content)) {
+      for (const block of obj.content) {
+        if (typeof block === 'object' && block !== null) {
+          if (block.type === 'text' && block.text) {
+            message.content = (message.content || '') + block.text
+          } else if (block.type === 'thinking' && block.thinking) {
+            // Claude Extended Thinking格式
+            message.reasoning = (message.reasoning || '') + block.thinking
+          }
+        }
+      }
+    } else if (typeof obj.content === 'string') {
+      message.content = obj.content
+    }
   }
 
   if ('error' in obj) {
@@ -80,8 +94,15 @@ function normalizePayload(raw: unknown): SSEMessage | null {
     }
 
     // 提取推理内容（ZenMux 推理模型）
+    // 支持多种可能的字段名：reasoning、thinking、thought
     if (choice.delta?.reasoning) {
       message.reasoning = choice.delta.reasoning
+    } else if (choice.delta?.thinking) {
+      message.reasoning = choice.delta.thinking
+    } else if (choice.delta?.thought) {
+      message.reasoning = choice.delta.thought
+    } else if (choice.message?.reasoning) {
+      message.reasoning = choice.message.reasoning
     }
 
     if (choice.finish_reason) {
@@ -327,7 +348,11 @@ export function isTransformStreamSupported(): boolean {
  */
 export function createSSETransformStream(
   onContent?: (_content: string) => void,
-  onComplete?: (_fullContent: string, _usage?: SSEMessage['usage']) => void | Promise<void>
+  onComplete?: (
+    _fullContent: string,
+    _usage?: SSEMessage['usage'],
+    _reasoning?: string  // ✅ 新增：推理内容
+  ) => void | Promise<void>
 ): TransformStream {
   if (!isTransformStreamSupported()) {
     throw new Error('TransformStream not supported in this environment. Use processSSEStream instead.')
@@ -335,6 +360,7 @@ export function createSSETransformStream(
 
   let buffer = ''
   let assistantContent = ''
+  let assistantReasoning = ''  // ✅ 新增：收集推理内容
   let tokenUsage: SSEMessage['usage'] | undefined
   // 修复P0: 持久化TextDecoder并启用流模式,防止多字节字符截断
   const decoder = new TextDecoder()
@@ -350,6 +376,12 @@ export function createSSETransformStream(
         if (message.content) {
           assistantContent += message.content
           onContent?.(message.content)
+        }
+
+        // ✅ 新增：收集推理内容
+        if (message.reasoning) {
+          assistantReasoning += message.reasoning
+          console.log('[SSE Parser] Collecting reasoning chunk, total length:', assistantReasoning.length)
         }
 
         if (message.usage) {
@@ -372,6 +404,10 @@ export function createSSETransformStream(
             assistantContent += message.content
             onContent?.(message.content)
           }
+          // ✅ 新增：收集推理内容
+          if (message.reasoning) {
+            assistantReasoning += message.reasoning
+          }
           if (message.usage) {
             tokenUsage = message.usage
           }
@@ -385,6 +421,10 @@ export function createSSETransformStream(
           if (message.content) {
             assistantContent += message.content
           }
+          // ✅ 新增：收集推理内容
+          if (message.reasoning) {
+            assistantReasoning += message.reasoning
+          }
           if (message.usage) {
             tokenUsage = message.usage
           }
@@ -392,7 +432,8 @@ export function createSSETransformStream(
       }
 
       if (onComplete) {
-        await Promise.resolve(onComplete(assistantContent, tokenUsage))
+        console.log('[SSE Parser] Stream complete, content length:', assistantContent.length, 'reasoning length:', assistantReasoning?.length || 0)
+        await Promise.resolve(onComplete(assistantContent, tokenUsage, assistantReasoning || undefined))
       }
     }
   })

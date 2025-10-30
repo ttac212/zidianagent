@@ -153,7 +153,7 @@ export default function ZenMuxTestPage() {
                 fullContent += delta.content
                 setStreamingContent(fullContent)
               }
-            } catch (e) {
+            } catch (_error) {
               console.error('解析SSE数据失败:', trimmedData.slice(0, 100))
             }
           }

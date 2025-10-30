@@ -367,7 +367,7 @@ export async function POST(request: NextRequest) {
 
   // 服务端统一裁剪（防止客户端绕过限制）- 基于实际模型上限
   const trimResult = trimForChatAPI(messages, model, creativeMode)
-  const finalMessages = trimResult.messages
+  let finalMessages = trimResult.messages
 
   // 估算本次请求需要的token数量（保守估计）
   const estimatedTokens = Math.max(trimResult.estimatedTokens * 1.5, 1000) // 预留50%缓冲
@@ -422,6 +422,28 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  // 移除被历史逻辑遗留的空内容消息（占位符、进度消息等）
+  const nonEmptyMessages = finalMessages.filter((message) => {
+    if (typeof message.content !== 'string') {
+      return false
+    }
+
+    return message.content.trim().length > 0
+  })
+
+  if (nonEmptyMessages.length === 0) {
+    await QuotaManager.releaseTokens(userId, estimatedTokens)
+    return error('无法生成回复：提交的消息内容为空。', { status: 400 })
+  }
+
+  if (nonEmptyMessages.length !== finalMessages.length) {
+    console.info('[Chat] Removed empty messages from request payload', {
+      removed: finalMessages.length - nonEmptyMessages.length
+    })
+  }
+
+  finalMessages = nonEmptyMessages
+
   // 3. 验证对话归属权（修复越权漏洞）
   if (conversationId) {
     const conversation = await prisma.conversation.findFirst({
@@ -473,7 +495,7 @@ export async function POST(request: NextRequest) {
     return error('没有可用的 AI 提供商，请检查环境配置', { status: 500 })
   }
 
-  console.log(`[Chat] Using provider: ${provider.name}`)
+  console.info(`[Chat] Using provider: ${provider.name}`)
 
   // 6. 调用 AI - 添加max_tokens参数支持Extended Thinking模式和创作模式
   const modelConfig = getModelContextConfig(model, creativeMode)
@@ -486,27 +508,34 @@ export async function POST(request: NextRequest) {
     stream: true
   }
 
-  // ZenMux 推理参数支持（根据官方文档）
+  // ZenMux 推理参数支持（根据ZenMux官方文档）
+  // 正确格式: { reasoning: { effort: "low" | "medium" | "high" } }
   if (reasoning?.enabled === false) {
-    // 明确禁用推理
-    requestOptions.reasoning = { enabled: false }
-  } else if (reasoning_effort || reasoning) {
-    // 启用推理模式
-    if (reasoning_effort) {
-      requestOptions.reasoning_effort = reasoning_effort
-    }
-
-    if (reasoning) {
-      requestOptions.reasoning = {
-        ...reasoning,
-        enabled: reasoning.enabled !== false,
-      }
+    // 明确禁用推理 - 不传reasoning参数
+    // ZenMux默认不启用推理，所以不需要显式禁用
+  } else if (reasoning_effort) {
+    // 启用推理模式 - 使用ZenMux规范格式
+    requestOptions.reasoning = {
+      effort: reasoning_effort  // low/medium/high
     }
 
     // Claude 模型推理模式要求 temperature 必须为 1
     if (model.includes('claude')) {
       requestOptions.temperature = 1
     }
+
+    console.info('[Chat] ZenMux reasoning enabled with effort:', reasoning_effort)
+  } else if (reasoning && reasoning.enabled !== false) {
+    // 兜底：如果只传了reasoning但没有effort，使用medium作为默认值
+    requestOptions.reasoning = {
+      effort: 'medium'
+    }
+
+    if (model.includes('claude')) {
+      requestOptions.temperature = 1
+    }
+
+    console.info('[Chat] ZenMux reasoning enabled with default effort: medium')
   }
 
   // Prompt Caching支持（仅Claude模型）
@@ -541,15 +570,26 @@ export async function POST(request: NextRequest) {
   )
 
   // 调试日志：打印请求信息
-  console.log('[Chat] Request URL:', chatRequest.url)
-  console.log('[Chat] Model:', chatRequest.body.model)
-  console.log('[Chat] Request options:', JSON.stringify({
+  console.info('[Chat] Request URL:', chatRequest.url)
+  console.info('[Chat] Model:', chatRequest.body.model)
+  console.info('[Chat] Request options:', JSON.stringify({
     temperature: chatRequest.body.temperature,
     max_tokens: chatRequest.body.max_tokens,
     stream: chatRequest.body.stream,
-    reasoning_effort: chatRequest.body.reasoning_effort,
     reasoning: chatRequest.body.reasoning,
   }, null, 2))
+
+  // 额外调试：如果启用了推理模式，打印完整请求体（不含消息内容）
+  if (chatRequest.body.reasoning) {
+    console.info('[Chat] ✅ ZenMux Reasoning mode enabled. Full request body (excluding messages):', JSON.stringify({
+      model: chatRequest.body.model,
+      temperature: chatRequest.body.temperature,
+      max_tokens: chatRequest.body.max_tokens,
+      stream: chatRequest.body.stream,
+      reasoning: chatRequest.body.reasoning,
+      messageCount: finalMessages.length
+    }, null, 2))
+  }
 
   const aiResponse = await fetch(chatRequest.url, {
     method: "POST",
@@ -568,8 +608,10 @@ export async function POST(request: NextRequest) {
   // 7. 使用现成SSE解析工具，修复数据丢失问题
   const handleStreamCompletion = async (
     fullContent: string,
-    usage?: SSEMessage["usage"]
+    usage?: SSEMessage["usage"],
+    reasoning?: string  // ✅ 新增：推理内容
   ) => {
+    console.log('[Chat API] Stream completion callback, content length:', fullContent.length, 'reasoning length:', reasoning?.length || 0)
     if (conversationId && fullContent) {
       try {
         const promptTokens = usage?.prompt_tokens || 0
@@ -583,9 +625,14 @@ export async function POST(request: NextRequest) {
             conversationId,
             role: 'ASSISTANT',
             content: fullContent,
-            modelId: model
+            modelId: model,
+            // ✅ 新增：传递推理内容和推理强度
+            reasoning: reasoning || undefined,
+            reasoningEffort: requestOptions.reasoning?.effort || undefined
           }
         )
+
+        console.log('[Chat API] Message saved with reasoning:', !!reasoning, 'effort:', requestOptions.reasoning?.effort)
 
         if (!success) {
           console.error('[Chat] Failed to save assistant message')
@@ -596,9 +643,8 @@ export async function POST(request: NextRequest) {
 
         if (dbError instanceof QuotaExceededError) {
           console.error(`[Chat] Quota exceeded during commit: ${dbError.message}`)
-        } else {
-          await QuotaManager.releaseTokens(userId, estimatedTokens)
         }
+        await QuotaManager.releaseTokens(userId, estimatedTokens)
       }
     } else {
       await QuotaManager.releaseTokens(userId, estimatedTokens)

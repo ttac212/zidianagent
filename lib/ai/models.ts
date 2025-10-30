@@ -3,7 +3,7 @@
 
 const raw = (process.env.MODEL_ALLOWLIST || '').trim()
 const DEFAULT_ALLOWLIST = [
-  'anthropic/claude-sonnet-4.5',  // ZenMux: Claude Sonnet 4.5（通过 reasoning_effort 控制推理）
+  'anthropic/claude-sonnet-4.5'
 ]
 
 const allowlist = raw
@@ -12,7 +12,7 @@ const allowlist = raw
 
 // 模型友好名称映射
 const MODEL_NAME_MAP: Record<string, string> = {
-  'anthropic/claude-sonnet-4.5': 'Claude Sonnet 4.5',
+  'anthropic/claude-sonnet-4.5': 'Claude Sonnet 4.5'
 }
 
 // 模型能力元数据
@@ -24,10 +24,10 @@ export interface ModelCapabilities {
 
 const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
   'anthropic/claude-sonnet-4.5': {
-    supportsReasoning: true,  // 支持推理，通过 reasoning_effort 参数控制
+    supportsReasoning: true,
     provider: 'ZenMux',
     family: 'claude'
-  },
+  }
 }
 
 // 导出格式化的模型列表（前端使用）

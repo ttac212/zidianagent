@@ -35,6 +35,7 @@ import {
   buildConversationSections,
   filterConversations,
   toggleConversationPinned,
+  deriveConversationData,
   type DerivedConversation,
   type ConversationSection
 } from "@/lib/utils/conversation-list"
@@ -91,7 +92,7 @@ export default function WorkspacePage() {
     conversations: fallbackConversations,
     currentConversation: fallbackCurrentConversation,
     loading: fallbackLoading,
-    error: _fallbackError,
+    error: fallbackError,
     createConversation,
     updateConversation,
     deleteConversation,
@@ -100,6 +101,7 @@ export default function WorkspacePage() {
   // 使用传统对话数据
   const conversations = fallbackConversations
   const loading = fallbackLoading
+  const error = fallbackError
   const currentConversation = fallbackCurrentConversation
 
   // 数据处理：构建分组结构化数据
@@ -108,19 +110,16 @@ export default function WorkspacePage() {
   // 搜索过滤逻辑
   const isSearching = deferredSearchQuery.trim().length > 0
 
+  // 修复：简化过滤逻辑，直接使用 deriveConversationData
   const filteredConversations = isSearching
     ? filterConversations(
-        conversations.map(conv => buildConversationSections([conv])[0]?.conversations[0]).filter(Boolean) as DerivedConversation[],
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        conversations.map(deriveConversationData),
         deferredSearchQuery
       )
     : []
 
   // 基础性能监控
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     if (!loading && conversations.length > 0) {
       // 性能监控逻辑
     }
@@ -165,8 +164,10 @@ export default function WorkspacePage() {
         }
       }
       return newConversation
-    // eslint-disable-next-line no-unused-vars
-    } catch (_error) {
+    } catch (error) {
+      // 修复：记录错误，不吞掉异常
+      console.error('创建对话失败:', error)
+      toast.error('创建对话失败')
       return null
     }
   }
@@ -195,7 +196,8 @@ export default function WorkspacePage() {
       toast.success('已删除对话', {
         description: `"${conversationToDelete.title}" 已删除（${msgCount} 条消息）。`
       })
-    } catch (_error) {
+    } catch (error) {
+      console.error('删除对话失败:', error)
       toast.error('删除对话失败')
     } finally {
       setDeleteConfirmOpen(false)
@@ -213,9 +215,9 @@ export default function WorkspacePage() {
     try {
       // 直接设置当前对话ID
       setCurrentConversationId(id)
-    // eslint-disable-next-line no-unused-vars
-    } catch (_error) {
-      // 使用简洁的toast提示
+    } catch (error) {
+      // 修复：记录错误，不吞掉异常
+      console.error('切换对话失败:', error)
       toast.error('切换对话失败')
     }
 
@@ -236,9 +238,10 @@ export default function WorkspacePage() {
       try {
         // 调用更新对话函数
         await handleUpdateConversation(editingConvId, { title: editTitle.trim() })
-      // eslint-disable-next-line no-unused-vars
-      } catch (_error) {
-        // 错误处理
+      } catch (error) {
+        // 修复：记录错误，不吞掉异常
+        console.error('更新标题失败:', error)
+        toast.error('更新标题失败')
       }
     }
     // 退出编辑状态
@@ -362,8 +365,8 @@ export default function WorkspacePage() {
       await navigator.clipboard.writeText(url)
       // 不显示复制成功toast，只在失败时提示
       // 浏览器已经有原生的复制反馈
-    // eslint-disable-next-line no-unused-vars
-    } catch (_e) {
+    } catch (error) {
+      console.error('复制失败:', error)
       toast.error('复制失败', { description: '无法复制到剪贴板' })
     }
   }
@@ -390,6 +393,22 @@ export default function WorkspacePage() {
       <div className="h-screen flex flex-col bg-background">
         <Header />
         <WorkspaceSkeleton />
+      </div>
+    )
+  }
+
+  // 修复：显示真实错误状态，不伪装成空列表
+  if (error) {
+    return (
+      <div className="h-screen flex flex-col bg-background">
+        <Header />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center space-y-4">
+            <p className="text-destructive text-lg font-semibold">加载对话失败</p>
+            <p className="text-muted-foreground">{error || '网络错误，请检查连接'}</p>
+            <Button onClick={() => window.location.reload()}>重试</Button>
+          </div>
+        </div>
       </div>
     )
   }

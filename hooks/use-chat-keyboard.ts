@@ -5,10 +5,15 @@
 
 import { useCallback, useEffect } from 'react'
 import type { ChatState } from '@/types/chat'
-import { selectComposerInput, selectIsSessionBusy } from '@/lib/chat/chat-state-selectors'
+import { selectIsSessionBusy } from '@/lib/chat/chat-state-selectors'
+
+type MinimalChatState = Partial<ChatState> & {
+  input?: string
+  isLoading?: boolean
+}
 
 interface UseChatKeyboardProps {
-  state: ChatState
+  state?: MinimalChatState | null
   onSendMessage?: () => void
   onStopGeneration?: () => void
   onCreateConversation?: () => void
@@ -35,8 +40,25 @@ export function useChatKeyboard({
   onFocusInput,
   textareaRef
 }: UseChatKeyboardProps) {
-  const inputValue = selectComposerInput(state)
-  const isBusy = selectIsSessionBusy(state)
+  const composerInput = typeof state?.composer?.input === 'string'
+    ? state.composer.input
+    : undefined
+  const legacyInput = typeof state?.input === 'string'
+    ? state.input
+    : undefined
+  const inputValue = composerInput ?? legacyInput ?? ''
+
+  let isBusy = false
+  if (state && typeof state === 'object' && 'session' in state && state.session) {
+    try {
+      isBusy = Boolean(selectIsSessionBusy(state as ChatState))
+    } catch (error) {
+      console.warn('[useChatKeyboard] Failed to read session status from state:', error)
+      isBusy = Boolean(state?.isLoading)
+    }
+  } else {
+    isBusy = Boolean(state?.isLoading)
+  }
 
   /**
    * 处理键盘快捷键

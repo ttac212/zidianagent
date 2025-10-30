@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       return validationError('messages 参数不能为空')
     }
 
-    console.log(
+    console.info(
       `[ZenMux Test] 模型: ${model}, 消息数: ${messages.length}, 推理: ${reasoning_effort || reasoning?.effort || '默认(medium)'}`
     )
 

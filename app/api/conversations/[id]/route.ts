@@ -137,17 +137,27 @@ export async function GET(
     const mappedConversation = {
       ...conversation,
       model: conversation.modelId, // 映射 modelId 到 model 字段以匹配 TypeScript 类型
-      messages: messages ? messages.map((msg: any) => ({
-        ...msg,
-        model: msg.modelId, // 映射消息中的 modelId 到 model 字段
-        timestamp: msg.createdAt ? new Date(msg.createdAt).getTime() : dt.timestamp(), // 映射 createdAt 到 timestamp (number)
-        status: 'completed' as const, // 默认状态为已完成（历史消息都是完成状态）
-        totalTokens: (msg.promptTokens || 0) + (msg.completionTokens || 0), // 修复字段名匹配
-        metadata: {
-          ...(typeof msg.metadata === 'object' && msg.metadata !== null ? msg.metadata : {}),
-          model: msg.modelId // 确保 metadata 中也有 model
+      messages: messages ? messages.map((msg: any) => {
+        const reasoning = (msg.metadata as any)?.reasoning || undefined
+        const reasoningEffort = (msg.metadata as any)?.reasoningEffort || undefined
+        console.log('[Conversation API] Message', msg.id, 'has reasoning:', !!reasoning, 'effort:', reasoningEffort)
+
+        return {
+          ...msg,
+          model: msg.modelId, // 映射消息中的 modelId 到 model 字段
+          timestamp: msg.createdAt ? new Date(msg.createdAt).getTime() : dt.timestamp(), // 映射 createdAt 到 timestamp (number)
+          status: 'completed' as const, // 默认状态为已完成（历史消息都是完成状态）
+          totalTokens: (msg.promptTokens || 0) + (msg.completionTokens || 0), // 修复字段名匹配
+          // ✅ 确保从metadata中读取reasoning
+          reasoning: reasoning,
+          metadata: {
+            ...(typeof msg.metadata === 'object' && msg.metadata !== null ? msg.metadata : {}),
+            model: msg.modelId, // 确保 metadata 中也有 model
+            // ✅ 确保从metadata中读取reasoningEffort
+            reasoningEffort: reasoningEffort
+          }
         }
-      })) : conversation.messages,
+      }) : conversation.messages,
       messageCount: conversation._count.messages,
       messagesWindow: includeMessages ? {
         size: messages ? messages.length : 0,
@@ -212,7 +222,16 @@ export async function PATCH(
       ...(temperature !== undefined && { temperature }),
       ...(maxTokens !== undefined && { maxTokens }),
       ...(contextAware !== undefined && { contextAware }),
-      ...(metadata !== undefined && { metadata }),
+      // 修复：使用 merge 而非覆盖，避免破坏服务端字段（Never break userspace）
+      ...(metadata !== undefined && {
+        metadata: {
+          // 类型安全的 merge：Prisma.JsonValue 需要类型断言
+          ...(typeof existingConversation.metadata === 'object' && existingConversation.metadata !== null
+            ? existingConversation.metadata as Record<string, any>
+            : {}),
+          ...metadata
+        }
+      }),
       updatedAt: dt.now(),
     }
 

@@ -10,7 +10,6 @@
  * - 分享链接: https://www.iesdouyin.com/share/video/[19位ID]
  */
 
-import { parseDouyinVideoShare } from '@/lib/douyin/share-link';
 
 /**
  * 抖音链接类型
@@ -459,7 +458,7 @@ export async function processDouyinVideo(shareLink: string): Promise<{
             if (event.type === 'done') {
               result = event;
             }
-          } catch (e) {
+          } catch (_error) {
             // 忽略解析错误
           }
         }

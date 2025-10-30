@@ -295,7 +295,6 @@ export class VideoProcessor {
         try {
           const info = JSON.parse(output);
           const format = info.format;
-          const videoStream = info.streams.find((s: any) => s.codec_type === 'video');
 
           resolve({
             url,
@@ -305,7 +304,7 @@ export class VideoProcessor {
             format: format.format_name || 'unknown',
             supportsRange: false,
           });
-        } catch (error) {
+        } catch (_error) {
           reject(new Error('解析视频信息失败'));
         }
       });

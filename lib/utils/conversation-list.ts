@@ -292,8 +292,13 @@ export function toggleConversationPinned(conversation: DerivedConversation): {
   }
 
   // 只提取用户自定义字段，排除实时统计字段
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { totalTokens, messageCount, lastActivity, lastMessage, ...customFields } = conversation.metadata || {}
+  const {
+    totalTokens: _totalTokens,
+    messageCount: _messageCount,
+    lastActivity: _lastActivity,
+    lastMessage: _lastMessage,
+    ...customFields
+  } = conversation.metadata || {}
 
   return {
     metadata: {

@@ -36,7 +36,7 @@ export function ModelSelectorAnimated({
   const [open, setOpen] = React.useState(false)
 
   // 简化显示名称（只保留核心信息）
-  const getDisplayName = (model: typeof ALLOWED_MODELS[0]) => {
+  const getDisplayName = (_model: typeof ALLOWED_MODELS[0]) => {
     return 'Sonnet 4.5'  // 统一显示为 Sonnet 4.5
   }
 

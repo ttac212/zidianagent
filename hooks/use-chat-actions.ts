@@ -4,20 +4,17 @@ import type {
   ChatMessage,
   ChatEvent,
   Conversation,
-  DouyinDoneEventPayload,
-  DouyinInfoEventPayload,
-  DouyinPartialEventPayload,
-  DouyinProgressEventPayload,
-  DouyinCommentsPartialEventPayload,
-  ChatSettings
+  ChatSettings,
+  PipelineSource
 } from '@/types/chat'
-import type { DouyinPipelineStep } from '@/lib/douyin/pipeline-steps'
 import { useQueryClient } from '@tanstack/react-query'
 import { processSSEStream } from '@/lib/utils/sse-parser'
 import { trimForChatAPI } from '@/lib/chat/context-trimmer'
 import * as dt from '@/lib/utils/date-toolkit'
 import { DEFAULT_MODEL } from '@/lib/ai/models'
-import { createStreamThrottle, createBatchStreamThrottle } from '@/lib/utils/stream-throttle'
+import { createBatchStreamThrottle } from '@/lib/utils/stream-throttle'
+import { normalizeEvent, isPipelineEvent } from '@/lib/chat/events'
+import { usePipelineHandler, computeResultMessageId } from '@/hooks/use-pipeline-handler'
 
 // 全局递增计数器确保 ID 唯一性
 let messageIdCounter = 0
@@ -37,6 +34,7 @@ export function useChatActions({
 }) {
   const abortRef = useRef<AbortController | null>(null)
   const queryClient = useQueryClient()
+  const { handlePipelineEvent, resetPipelineSession } = usePipelineHandler({ emitEvent: onEvent })
 
   // 组件卸载时清理 AbortController，防止内存泄漏
   useEffect(() => {
@@ -75,6 +73,8 @@ export function useChatActions({
     abortRef.current = currentController // 先设置新控制器再中止旧的
     previousController?.abort() // 中止之前的请求
 
+    resetPipelineSession()
+
     try {
       // 发送 started 事件
       onEvent?.({
@@ -99,10 +99,16 @@ export function useChatActions({
         throw new Error('您的输入过长，超出了单次对话的token限制。请尝试缩短消息内容或分段发送。')
       }
 
+      // 过滤掉历史中被创建为占位符的空消息，防止下游API报错
+      const sanitizedMessages = trimResult.messages.filter(message => {
+        const content = typeof message.content === 'string' ? message.content : ''
+        return content.trim().length > 0
+      })
+
       // 构建API请求体
       const requestBody: Record<string, any> = {
         conversationId: activeConversationId,
-        messages: trimResult.messages,
+        messages: sanitizedMessages,
         model
       }
 
@@ -134,238 +140,92 @@ export function useChatActions({
       // 使用现成SSE解析工具，修复跨chunk数据丢失问题
       const reader = response.body!.getReader()
 
-      let hasDouyinPipeline = false
-      let douyinFinalMarkdown: string | null = null
-      let douyinError: string | null = null
-      let douyinResultPayload: DouyinDoneEventPayload | null = null
-      let fullReasoning = ''  // 累积推理内容
+      let streamingContent = ''
+      let fullReasoning = ''
+      let hasPipeline = false
+      let pipelineFinalContent: string | null = null
+      let pipelineError: string | null = null
+      let pipelineStateId: string | null = null
+      let pipelineSource: PipelineSource | null = null
+      let pipelineResultMessageId: string | null = null
 
-      // 创建节流器 - 使用requestIdleCallback优化增量更新性能
-      // 保留完整字符串，只节流UI更新频率
-      const contentThrottle = createStreamThrottle((fullContent: string, fullReasoning?: string) => {
+      // 使用批量节流器同时处理 content 和 reasoning 的更新
+      const streamThrottle = createBatchStreamThrottle<'content' | 'reasoning'>((updates) => {
         onEvent?.({
           type: 'chunk',
           requestId,
-          content: fullContent,  // 传递完整内容而不是delta
-          reasoning: fullReasoning,  // 传递推理内容
+          content: updates.content || streamingContent,
+          reasoning: updates.reasoning || undefined,
           pendingAssistantId
         })
-      }, { maxWait: 16 })  // 60fps
-
-      const douyinAppendBuffer: Partial<Record<DouyinPartialEventPayload['key'], string>> = {}
-      const douyinPartialThrottle = createBatchStreamThrottle<DouyinPartialEventPayload['key']>(
-        (updates) => {
-          for (const key of Object.keys(updates) as Array<DouyinPartialEventPayload['key']>) {
-            const data = updates[key]
-            if (!data) continue
-
-            onEvent?.({
-              type: 'douyin-partial',
-              requestId,
-              pendingAssistantId,
-              data: {
-                key,
-                data,
-                append: true
-              }
-            })
-
-            delete douyinAppendBuffer[key]
-          }
-        },
-        { maxWait: 32 }
-      )
-
-      const commentsAppendBuffer: Partial<Record<DouyinCommentsPartialEventPayload['key'], string>> = {}
-      const commentsPartialThrottle = createBatchStreamThrottle<DouyinCommentsPartialEventPayload['key']>(
-        (updates) => {
-          for (const key of Object.keys(updates) as Array<DouyinCommentsPartialEventPayload['key']>) {
-            const data = updates[key]
-            if (!data) continue
-
-            onEvent?.({
-              type: 'comments-partial',
-              requestId,
-              pendingAssistantId,
-              data: {
-                key,
-                data,
-                append: true
-              }
-            })
-
-            delete commentsAppendBuffer[key]
-          }
-        },
-        { maxWait: 32 }
-      )
+      }, { maxWait: 16 })
 
       const fullContent = await processSSEStream(reader, {
         onMessage: (message) => {
-          // 累积推理内容
-          if (message.reasoning) {
-            fullReasoning += message.reasoning
+          const unified = normalizeEvent(message)
+          if (!unified) {
+            return
           }
 
-          if (!message.event) return
-
-          // 识别抖音相关事件（包括视频和评论）
-          if (message.event.startsWith('douyin-') || message.event.startsWith('comments-')) {
-            hasDouyinPipeline = true
+          if (isPipelineEvent(unified)) {
+            hasPipeline = true
+            const outcome = handlePipelineEvent(unified, {
+              requestId,
+              pendingAssistantId
+            })
+            pipelineStateId = outcome.pipelineStateId
+            pipelineSource = outcome.source
+            pipelineResultMessageId = computeResultMessageId(pendingAssistantId, outcome.source)
+            if (outcome.finalContent) {
+              pipelineFinalContent = outcome.finalContent
+            }
+            if (outcome.error) {
+              pipelineError = outcome.error
+            }
+            return
           }
 
-          switch (message.event) {
-            // ===== 抖音视频文案提取事件 =====
-            case 'douyin-progress': {
-              if (!message.payload) return
-              onEvent?.({
-                type: 'douyin-progress',
-                requestId,
-                pendingAssistantId,
-                progress: message.payload as DouyinProgressEventPayload
-              })
-              break
-            }
-            case 'douyin-info': {
-              if (!message.payload) return
-              onEvent?.({
-                type: 'douyin-info',
-                requestId,
-                pendingAssistantId,
-                info: message.payload as DouyinInfoEventPayload
-              })
-              break
-            }
-            case 'douyin-partial': {
-              if (!message.payload) return
-              const payload = message.payload as DouyinPartialEventPayload
-              const shouldAppend = payload.append !== false
+          switch (unified.type) {
+            case 'chunk': {
+              const delta = unified.payload?.delta ?? ''
+              const hasDelta = Boolean(delta)
+              const hasReasoning = Boolean(unified.reasoning)
 
-              if (!shouldAppend) {
-                douyinPartialThrottle.flush()
-                delete douyinAppendBuffer[payload.key]
-                onEvent?.({
-                  type: 'douyin-partial',
-                  requestId,
-                  pendingAssistantId,
-                  data: payload
-                })
-              } else {
-                const chunk = typeof payload.data === 'string' ? payload.data : String(payload.data ?? '')
-                if (!chunk) break
-
-                douyinAppendBuffer[payload.key] = (douyinAppendBuffer[payload.key] ?? '') + chunk
-                douyinPartialThrottle.update(payload.key, douyinAppendBuffer[payload.key]!)
+              if (hasDelta) {
+                streamingContent += delta
+                streamThrottle.update('content', streamingContent)
               }
-              break
-            }
-            case 'douyin-done': {
-              if (!message.payload) return
-              douyinResultPayload = message.payload as DouyinDoneEventPayload
-              douyinFinalMarkdown = douyinResultPayload.markdown
-              onEvent?.({
-                type: 'douyin-done',
-                requestId,
-                pendingAssistantId,
-                result: douyinResultPayload
-              })
-              break
-            }
-            case 'douyin-error': {
-              const payload = (message.payload ?? {}) as { message?: string; step?: DouyinPipelineStep }
-              douyinError = payload?.message || '抖音视频处理失败'
-              onEvent?.({
-                type: 'douyin-error',
-                requestId,
-                pendingAssistantId,
-                error: douyinError,
-                step: payload?.step
-              })
-              break
-            }
 
-            // ===== 抖音评论分析事件 =====
-            case 'comments-progress': {
-              if (!message.payload) return
-              // 转发为统一的progress事件，前端使用相同的进度组件
-              onEvent?.({
-                type: 'comments-progress',
-                requestId,
-                pendingAssistantId,
-                progress: message.payload as any // 评论和视频的progress结构相同
-              })
-              break
-            }
-            case 'comments-info': {
-              if (!message.payload) return
-              onEvent?.({
-                type: 'comments-info',
-                requestId,
-                pendingAssistantId,
-                info: message.payload as any
-              })
-              break
-            }
-            case 'comments-partial': {
-              if (!message.payload) return
-              const payload = message.payload as DouyinCommentsPartialEventPayload
-              const shouldAppend = payload.append !== false
-
-              if (!shouldAppend) {
-                commentsPartialThrottle.flush()
-                delete commentsAppendBuffer[payload.key]
-                onEvent?.({
-                  type: 'comments-partial',
-                  requestId,
-                  pendingAssistantId,
-                  data: payload
-                })
-              } else {
-                const chunk = typeof payload.data === 'string' ? payload.data : String(payload.data ?? '')
-                if (!chunk) break
-
-                commentsAppendBuffer[payload.key] = (commentsAppendBuffer[payload.key] ?? '') + chunk
-                commentsPartialThrottle.update(payload.key, commentsAppendBuffer[payload.key]!)
+              if (hasReasoning) {
+                fullReasoning += unified.reasoning!
+                streamThrottle.update('reasoning', fullReasoning)
               }
-              break
-            }
-            case 'comments-done': {
-              if (!message.payload) return
-              // 评论完成事件 - 提取markdown
-              const commentsPayload = message.payload as any
-              douyinFinalMarkdown = commentsPayload.markdown
-              douyinResultPayload = commentsPayload as DouyinDoneEventPayload // 结构兼容
-              onEvent?.({
-                type: 'comments-done',
-                requestId,
-                pendingAssistantId,
-                result: commentsPayload
-              })
-              break
-            }
-            case 'comments-error': {
-              const payload = (message.payload ?? {}) as { message?: string; step?: any }
-              douyinError = payload?.message || '评论分析失败'
-              onEvent?.({
-                type: 'comments-error',
-                requestId,
-                pendingAssistantId,
-                error: douyinError,
-                step: payload?.step
-              })
-              break
-            }
 
-            default:
+              break
+            }
+            case 'warn': {
+              onEvent?.({
+                type: 'warn',
+                requestId,
+                message: unified.payload.message
+              })
+              break
+            }
+            case 'error': {
+              onEvent?.({
+                type: 'error',
+                requestId,
+                pendingAssistantId,
+                error: unified.payload.message,
+                recoverable: unified.payload.recoverable ?? true
+              })
+              break
+            }
+            case 'done':
               break
           }
-        },
-        onContent: (_delta, fullContent) => {
-          // 使用节流器批量更新UI，保留完整内容和推理
-          contentThrottle(fullContent, fullReasoning || undefined)
         },
         onError: (error) => {
-          // 处理流内部错误（如服务端警告）
           onEvent?.({
             type: 'warn',
             requestId,
@@ -374,33 +234,39 @@ export function useChatActions({
         }
       })
 
-      // Flush节流器，确保最后的内容一定会更新到UI
-      douyinPartialThrottle.flush()
-      commentsPartialThrottle.flush()
-      contentThrottle.flush()
+      streamThrottle.flush()
 
-      const finalContent = douyinFinalMarkdown ?? fullContent
-
-      if (hasDouyinPipeline && !finalContent) {
-        throw new Error(douyinError || '抖音视频处理失败')
+      if (pipelineError) {
+        throw new Error(pipelineError)
       }
 
-      const isDouyinFlow = hasDouyinPipeline && !!douyinResultPayload
+      const finalContent = pipelineFinalContent ?? fullContent
+
+      if (hasPipeline && !finalContent) {
+        throw new Error('流水线处理未返回有效内容')
+      }
+
       const assistantMetadata: ChatMessage['metadata'] = { model }
 
-      if (isDouyinFlow && douyinResultPayload) {
-        assistantMetadata.douyinResult = douyinResultPayload
-        assistantMetadata.douyinProgressMessageId = pendingAssistantId
+      if (pipelineStateId && pipelineSource) {
+        assistantMetadata.pipelineStateId = pipelineStateId
+        assistantMetadata.pipelineSource = pipelineSource
+        assistantMetadata.pipelineRole = 'result'
+        assistantMetadata.pipelineLinkedMessageId = pendingAssistantId
       }
 
+      const targetAssistantId = hasPipeline && pipelineSource
+        ? (pipelineResultMessageId ?? computeResultMessageId(pendingAssistantId, pipelineSource))
+        : pendingAssistantId
+
       const assistantMessage: ChatMessage = {
-        id: isDouyinFlow ? `${pendingAssistantId}_result` : pendingAssistantId,
+        id: targetAssistantId,
         role: 'assistant',
         content: finalContent,
-        reasoning: fullReasoning || undefined,  // 添加推理内容
+        reasoning: fullReasoning || undefined,
         timestamp: dt.timestamp(),
         metadata: assistantMetadata,
-        status: 'completed' // 助手消息流式完成后设为completed
+        status: 'completed'
       }
 
       // 发送 done 事件
@@ -597,7 +463,7 @@ export function useChatActions({
 
       toast.error(errorMessage)
     }
-  }, [conversationId, onEvent, messages, model, settings, queryClient])
+  }, [conversationId, onEvent, messages, model, settings, queryClient, handlePipelineEvent, resetPipelineSession])
 
   const stopGeneration = useCallback(() => {
     // 原子化停止生成 - 避免竞态条件

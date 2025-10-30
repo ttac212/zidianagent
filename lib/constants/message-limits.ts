@@ -22,6 +22,12 @@ export const MESSAGE_LIMITS = {
   CONTEXT_LIMITS: {
     // 模型特定的上下文窗口配置
     MODEL_CONFIGS: {
+      'anthropic/claude-sonnet-4.5': {
+        contextWindow: 200000,
+        reserveTokens: 8000,
+        maxTokens: 16000,
+        creativeMode: { contextWindow: 200000, reserveTokens: 20000, maxTokens: 24000 }
+      },
       'claude-opus-4-1-20250805': {
         contextWindow: 200000,
         reserveTokens: 8000,

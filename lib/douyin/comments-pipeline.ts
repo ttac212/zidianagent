@@ -155,7 +155,7 @@ function buildMarkdown(
   statistics: DouyinCommentsStatistics,
   analysisText: string,
   comments: CleanedComment[],
-  locationStats: LocationStat[]
+  _locationStats: LocationStat[]
 ): string {
   return [
     '📊 **抖音视频评论分析报告**',
@@ -314,7 +314,7 @@ ${data.locationStats.map(({ location, count }) => `- ${location}: ${count}条`).
                 append: true
               })
             }
-          } catch (parseError) {
+          } catch (_parseError) {
             // 忽略解析错误
           }
         }

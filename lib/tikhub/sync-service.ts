@@ -535,7 +535,7 @@ async function bulkUpsertMerchantContents(
       "createdAt",
       "updatedAt"
     )
-    VALUES ${Prisma.join(values, Prisma.sql`, `)}
+    VALUES ${Prisma.join(values, ', ')}
     ON CONFLICT("externalId", "merchantId") DO UPDATE SET
       "title" = excluded."title",
       "content" = excluded."content",

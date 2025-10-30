@@ -4,7 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ALLOWED_MODELS, DEFAULT_MODEL } from '@/lib/ai/models'
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   return NextResponse.json({
     success: true,
     data: {

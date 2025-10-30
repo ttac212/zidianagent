@@ -16,6 +16,10 @@ import type {
   DouyinCommentsStatistics
 } from '@/lib/douyin/comments-pipeline-steps'
 
+export type PipelineSource = 'douyin-video' | 'douyin-comments'
+export type PipelineRole = 'progress' | 'result'
+export type PipelineStage = 'progress' | 'info' | 'partial' | 'done' | 'error'
+
 // 消息状态类型
 export type MessageStatus = 'pending' | 'streaming' | 'completed' | 'error'
 
@@ -37,12 +41,11 @@ export interface MessageMetadata {
   temperature?: number
   processingTime?: number
   error?: string
-  douyinProgress?: DouyinProgressState
-  douyinResult?: DouyinDoneEventPayload
-  douyinProgressMessageId?: string
-  commentsProgress?: DouyinCommentsProgressState
-  commentsResult?: DouyinCommentsDoneEventPayload
-  commentsProgressMessageId?: string
+  reasoningEffort?: 'low' | 'medium' | 'high'
+  pipelineStateId?: string
+  pipelineSource?: PipelineSource
+  pipelineRole?: PipelineRole
+  pipelineLinkedMessageId?: string
 }
 
 // 对话类型
@@ -170,20 +173,22 @@ export type ChatAction =
         content?: string;
         delta?: string;
         status: MessageStatus;
-        metadata?: Partial<MessageMetadata>
+        metadata?: Partial<MessageMetadata>;
+        reasoning?: string;
       }
     }
-  | { type: 'UPDATE_DOUYIN_PROGRESS'; payload: { messageId: string; progress: DouyinProgressEventPayload } }
-  | { type: 'UPDATE_DOUYIN_INFO'; payload: { messageId: string; info: DouyinInfoEventPayload } }
-  | { type: 'UPDATE_DOUYIN_PARTIAL'; payload: { messageId: string; data: DouyinPartialEventPayload } }
-  | { type: 'UPDATE_DOUYIN_DONE'; payload: { messageId: string; result: DouyinDoneEventPayload } }
-  | { type: 'UPDATE_DOUYIN_ERROR'; payload: { messageId: string; error: string; step?: DouyinPipelineStep } }
-  // 评论分析事件
-  | { type: 'UPDATE_COMMENTS_PROGRESS'; payload: { messageId: string; progress: DouyinCommentsProgressEventPayload } }
-  | { type: 'UPDATE_COMMENTS_INFO'; payload: { messageId: string; info: DouyinCommentsInfoEventPayload } }
-  | { type: 'UPDATE_COMMENTS_PARTIAL'; payload: { messageId: string; data: DouyinCommentsPartialEventPayload } }
-  | { type: 'UPDATE_COMMENTS_DONE'; payload: { messageId: string; result: DouyinCommentsDoneEventPayload } }
-  | { type: 'UPDATE_COMMENTS_ERROR'; payload: { messageId: string; error: string; step?: DouyinCommentsPipelineStep } }
+  | {
+      type: 'UPDATE_PIPELINE_STATE';
+      payload: {
+        messageId: string;
+        pipelineStateId?: string | null;
+        source?: PipelineSource;
+        role?: PipelineRole;
+        status?: MessageStatus;
+        error?: string | null;
+        linkedMessageId?: string | null;
+      };
+    }
 
 // 组件 Props 类型
 export interface SmartChatCenterProps {
@@ -344,112 +349,90 @@ export interface DouyinCommentsProgressStep {
   descriptionOverride?: string
 }
 
-// 事件协议类型
-export interface ChatEventProtocol {
-  started: {
-    type: 'started'
-    requestId: string
-    conversationId?: string
-    userMessage: ChatMessage
-    pendingAssistantId: string
-  }
-  chunk: {
-    type: 'chunk'
-    requestId: string
-    /** @deprecated 使用 content 替代，保留用于向后兼容 */
-    delta?: string
-    /** 完整内容（优化后使用此字段，避免频繁增量更新） */
-    content?: string
-    /** 推理内容（ZenMux 推理模型） */
-    reasoning?: string
-    pendingAssistantId: string
-  }
-  done: {
-    type: 'done'
-    requestId: string
-    conversationId?: string
-    assistantMessage: ChatMessage
-    tokens?: number
-    finishedAt: number
-  }
-  error: {
-    type: 'error'
-    requestId: string
-    pendingAssistantId: string
-    error: string
-    recoverable: boolean
-    fallbackMessage?: ChatMessage
-  }
-  warn: {
-    type: 'warn'
-    requestId?: string
-    message: string
-  }
-  'douyin-progress': {
-    type: 'douyin-progress'
-    requestId: string
-    pendingAssistantId: string
-    progress: DouyinProgressEventPayload
-  }
-  'douyin-info': {
-    type: 'douyin-info'
-    requestId: string
-    pendingAssistantId: string
-    info: DouyinInfoEventPayload
-  }
-  'douyin-partial': {
-    type: 'douyin-partial'
-    requestId: string
-    pendingAssistantId: string
-    data: DouyinPartialEventPayload
-  }
-  'douyin-done': {
-    type: 'douyin-done'
-    requestId: string
-    pendingAssistantId: string
-    result: DouyinDoneEventPayload
-  }
-  'douyin-error': {
-    type: 'douyin-error'
-    requestId: string
-    pendingAssistantId: string
-    error: string
-    step?: DouyinPipelineStep
-  }
-  'comments-progress': {
-    type: 'comments-progress'
-    requestId: string
-    pendingAssistantId: string
-    progress: DouyinCommentsProgressEventPayload
-  }
-  'comments-info': {
-    type: 'comments-info'
-    requestId: string
-    pendingAssistantId: string
-    info: DouyinCommentsInfoEventPayload
-  }
-  'comments-partial': {
-    type: 'comments-partial'
-    requestId: string
-    pendingAssistantId: string
-    data: DouyinCommentsPartialEventPayload
-  }
-  'comments-done': {
-    type: 'comments-done'
-    requestId: string
-    pendingAssistantId: string
-    result: DouyinCommentsDoneEventPayload
-  }
-  'comments-error': {
-    type: 'comments-error'
-    requestId: string
-    pendingAssistantId: string
-    error: string
-    step?: DouyinCommentsPipelineStep
-  }
+export interface PipelineUpdateEvent {
+  type: 'pipeline:update'
+  requestId: string
+  pendingAssistantId: string
+  targetMessageId: string
+  pipelineStateId: string
+  source: PipelineSource
+  stage: PipelineStage
+  status: MessageStatus
+  error?: string
+  linkedMessageId?: string
 }
 
-export type ChatEvent = ChatEventProtocol[keyof ChatEventProtocol]
+export interface PipelineResultStreamEvent {
+  type: 'pipeline:result-stream'
+  requestId: string
+  pendingAssistantId: string
+  targetMessageId: string
+  pipelineStateId: string
+  chunk: string
+  append: boolean
+}
+
+export interface PipelineResultFinalizeEvent {
+  type: 'pipeline:result-finalize'
+  requestId: string
+  pendingAssistantId: string
+  targetMessageId: string
+  pipelineStateId: string
+  content: string
+  status: MessageStatus
+  metadata?: Partial<MessageMetadata>
+}
+
+export interface PipelineResultErrorEvent {
+  type: 'pipeline:result-error'
+  requestId: string
+  pendingAssistantId: string
+  targetMessageId: string
+  pipelineStateId: string
+  error: string
+}
+
+export type ChatEvent =
+  | {
+      type: 'started'
+      requestId: string
+      conversationId?: string
+      userMessage: ChatMessage
+      pendingAssistantId: string
+    }
+  | {
+      type: 'chunk'
+      requestId: string
+      delta?: string
+      content?: string
+      reasoning?: string
+      pendingAssistantId: string
+    }
+  | {
+      type: 'done'
+      requestId: string
+      conversationId?: string
+      assistantMessage: ChatMessage
+      tokens?: number
+      finishedAt: number
+    }
+  | {
+      type: 'error'
+      requestId: string
+      pendingAssistantId: string
+      error: string
+      recoverable: boolean
+      fallbackMessage?: ChatMessage
+    }
+  | {
+      type: 'warn'
+      requestId?: string
+      message: string
+    }
+  | PipelineUpdateEvent
+  | PipelineResultStreamEvent
+  | PipelineResultFinalizeEvent
+  | PipelineResultErrorEvent
 
 // 性能监控类型
 export interface PerformanceMetrics {

@@ -11,7 +11,7 @@ import { authOptions } from '@/auth'
 import { getTikHubClient } from '@/lib/tikhub'
 import * as HttpResponse from '@/lib/api/http-response'
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     // 1. 验证用户权限
     const session = await getServerSession(authOptions)

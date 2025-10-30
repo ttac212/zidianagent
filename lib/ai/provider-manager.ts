@@ -80,13 +80,12 @@ export function selectProvider(modelId: string): LLMProvider | null {
 export function transformModelId(modelId: string, provider: LLMProvider): string {
   // ZenMux需要带提供商前缀的格式
   if (provider.name === 'ZenMux') {
-    // 如果已经有前缀，去掉 :thinking 后缀（ZenMux 通过 reasoning_effort 参数控制推理，不是通过模型名）
-    if (modelId.includes('/')) {
-      // 去掉 :thinking 后缀
-      return modelId.replace(':thinking', '')
+    const normalizedModelId = modelId.replace(':thinking', '')
+
+    if (normalizedModelId) {
+      return normalizedModelId
     }
 
-    // 否则使用默认模型
     return process.env.ZENMUX_DEFAULT_MODEL || 'anthropic/claude-sonnet-4.5'
   }
 
