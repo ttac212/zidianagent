@@ -67,7 +67,6 @@ model User {
   messages          Message[]
   sessions          Session[]
   usageStats        UsageStats[]
-  userSessions      UserSession[]
 
   // 优化索引
   @@index([status])
@@ -150,37 +149,6 @@ model UsageStats {
   @@index([modelId, date])
   @@index([modelProvider, date])
   @@map("usage_stats")
-}
-
-model UserSession {
-  id        String   @id @default(cuid())
-  userId    String
-  sessionId String   @unique
-  ipAddress String?
-  userAgent String?
-  isActive  Boolean  @default(true)
-  lastPing  DateTime @default(now())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, isActive])
-  @@index([lastPing])
-  @@map("user_sessions")
-}
-
-model SystemConfig {
-  id          String     @id @default(cuid())
-  key         String     @unique
-  value       String
-  type        ConfigType @default(STRING)
-  description String?
-  category    String?    @default("general")
-  isReadonly  Boolean    @default(false)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-
-  @@map("system_configs")
 }
 
 model MerchantCategory {
@@ -431,13 +399,6 @@ enum MessageRole {
   ASSISTANT
   SYSTEM
   FUNCTION
-}
-
-enum ConfigType {
-  STRING
-  NUMBER
-  BOOLEAN
-  JSON
 }
 
 enum BusinessType {
