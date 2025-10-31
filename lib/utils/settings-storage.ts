@@ -24,20 +24,15 @@ export function loadChatSettings(): Partial<ChatSettings> {
 
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
-    console.log('[SettingsStorage] Loading settings, raw value:', stored)
     if (!stored) {
-      console.log('[SettingsStorage] No stored settings found, using defaults')
       return DEFAULT_SETTINGS
     }
 
     const parsed = JSON.parse(stored)
-    console.log('[SettingsStorage] Parsed settings:', parsed)
-    const result = {
+    return {
       ...DEFAULT_SETTINGS,
       ...parsed
     }
-    console.log('[SettingsStorage] Final merged settings:', result)
-    return result
   } catch (error) {
     console.error('[SettingsStorage] Failed to load settings:', error)
     return DEFAULT_SETTINGS
@@ -60,9 +55,7 @@ export function saveChatSettings(settings: Partial<ChatSettings>): void {
       reasoning: settings.reasoning
     }
 
-    console.log('[SettingsStorage] Saving settings:', toSave)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave))
-    console.log('[SettingsStorage] Settings saved successfully')
   } catch (error) {
     console.error('[SettingsStorage] Failed to save settings:', error)
   }

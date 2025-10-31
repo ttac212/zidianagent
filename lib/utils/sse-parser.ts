@@ -94,20 +94,29 @@ function normalizePayload(raw: unknown): SSEMessage | null {
     }
 
     // 提取推理内容（ZenMux 推理模型）
-    // 支持多种可能的字段名：reasoning、thinking、thought
+    // 支持多种可能的字段名：reasoning、thinking、thought、reasoning_content
     if (choice.delta?.reasoning) {
       message.reasoning = choice.delta.reasoning
+    } else if (choice.delta?.reasoning_content) {
+      message.reasoning = choice.delta.reasoning_content
     } else if (choice.delta?.thinking) {
       message.reasoning = choice.delta.thinking
     } else if (choice.delta?.thought) {
       message.reasoning = choice.delta.thought
     } else if (choice.message?.reasoning) {
       message.reasoning = choice.message.reasoning
+    } else if (choice.message?.reasoning_content) {
+      message.reasoning = choice.message.reasoning_content
     }
 
     if (choice.finish_reason) {
       message.finished = true
     }
+  }
+
+  // 检查顶层 reasoning 字段（某些提供商可能使用这种格式）
+  if (obj.reasoning && typeof obj.reasoning === 'string') {
+    message.reasoning = obj.reasoning
   }
 
   // 返回null表示没有有效数据
@@ -381,7 +390,6 @@ export function createSSETransformStream(
         // ✅ 新增：收集推理内容
         if (message.reasoning) {
           assistantReasoning += message.reasoning
-          console.log('[SSE Parser] Collecting reasoning chunk, total length:', assistantReasoning.length)
         }
 
         if (message.usage) {
@@ -432,7 +440,6 @@ export function createSSETransformStream(
       }
 
       if (onComplete) {
-        console.log('[SSE Parser] Stream complete, content length:', assistantContent.length, 'reasoning length:', assistantReasoning?.length || 0)
         await Promise.resolve(onComplete(assistantContent, tokenUsage, assistantReasoning || undefined))
       }
     }

@@ -611,7 +611,6 @@ export async function POST(request: NextRequest) {
     usage?: SSEMessage["usage"],
     reasoning?: string  // ✅ 新增：推理内容
   ) => {
-    console.log('[Chat API] Stream completion callback, content length:', fullContent.length, 'reasoning length:', reasoning?.length || 0)
     if (conversationId && fullContent) {
       try {
         const promptTokens = usage?.prompt_tokens || 0
@@ -631,8 +630,6 @@ export async function POST(request: NextRequest) {
             reasoningEffort: requestOptions.reasoning?.effort || undefined
           }
         )
-
-        console.log('[Chat API] Message saved with reasoning:', !!reasoning, 'effort:', requestOptions.reasoning?.effort)
 
         if (!success) {
           console.error('[Chat] Failed to save assistant message')

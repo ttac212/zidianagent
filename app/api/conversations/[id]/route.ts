@@ -140,7 +140,6 @@ export async function GET(
       messages: messages ? messages.map((msg: any) => {
         const reasoning = (msg.metadata as any)?.reasoning || undefined
         const reasoningEffort = (msg.metadata as any)?.reasoningEffort || undefined
-        console.log('[Conversation API] Message', msg.id, 'has reasoning:', !!reasoning, 'effort:', reasoningEffort)
 
         return {
           ...msg,

@@ -212,7 +212,7 @@ export function useDouyinExtraction(): UseDouyinExtractionReturn {
         break;
 
       default:
-        console.log('未知事件类型:', type, payload);
+        console.warn('[Douyin Extraction] 未知事件类型:', type, payload);
     }
   }, []);
 

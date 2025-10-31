@@ -153,7 +153,6 @@ function SmartChatCenterInternal({
   React.useEffect(() => {
     // 跳过首次挂载时的保存，避免覆盖刚加载的设置
     if (isFirstMountRef.current) {
-      console.log('[Settings] Skipping save on first mount')
       return
     }
 
@@ -164,7 +163,6 @@ function SmartChatCenterInternal({
       composerSettings.reasoning !== undefined
 
     if (hasValidSettings) {
-      console.log('[Settings] Auto-saving settings')
       saveChatSettings(composerSettings)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

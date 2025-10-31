@@ -1,10 +1,11 @@
 /**
  * 商家数据展示页面
+ * 使用 React Query 统一管理数据
  */
 
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { Header } from '@/components/header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -26,23 +27,21 @@ import {
   RefreshCw
 } from 'lucide-react'
 import type {
-  MerchantListItem,
-  MerchantCategory,
-  MerchantStats,
   MerchantFilters
 } from '@/types/merchant'
 import {
   BUSINESS_TYPE_LABELS,
   MERCHANT_STATUS_LABELS
 } from '@/types/merchant'
+import {
+  useMerchantsQuery,
+  useMerchantCategoriesQuery,
+  useMerchantStatsQuery,
+  useInvalidateMerchants
+} from '@/hooks/api/use-merchants-query'
 
 export default function MerchantsPage() {
   const { data: session } = useSession()
-  const [merchants, setMerchants] = useState<MerchantListItem[]>([])
-  const [categories, setCategories] = useState<MerchantCategory[]>([])
-  const [stats, setStats] = useState<MerchantStats | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
   const [filters, setFilters] = useState<MerchantFilters>({
     search: '',
     categoryId: '',
@@ -52,84 +51,26 @@ export default function MerchantsPage() {
     page: 1,
     limit: 20
   })
-  const [total, setTotal] = useState(0)
+
+  // 使用 React Query 获取数据
+  const { data: merchantsData, isLoading: merchantsLoading, isFetching: merchantsFetching } = useMerchantsQuery(filters)
+  const { data: categories = [], isFetching: categoriesFetching } = useMerchantCategoriesQuery()
+  const { data: stats, isFetching: statsFetching } = useMerchantStatsQuery()
+  const { invalidateAll } = useInvalidateMerchants()
+
+  // 从 React Query 数据中提取
+  const merchants = merchantsData?.merchants || []
+  const total = merchantsData?.total || 0
+  const loading = merchantsLoading
+  const refreshing = merchantsFetching || categoriesFetching || statsFetching
 
   // 判断用户是否有权限添加商家（仅管理员可添加）
   const canAddMerchant = session?.user?.role === 'ADMIN'
 
-  // 获取商家列表
-  const fetchMerchants = useCallback(async () => {
-    try {
-      setLoading(true)
-      const params = new URLSearchParams()
-
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value && value !== '') {
-          params.append(key, String(value))
-        }
-      })
-
-      // 添加时间戳防止浏览器缓存
-      params.append('_t', Date.now().toString())
-
-      const response = await fetch(`/api/merchants?${params.toString()}`, {
-        cache: 'no-store', // 禁用 Next.js fetch 缓存
-      })
-      if (!response.ok) {
-        console.error('获取商户列表失败', await response.text())
-        return
-      }
-
-      const data = await response.json()
-      setMerchants(data.merchants)
-      setTotal(data.total)
-    } catch (error) {
-      console.error('获取商户列表异常', error)
-    } finally {
-      setLoading(false)
-    }
-  }, [filters])
-  // 获取分类和统计数据
-  const fetchData = async () => {
-    try {
-      const [categoriesRes, statsRes] = await Promise.all([
-        fetch('/api/merchants/categories', { cache: 'no-store' }),
-        fetch('/api/merchants/stats', { cache: 'no-store' })
-      ])
-
-      if (categoriesRes.ok) {
-        const categoriesData = await categoriesRes.json()
-        setCategories(categoriesData)
-      }
-
-      if (statsRes.ok) {
-        const statsData = await statsRes.json()
-        setStats(statsData.stats)
-      }
-    } catch (_error) {
-      }
-  }
-
   // 强制刷新所有数据
   const handleRefresh = async () => {
-    setRefreshing(true)
-    try {
-      await Promise.all([
-        fetchMerchants(),
-        fetchData()
-      ])
-    } finally {
-      setRefreshing(false)
-    }
+    await invalidateAll()
   }
-
-  useEffect(() => {
-    fetchData()
-  }, [])
-
-  useEffect(() => {
-    fetchMerchants()
-  }, [fetchMerchants])
 
   // 处理搜索
   const handleSearch = (value: string) => {
@@ -178,10 +119,7 @@ export default function MerchantsPage() {
           {canAddMerchant && (
             <AddMerchantDialog
               categories={categories}
-              onSuccess={() => {
-                fetchMerchants()
-                fetchData()
-              }}
+              onSuccess={invalidateAll}
             />
           )}
         </div>
