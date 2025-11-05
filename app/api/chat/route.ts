@@ -32,6 +32,7 @@ import {
 } from "@/lib/douyin/link-detector"
 import { runDouyinPipeline } from "@/lib/douyin/pipeline"
 import { runDouyinCommentsPipeline } from "@/lib/douyin/comments-pipeline"
+import { handleDouyinPipeline } from "@/lib/douyin/sse-handler"
 
 export async function POST(request: NextRequest) {
   try {
@@ -82,144 +83,28 @@ export async function POST(request: NextRequest) {
   if (lastUserMessage?.role === 'user' && detectDouyinLink(lastUserMessage.content)) {
     console.info('[Douyin] 检测到抖音链接')
 
+    const shareLink = extractDouyinLink(lastUserMessage.content)
+    if (!shareLink) {
+      return validationError('无法提取抖音链接')
+    }
+
+    const { DOUYIN_ESTIMATED_TOKENS } = await import('@/lib/constants/douyin-quota')
+
     // 优先检查是否明确请求视频文案提取
     if (isDouyinVideoExtractionRequest(lastUserMessage.content)) {
       console.info('[Douyin] 明确请求视频文案提取')
 
-      const shareLink = extractDouyinLink(lastUserMessage.content)
-      if (!shareLink) {
-        return validationError('无法提取抖音链接')
-      }
-
-      // SECURITY: 必须在保存消息前校验会话权限
-      if (conversationId) {
-        const conversation = await prisma.conversation.findFirst({
-          where: { id: conversationId, userId }
-        })
-
-        if (!conversation) {
-          return forbidden('无权访问此对话')
-        }
-
-        try {
-          await QuotaManager.commitTokens(
-            userId,
-            { promptTokens: 0, completionTokens: 0 },
-            0,
-            {
-              conversationId,
-              role: 'USER',
-              content: lastUserMessage.content,
-              modelId: model
-            }
-          )
-        } catch (dbError) {
-          console.error('[Douyin] Failed to save user message:', dbError)
-        }
-      }
-
-      const encoder = new TextEncoder()
-      const stream = new ReadableStream({
-        async start(controller) {
-          let isClosed = false
-
-          const sendEvent = (type: string, payload: unknown) => {
-            if (isClosed) return
-
-            try {
-              const chunk = `event: ${type}\n` +
-                            `data: ${JSON.stringify(payload)}\n\n`
-              controller.enqueue(encoder.encode(chunk))
-            } catch (enqueueError) {
-              console.error('[Douyin] Failed to enqueue event:', enqueueError)
-            }
-          }
-
-          const finishStream = () => {
-            if (isClosed) return
-            isClosed = true
-            try {
-              controller.enqueue(encoder.encode('data: [DONE]\n\n'))
-            } catch (doneError) {
-              console.error('[Douyin] Failed to enqueue DONE marker:', doneError)
-            } finally {
-              controller.close()
-            }
-          }
-
-          const abortHandler = () => finishStream()
-
-          request.signal.addEventListener('abort', abortHandler)
-
-          try {
-            let finalMarkdown: string | null = null
-
-            const result = await runDouyinPipeline(
-              shareLink,
-              async (event) => {
-                switch (event.type) {
-                  case 'progress':
-                    sendEvent('douyin-progress', event)
-                    break
-                  case 'info':
-                    sendEvent('douyin-info', event)
-                    break
-                  case 'partial':
-                    sendEvent('douyin-partial', event)
-                    break
-                  case 'done':
-                    finalMarkdown = event.markdown
-                    sendEvent('douyin-done', event)
-                    break
-                  case 'error':
-                    sendEvent('douyin-error', event)
-                    break
-                }
-              },
-              { signal: request.signal }
-            )
-
-            if (!finalMarkdown && result?.markdown) {
-              finalMarkdown = result.markdown
-            }
-
-            // SECURITY: 助手消息保存时再次确认权限(防御性编程)
-            if (conversationId && finalMarkdown) {
-              try {
-                await QuotaManager.commitTokens(
-                  userId,
-                  { promptTokens: 0, completionTokens: 0 },
-                  0,
-                  {
-                    conversationId,
-                    role: 'ASSISTANT',
-                    content: finalMarkdown,
-                    modelId: model
-                  }
-                )
-              } catch (dbError) {
-                console.error('[Douyin] Failed to save assistant message:', dbError)
-              }
-            }
-          } catch (err) {
-            if (err instanceof Error && err.name === 'AbortError') {
-              console.warn('[Douyin] Pipeline aborted by client')
-            } else {
-              console.error('[Douyin] Pipeline failed:', err)
-            }
-          } finally {
-            finishStream()
-            request.signal.removeEventListener('abort', abortHandler)
-          }
-        }
-      })
-
-      return new Response(stream, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        }
+      return handleDouyinPipeline({
+        shareLink,
+        userId,
+        conversationId,
+        model,
+        estimatedTokens: DOUYIN_ESTIMATED_TOKENS.VIDEO_EXTRACTION,
+        request,
+        userMessage: lastUserMessage.content,
+        pipeline: runDouyinPipeline,
+        eventPrefix: 'douyin',
+        featureName: 'Douyin'
       })
     }
 
@@ -227,142 +112,21 @@ export async function POST(request: NextRequest) {
     if (isDouyinShareRequest(lastUserMessage.content)) {
       console.info('[Douyin Comments] 默认处理评论分析请求')
 
-      const shareLink = extractDouyinLink(lastUserMessage.content)
-      if (!shareLink) {
-        return validationError('无法提取抖音链接')
-      }
-
-      // SECURITY: 必须在保存消息前校验会话权限
-      if (conversationId) {
-        const conversation = await prisma.conversation.findFirst({
-          where: { id: conversationId, userId }
-        })
-
-        if (!conversation) {
-          return forbidden('无权访问此对话')
-        }
-
-        try {
-          await QuotaManager.commitTokens(
-            userId,
-            { promptTokens: 0, completionTokens: 0 },
-            0,
-            {
-              conversationId,
-              role: 'USER',
-              content: lastUserMessage.content,
-              modelId: model
-            }
-          )
-        } catch (dbError) {
-          console.error('[Douyin Comments] Failed to save user message:', dbError)
-        }
-      }
-
-      const encoder = new TextEncoder()
-      const stream = new ReadableStream({
-        async start(controller) {
-          let isClosed = false
-
-          const sendEvent = (type: string, payload: unknown) => {
-            if (isClosed) return
-
-            try {
-              const chunk = `event: ${type}\n` + `data: ${JSON.stringify(payload)}\n\n`
-              controller.enqueue(encoder.encode(chunk))
-            } catch (enqueueError) {
-              console.error('[Douyin Comments] Failed to enqueue event:', enqueueError)
-            }
-          }
-
-          const finishStream = () => {
-            if (isClosed) return
-            isClosed = true
-            try {
-              controller.enqueue(encoder.encode('data: [DONE]\n\n'))
-            } catch (doneError) {
-              console.error('[Douyin Comments] Failed to enqueue DONE marker:', doneError)
-            } finally {
-              controller.close()
-            }
-          }
-
-          const abortHandler = () => finishStream()
-          request.signal.addEventListener('abort', abortHandler)
-
-          try {
-            let finalMarkdown: string | null = null
-
-            const result = await runDouyinCommentsPipeline(
-              shareLink,
-              async (event) => {
-                switch (event.type) {
-                  case 'progress':
-                    sendEvent('comments-progress', event)
-                    break
-                  case 'info':
-                    sendEvent('comments-info', event)
-                    break
-                  case 'partial':
-                    sendEvent('comments-partial', event)
-                    break
-                  case 'done':
-                    finalMarkdown = event.markdown
-                    sendEvent('comments-done', event)
-                    break
-                  case 'error':
-                    sendEvent('comments-error', event)
-                    break
-                }
-              },
-              { signal: request.signal }
-            )
-
-            if (!finalMarkdown && result?.markdown) {
-              finalMarkdown = result.markdown
-            }
-
-            // SECURITY: 助手消息保存时再次确认权限
-            if (conversationId && finalMarkdown) {
-              try {
-                await QuotaManager.commitTokens(
-                  userId,
-                  { promptTokens: 0, completionTokens: 0 },
-                  0,
-                  {
-                    conversationId,
-                    role: 'ASSISTANT',
-                    content: finalMarkdown,
-                    modelId: model
-                  }
-                )
-              } catch (dbError) {
-                console.error('[Douyin Comments] Failed to save assistant message:', dbError)
-              }
-            }
-          } catch (err) {
-            if (err instanceof Error && err.name === 'AbortError') {
-              console.warn('[Douyin Comments] Pipeline aborted by client')
-            } else {
-              console.error('[Douyin Comments] Pipeline failed:', err)
-            }
-          } finally {
-            finishStream()
-            request.signal.removeEventListener('abort', abortHandler)
-          }
-        }
+      return handleDouyinPipeline({
+        shareLink,
+        userId,
+        conversationId,
+        model,
+        estimatedTokens: DOUYIN_ESTIMATED_TOKENS.COMMENTS_ANALYSIS,
+        request,
+        userMessage: lastUserMessage.content,
+        pipeline: runDouyinCommentsPipeline,
+        eventPrefix: 'comments',
+        featureName: 'Douyin Comments'
       })
-
-      return new Response(stream, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive'
-        }
-      })
-    } else {
-      console.info('[Douyin] 检测到抖音链接但不是纯分享请求,保持原样进入普通聊天')
     }
+
+    console.info('[Douyin] 检测到抖音链接但不是纯分享请求,保持原样进入普通聊天')
   }
 
   // 服务端统一裁剪（防止客户端绕过限制）- 基于实际模型上限
@@ -591,18 +355,48 @@ export async function POST(request: NextRequest) {
     }, null, 2))
   }
 
-  const aiResponse = await fetch(chatRequest.url, {
-    method: "POST",
-    headers: { ...chatRequest.headers, ...headers },
-    body: JSON.stringify(chatRequest.body)
-  })
+  // Reasoning模式需要更长的超时时间
+  const timeout = requestOptions.reasoning ? 120000 : 60000 // 推理模式120秒，普通60秒
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeout)
 
-  if (!aiResponse.ok) {
+  // 在 try 块外部声明 aiResponse，避免作用域问题
+  let aiResponse: Response
+
+  try {
+    aiResponse = await fetch(chatRequest.url, {
+      method: "POST",
+      headers: { ...chatRequest.headers, ...headers },
+      body: JSON.stringify(chatRequest.body),
+      signal: controller.signal
+    })
+    clearTimeout(timeoutId)
+
+    if (!aiResponse.ok) {
+      // 释放预留的配额
+      await QuotaManager.releaseTokens(userId, estimatedTokens)
+      const errorText = await aiResponse.text()
+      console.error('[Chat] AI API error:', aiResponse.status, errorText)
+      return Response.json({ error: `AI错误: ${aiResponse.status} - ${errorText}` }, { status: aiResponse.status })
+    }
+  } catch (fetchError) {
+    clearTimeout(timeoutId)
+
     // 释放预留的配额
     await QuotaManager.releaseTokens(userId, estimatedTokens)
-    const errorText = await aiResponse.text()
-    console.error('[Chat] AI API error:', aiResponse.status, errorText)
-    return Response.json({ error: `AI错误: ${aiResponse.status} - ${errorText}` }, { status: aiResponse.status })
+
+    if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+      console.error('[Chat] Request timeout after', timeout, 'ms')
+      return error(
+        requestOptions.reasoning
+          ? 'AI推理超时（120秒），请尝试使用较低的推理强度或普通模式'
+          : 'AI请求超时（60秒），请稍后重试',
+        { status: 504 }
+      )
+    }
+
+    console.error('[Chat] Fetch error:', fetchError)
+    return error('AI服务连接失败，请检查网络或稍后重试', { status: 502 })
   }
 
   // 7. 使用现成SSE解析工具，修复数据丢失问题

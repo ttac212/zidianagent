@@ -4,7 +4,6 @@
  */
 
 import { NextRequest } from 'next/server'
-import { getToken } from 'next-auth/jwt'
 import { prisma } from '@/lib/prisma'
 import { parseAndCleanTags } from '@/lib/utils/tag-parser'
 import { createErrorResponse, generateRequestId } from '@/lib/api/error-handler'
@@ -12,9 +11,9 @@ import * as dt from '@/lib/utils/date-toolkit'
 import {
   success,
   validationError,
-  notFound,
-  unauthorized
+  notFound
 } from '@/lib/api/http-response'
+import { withMerchantAuth } from '@/lib/api/merchant-auth'
 
 
 // GET /api/merchants/[id]/analytics - 获取商家分析数据
@@ -22,14 +21,13 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const token = await getToken({ req: request as any })
-  if (!token?.sub) return unauthorized('未认证')
-  try {
-    const { id } = await params
-    
-    if (!id) {
-      return validationError('商家ID不能为空')
-    }
+  return withMerchantAuth(request, params, async (_userId, _req, params) => {
+    try {
+      const { id } = await params
+
+      if (!id) {
+        return validationError('商家ID不能为空')
+      }
 
     // 获取商家基本信息
     const merchant = await prisma.merchant.findUnique({
@@ -197,11 +195,12 @@ export async function GET(
       tagStats
     }
 
-    return success(analytics)
-    
-  } catch (error) {
-    return createErrorResponse(error as Error, generateRequestId())
-  }
+      return success(analytics)
+
+    } catch (error) {
+      return createErrorResponse(error as Error, generateRequestId())
+    }
+  })
 }
 
 export const dynamic = 'force-dynamic'

@@ -13,7 +13,8 @@
       "Bash(pnpm type-check:*)",
       "Bash(git restore:*)",
       "Bash(npx tsx:*)",
-      "Bash(TIKHUB_API_KEY=\"nasQXM88xWilwWy0O6/F5DftDxaSfaA9vSPz62eARtiKgAucPXmRZzaxaA==\" npx tsx scripts/test-merchant-fetch.ts)"
+      "Bash(TIKHUB_API_KEY=\"nasQXM88xWilwWy0O6/F5DftDxaSfaA9vSPz62eARtiKgAucPXmRZzaxaA==\" npx tsx scripts/test-merchant-fetch.ts)",
+      "Bash(pnpm db:generate)"
     ],
     "additionalDirectories": [
       "C:\\Users\\ADMIN\\AppData\\Roaming",

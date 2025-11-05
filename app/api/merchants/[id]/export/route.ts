@@ -4,16 +4,15 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getToken } from 'next-auth/jwt'
 import { prisma } from '@/lib/prisma'
 import { parseAndCleanTags } from '@/lib/utils/tag-parser'
 import { createErrorResponse, generateRequestId } from '@/lib/api/error-handler'
 import * as dt from '@/lib/utils/date-toolkit'
 import {
   validationError,
-  notFound,
-  unauthorized
+  notFound
 } from '@/lib/api/http-response'
+import { withMerchantAuth } from '@/lib/api/merchant-auth'
 
 
 // GET /api/merchants/[id]/export - 导出商家数据
@@ -21,11 +20,10 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const token = await getToken({ req: request as any })
-  if (!token?.sub) return unauthorized('未认证')
-  try {
-    const { id } = await params
-    const { searchParams } = new URL(request.url)
+  return withMerchantAuth(request, params, async (_userId, req, params) => {
+    try {
+      const { id } = await params
+      const { searchParams } = new URL(req.url)
     const _format = searchParams.get('format') || 'csv' // TODO: 实现格式选择功能
     const type = searchParams.get('type') || 'content' // content | analytics | tags
     
@@ -205,11 +203,12 @@ export async function GET(
       }
     })
 
-    return response
-    
-  } catch (error) {
-    return createErrorResponse(error as Error, generateRequestId())
-  }
+      return response
+
+    } catch (error) {
+      return createErrorResponse(error as Error, generateRequestId())
+    }
+  })
 }
 
 export const dynamic = 'force-dynamic'

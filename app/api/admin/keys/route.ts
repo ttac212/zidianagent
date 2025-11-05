@@ -1,20 +1,17 @@
 import type { NextRequest } from "next/server"
-import { getToken } from "next-auth/jwt"
 import * as dt from '@/lib/utils/date-toolkit'
+import { requireAdmin } from '@/lib/auth/admin-guard'
 import {
   success,
   validationError,
-  forbidden,
-  unauthorized,
   serverError
 } from '@/lib/api/http-response'
 
 
 export async function GET(request: NextRequest) {
   try {
-    const token = await getToken({ req: request as any })
-    if (!token?.sub) return unauthorized('未认证')
-    if ((token as any).role !== "ADMIN") return forbidden('无权限')
+    const { error } = await requireAdmin(request)
+    if (error) return error
 
     // 模拟 API 密钥数据
     const keys = generateMockApiKeys()
@@ -30,9 +27,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // SECURITY: 必须验证权限！
-    const token = await getToken({ req: request as any })
-    if (!token?.sub) return unauthorized('未认证')
-    if ((token as any).role !== "ADMIN") return forbidden('无权限创建API密钥')
+    const { error } = await requireAdmin(request)
+    if (error) return error
 
     const { name, permissions, expiresAt, maxUsage } = await request.json()
 

@@ -170,6 +170,22 @@ node scripts/cleanup-unused-vars.js            # 清理未使用变量
 - **数据源**: 支持抖音等多平台数据采集，通过`dataSource`字段区分
 - **导入工具**: `scripts/import-merchant-data.ts`批量导入CSV/Excel数据
 
+### 使用量分析系统（简单实用）
+- **架构**: Prisma直接查询 + React Query缓存 + Recharts可视化
+- **核心API**: `app/api/users/[id]/model-stats/route.ts`
+  - 总体统计（总Token、总请求数、平均每次请求Token）
+  - 按模型聚合（Token分布、请求次数、使用占比）
+  - 每日趋势数据（最近N天的Token消耗）
+- **前端组件**:
+  - `hooks/api/use-usage-stats.ts` - React Query hooks
+  - `components/analytics/usage-dashboard.tsx` - 可视化仪表板
+  - `app/analytics/page.tsx` - 分析页面
+- **性能优化**:
+  - React Query自动缓存（1分钟staleTime，5分钟自动刷新）
+  - Prisma索引优化（`@@index([userId, modelId, createdAt])`）
+  - 按天预聚合数据（`UsageStats`表）
+- **访问路径**: `http://localhost:3007/analytics`
+
 ## 环境配置
 
 ### 必需环境变量（.env.local）

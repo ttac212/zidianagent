@@ -1,371 +1,376 @@
-"use client"
+/**
+ * 用户管理组件
+ * 使用真实API和React Query
+ */
 
-import type React from "react"
+'use client'
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Search, Plus, Edit, Trash2, Key, Users } from "lucide-react"
-import { toast } from "@/lib/toast/toast"
-
-interface User {
-  id: string
-  username: string
-  email: string
-  role: string
-  status: string
-  permissions: string[]
-  createdAt: string
-  lastLoginAt: string | null
-  totalSessions: number
-  totalTokensUsed: number
-}
+import { useState, useEffect } from 'react'
+import {
+  useAdminUsers,
+  useUpdateUser,
+  useDeleteUser,
+  type AdminUser,
+  type UpdateUserData,
+} from '@/hooks/api/use-admin-users'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Search, Edit, Trash2, Users, CheckCircle, Ban } from 'lucide-react'
+import { toast } from '@/lib/toast/toast'
+import { useSession } from 'next-auth/react'
 
 export function UserManagement() {
-  const [users, setUsers] = useState<User[]>([])
-  const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [showCreateDialog, setShowCreateDialog] = useState(false)
-  // 使用统一的toast API
+  const { data: session } = useSession()
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [editUser, setEditUser] = useState<AdminUser | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<AdminUser | null>(null)
 
-  const fetchUsers = async () => {
+  // Hooks
+  const { data, isLoading } = useAdminUsers({ search, page, limit: 10 })
+  const updateMutation = useUpdateUser()
+  const deleteMutation = useDeleteUser()
+
+  const handleUpdate = async (userId: string, updateData: UpdateUserData) => {
     try {
-      setLoading(true)
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      const mockUsers: User[] = [
-        {
-          id: "1",
-          username: "admin",
-          email: "admin@example.com",
-          role: "admin",
-          status: "active",
-          permissions: ["chat", "documents", "trending", "admin"],
-          createdAt: "2024-01-01T00:00:00Z",
-          lastLoginAt: "2024-01-15T10:30:00Z",
-          totalSessions: 156,
-          totalTokensUsed: 45000,
-        },
-        {
-          id: "2",
-          username: "user1",
-          email: "user1@example.com",
-          role: "user",
-          status: "active",
-          permissions: ["chat", "documents"],
-          createdAt: "2024-01-05T00:00:00Z",
-          lastLoginAt: "2024-01-14T15:20:00Z",
-          totalSessions: 89,
-          totalTokensUsed: 12000,
-        },
-      ]
-
-      setUsers(mockUsers)
-    } catch (_error) {
-      toast.error("获取用户列表失败", {
-        description: "请稍后重试"
-      })
-    } finally {
-      setLoading(false)
+      await updateMutation.mutateAsync({ userId, data: updateData })
+      toast.success('用户更新成功')
+      setEditUser(null)
+    } catch (error: any) {
+      toast.error(error.message || '更新失败')
     }
   }
 
-  useEffect(() => {
-    fetchUsers()
-  }, [])
-
-  const filteredUsers = users.filter((user) => {
-    const matchesSearch =
-      user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === "all" || user.status === statusFilter
-    return matchesSearch && matchesStatus
-  })
-
-  const formatDate = (dateString: string | null): string => {
-    if (!dateString) return "从未登录"
-    return new Date(dateString).toLocaleString("zh-CN")
-  }
-
-  const getStatusColor = (status: string): "default" | "secondary" | "destructive" => {
-    switch (status) {
-      case "active":
-        return "default"
-      case "inactive":
-        return "secondary"
-      case "suspended":
-        return "destructive"
-      default:
-        return "secondary"
-    }
-  }
-
-  const getStatusText = (status: string): string => {
-    switch (status) {
-      case "active":
-        return "活跃"
-      case "inactive":
-        return "非活跃"
-      case "suspended":
-        return "已暂停"
-      default:
-        return "未知"
-    }
-  }
-
-  const getRoleText = (role: string): string => {
-    switch (role) {
-      case "admin":
-        return "管理员"
-      case "premium":
-        return "高级用户"
-      case "user":
-        return "普通用户"
-      default:
-        return "未知"
+  const handleDelete = async (userId: string) => {
+    try {
+      await deleteMutation.mutateAsync(userId)
+      toast.success('用户已删除')
+      setDeleteConfirm(null)
+    } catch (error: any) {
+      toast.error(error.message || '删除失败')
     }
   }
 
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              用户管理
-            </CardTitle>
-            <CardDescription>管理系统用户和权限设置</CardDescription>
-          </div>
-          <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-            <DialogTrigger asChild>
-              <Button className="gap-2">
-                <Plus className="h-4 w-4" />
-                添加用户
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>创建新用户</DialogTitle>
-              </DialogHeader>
-              <CreateUserForm
-                onSuccess={() => {
-                  setShowCreateDialog(false)
-                  fetchUsers()
-                }}
-              />
-            </DialogContent>
-          </Dialog>
-        </div>
+        <CardTitle className="flex items-center gap-2">
+          <Users className="h-5 w-5" />
+          用户管理
+        </CardTitle>
+        <CardDescription>管理所有用户的权限、配额和状态</CardDescription>
       </CardHeader>
-
-      <CardContent className="space-y-4">
-        {/* 搜索和筛选 */}
-        <div className="flex gap-4">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="搜索用户名或邮箱..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
+      <CardContent>
+        {/* 搜索 */}
+        <div className="flex items-center gap-4 mb-6">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="搜索用户（邮箱、用户名、显示名称）"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value)
+                setPage(1)
+              }}
+              className="pl-10"
+            />
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-32">
-              <SelectValue placeholder="状态" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部状态</SelectItem>
-              <SelectItem value="active">活跃</SelectItem>
-              <SelectItem value="inactive">非活跃</SelectItem>
-              <SelectItem value="suspended">已暂停</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
 
-        {/* 用户表格 */}
-        {loading ? (
-          <div className="flex items-center justify-center h-32">
-            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-            <span className="ml-2 text-muted-foreground">加载中...</span>
-          </div>
+        {/* 用户列表 */}
+        {isLoading ? (
+          <div className="text-center py-8 text-muted-foreground">加载中...</div>
+        ) : !data || data.users.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">暂无用户</div>
         ) : (
-          <div className="border rounded-lg">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>用户信息</TableHead>
-                  <TableHead>角色</TableHead>
-                  <TableHead>状态</TableHead>
-                  <TableHead>使用统计</TableHead>
-                  <TableHead>最后登录</TableHead>
-                  <TableHead>操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredUsers.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{user.username}</div>
-                        <div className="text-sm text-muted-foreground">{user.email}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{getRoleText(user.role)}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getStatusColor(user.status)}>{getStatusText(user.status)}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        <div>会话: {user.totalSessions}</div>
-                        <div className="text-muted-foreground">Token: {user.totalTokensUsed.toLocaleString()}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm text-muted-foreground">{formatDate(user.lastLoginAt)}</div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="sm">
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                        <Button variant="ghost" size="sm">
-                          <Key className="h-3 w-3" />
-                        </Button>
-                        <Button variant="ghost" size="sm">
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-3 px-4">用户</th>
+                    <th className="text-left py-3 px-4">角色</th>
+                    <th className="text-left py-3 px-4">状态</th>
+                    <th className="text-right py-3 px-4">配额</th>
+                    <th className="text-right py-3 px-4">已用</th>
+                    <th className="text-right py-3 px-4">对话/消息</th>
+                    <th className="text-right py-3 px-4">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.users.map((user) => (
+                    <tr key={user.id} className="border-b hover:bg-muted/50">
+                      <td className="py-3 px-4">
+                        <div>
+                          <div className="font-medium">{user.displayName || user.email}</div>
+                          <div className="text-xs text-muted-foreground">{user.email}</div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <Badge
+                          variant={
+                            user.role === 'ADMIN'
+                              ? 'default'
+                              : user.role === 'USER'
+                              ? 'secondary'
+                              : 'outline'
+                          }
+                        >
+                          {user.role}
+                        </Badge>
+                      </td>
+                      <td className="py-3 px-4">
+                        {user.status === 'ACTIVE' ? (
+                          <span className="inline-flex items-center gap-1 text-green-600">
+                            <CheckCircle className="h-4 w-4" />
+                            活跃
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-red-600">
+                            <Ban className="h-4 w-4" />
+                            停用
+                          </span>
+                        )}
+                      </td>
+                      <td className="text-right py-3 px-4 font-mono">
+                        {(user.monthlyTokenLimit / 1000).toFixed(0)}K
+                      </td>
+                      <td className="text-right py-3 px-4 font-mono">
+                        {(user.currentMonthUsage / 1000).toFixed(0)}K
+                      </td>
+                      <td className="text-right py-3 px-4 text-muted-foreground">
+                        {user._count.conversations} / {user._count.messages}
+                      </td>
+                      <td className="text-right py-3 px-4">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setEditUser(user)}
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => setDeleteConfirm(user)}
+                            disabled={user.id === session?.user?.id}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-        <div className="text-sm text-muted-foreground">显示 {filteredUsers.length} 个用户</div>
+            {/* 分页 */}
+            <div className="flex items-center justify-between mt-6">
+              <div className="text-sm text-muted-foreground">
+                共 {data.pagination.total} 个用户
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                >
+                  上一页
+                </Button>
+                <span className="text-sm">
+                  第 {page} / {data.pagination.totalPages} 页
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={page >= data.pagination.totalPages}
+                >
+                  下一页
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
       </CardContent>
+
+      {/* 编辑对话框 */}
+      <EditDialog
+        user={editUser}
+        open={!!editUser}
+        onClose={() => setEditUser(null)}
+        onSave={handleUpdate}
+        isLoading={updateMutation.isPending}
+      />
+
+      {/* 删除确认 */}
+      <DeleteDialog
+        user={deleteConfirm}
+        open={!!deleteConfirm}
+        onClose={() => setDeleteConfirm(null)}
+        onConfirm={() => deleteConfirm && handleDelete(deleteConfirm.id)}
+        isLoading={deleteMutation.isPending}
+      />
     </Card>
   )
 }
 
-function CreateUserForm({ onSuccess }: { onSuccess: () => void }) {
-  const [formData, setFormData] = useState({
-    username: "",
-    email: "",
-    role: "user",
-    permissions: [] as string[],
-  })
-  const [loading, setLoading] = useState(false)
-  // 使用统一的toast API
+// 编辑对话框
+function EditDialog({
+  user,
+  open,
+  onClose,
+  onSave,
+  isLoading,
+}: {
+  user: AdminUser | null
+  open: boolean
+  onClose: () => void
+  onSave: (userId: string, data: UpdateUserData) => void
+  isLoading: boolean
+}) {
+  const [role, setRole] = useState<string>('USER')
+  const [status, setStatus] = useState<string>('ACTIVE')
+  const [quota, setQuota] = useState<string>('100000')
 
-  const allPermissions = [
-    { id: "chat", label: "AI对话" },
-    { id: "documents", label: "文档管理" },
-    { id: "trending", label: "热门数据" },
-    { id: "export", label: "数据导出" },
-    { id: "admin", label: "管理权限" },
-  ]
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      toast.success("创建成功", {
-        description: "用户已创建"
-      })
-      onSuccess()
-    } catch (_error) {
-      toast.error("创建失败", {
-        description: "请稍后重试"
-      })
-    } finally {
-      setLoading(false)
+  // 当 user 变化时，同步表单状态
+  useEffect(() => {
+    if (user) {
+      setRole(user.role)
+      setStatus(user.status)
+      setQuota(String(user.monthlyTokenLimit))
     }
-  }
+  }, [user])
 
-  const handlePermissionChange = (permissionId: string, checked: boolean) => {
-    setFormData((prev) => ({
-      ...prev,
-      permissions: checked ? [...prev.permissions, permissionId] : prev.permissions.filter((p) => p !== permissionId),
-    }))
-  }
+  if (!user) return null
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="username">用户名</Label>
-        <Input
-          id="username"
-          value={formData.username}
-          onChange={(e) => setFormData((prev) => ({ ...prev, username: e.target.value }))}
-          required
-        />
-      </div>
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>编辑用户</DialogTitle>
+          <DialogDescription>{user.email}</DialogDescription>
+        </DialogHeader>
 
-      <div className="space-y-2">
-        <Label htmlFor="email">邮箱</Label>
-        <Input
-          id="email"
-          type="email"
-          value={formData.email}
-          onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
-          required
-        />
-      </div>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>角色</Label>
+            <Select value={role} onValueChange={setRole}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="USER">普通用户</SelectItem>
+                <SelectItem value="ADMIN">管理员</SelectItem>
+                <SelectItem value="GUEST">访客</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="role">角色</Label>
-        <Select value={formData.role} onValueChange={(value) => setFormData((prev) => ({ ...prev, role: value }))}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="user">普通用户</SelectItem>
-            <SelectItem value="premium">高级用户</SelectItem>
-            <SelectItem value="admin">管理员</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+          <div className="space-y-2">
+            <Label>状态</Label>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ACTIVE">活跃</SelectItem>
+                <SelectItem value="SUSPENDED">停用</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-      <div className="space-y-2">
-        <Label>权限</Label>
-        <div className="space-y-2">
-          {allPermissions.map((permission) => (
-            <div key={permission.id} className="flex items-center space-x-2">
-              <Checkbox
-                id={permission.id}
-                checked={formData.permissions.includes(permission.id)}
-                onCheckedChange={(checked) => handlePermissionChange(permission.id, checked as boolean)}
-              />
-              <Label htmlFor={permission.id}>{permission.label}</Label>
-            </div>
-          ))}
+          <div className="space-y-2">
+            <Label>月度Token配额</Label>
+            <Input
+              type="number"
+              value={quota}
+              onChange={(e) => setQuota(e.target.value)}
+              placeholder="100000"
+            />
+          </div>
         </div>
-      </div>
 
-      <div className="flex justify-end gap-2">
-        <Button type="submit" disabled={loading}>
-          {loading ? "创建中..." : "创建用户"}
-        </Button>
-      </div>
-    </form>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={isLoading}>
+            取消
+          </Button>
+          <Button
+            onClick={() =>
+              onSave(user.id, {
+                role: role as any,
+                status: status as any,
+                monthlyTokenLimit: parseInt(quota),
+              })
+            }
+            disabled={isLoading}
+          >
+            保存
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// 删除确认对话框
+function DeleteDialog({
+  user,
+  open,
+  onClose,
+  onConfirm,
+  isLoading,
+}: {
+  user: AdminUser | null
+  open: boolean
+  onClose: () => void
+  onConfirm: () => void
+  isLoading: boolean
+}) {
+  if (!user) return null
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>确认删除用户？</DialogTitle>
+          <DialogDescription>
+            确定要删除用户 <strong>{user.email}</strong> 吗？
+            <br />
+            此操作将删除该用户的所有对话和消息，且无法恢复。
+          </DialogDescription>
+        </DialogHeader>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={isLoading}>
+            取消
+          </Button>
+          <Button variant="destructive" onClick={onConfirm} disabled={isLoading}>
+            确认删除
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

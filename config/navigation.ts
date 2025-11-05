@@ -8,6 +8,5 @@ export const DEFAULT_NAV_ITEMS: NavItem[] = [
   { name: "创作工作台", href: "/workspace" },
   { name: "商家中心", href: "/merchants" },
   { name: "设置", href: "/settings" },
-  { name: "ZenMux测试", href: "/zenmux-test" },
 ]
 

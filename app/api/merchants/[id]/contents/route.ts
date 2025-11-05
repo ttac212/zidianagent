@@ -4,16 +4,15 @@
  */
 
 import { NextRequest } from 'next/server'
-import { getToken } from 'next-auth/jwt'
 import { prisma } from '@/lib/prisma'
 import type { ContentFilters, ContentListResponse } from '@/types/merchant'
 import { createErrorResponse, generateRequestId } from '@/lib/api/error-handler'
 import {
   success,
   validationError,
-  notFound,
-  unauthorized
+  notFound
 } from '@/lib/api/http-response'
+import { withMerchantAuth } from '@/lib/api/merchant-auth'
 
 
 // GET /api/merchants/[id]/contents - 获取商家内容列表
@@ -21,11 +20,10 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const token = await getToken({ req: request as any })
-  if (!token?.sub) return unauthorized('未认证')
-  try {
-    const { id } = await params
-    const { searchParams } = new URL(request.url)
+  return withMerchantAuth(request, params, async (_userId, req, params) => {
+    try {
+      const { id } = await params
+      const { searchParams } = new URL(req.url)
     
     if (!id) {
       return validationError('商家ID不能为空')
@@ -159,11 +157,12 @@ export async function GET(
       hasMore: total > skip + take,
     }
 
-    return success(response)
-    
-  } catch (error) {
-    return createErrorResponse(error as Error, generateRequestId())
-  }
+      return success(response)
+
+    } catch (error) {
+      return createErrorResponse(error as Error, generateRequestId())
+    }
+  })
 }
 
 export const dynamic = 'force-dynamic'

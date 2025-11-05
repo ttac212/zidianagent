@@ -63,9 +63,10 @@ export async function ensureMerchantMembership(
     return false
   }
 
+  const now = new Date()
   await prisma.$executeRaw`
     INSERT INTO merchant_members ("id","merchantId","userId","role","createdAt","updatedAt")
-    VALUES (${randomUUID()}, ${merchantId}, ${userId}, ${role}, datetime('now'), datetime('now'))
+    VALUES (${randomUUID()}, ${merchantId}, ${userId}, ${role}, ${now}, ${now})
   `
 
   return true

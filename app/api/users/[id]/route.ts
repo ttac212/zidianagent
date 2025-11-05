@@ -1,135 +1,38 @@
 import { NextRequest } from "next/server"
 import { prisma } from '@/lib/prisma'
 import { getToken } from 'next-auth/jwt'
-import { createErrorResponse, generateRequestId, requireAuth } from '@/lib/api/error-handler'
-import * as dt from '@/lib/utils/date-toolkit'
+import { createErrorResponse, generateRequestId } from '@/lib/api/error-handler'
 import {
   success,
-  error,
   notFound,
-  serverError
 } from '@/lib/api/http-response'
 
 
-// 获取单个用户详情（受保护 - 需要ADMIN权限）
+// 获取单个用户基本信息（本人可读）
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const token = await getToken({ req: request as any })
-    
-    // 使用统一认证检查，需要ADMIN权限
-    const authError = requireAuth(token, 'ADMIN')
-    if (authError) return createErrorResponse(authError)
+
+    if (!token?.sub) {
+      return createErrorResponse(new Error('未认证'), generateRequestId())
+    }
 
     const { id } = await params
-    
+
+    // 只允许查看自己的信息（管理员请使用 /api/admin/users/[id]）
+    if (String(token.sub) !== id) {
+      return createErrorResponse(
+        new Error('无权访问其他用户信息'),
+        generateRequestId()
+      )
+    }
+
+    // 只返回配额相关的基本字段
     const user = await prisma.user.findUnique({
       where: { id },
-      include: {
-        conversations: {
-          select: {
-            id: true,
-            title: true,
-            messageCount: true,
-            totalTokens: true,
-            createdAt: true,
-            updatedAt: true,
-            lastMessageAt: true,
-          },
-          orderBy: { lastMessageAt: 'desc' },
-          take: 5, // 最近5个对话（按最后消息时间排序，利用现有索引）
-        },
-        usageStats: {
-          select: {
-            date: true,
-            promptTokens: true,
-            completionTokens: true,
-            apiCalls: true,
-            modelId: true,          // 新增
-            modelProvider: true,    // 新增
-          },
-          orderBy: { date: 'desc' },
-          take: 90, // 增加数量，因为有模型分组
-        },
-        _count: {
-          select: {
-            conversations: true,
-            messages: true,
-          }
-        }
-      }
-    })
-    
-    if (!user) {
-      return notFound('用户不存在')
-    }
-    
-    return success(user)
-  } catch (error) {
-    return createErrorResponse(error as Error, generateRequestId())
-  }
-}
-
-// 更新用户（需要ADMIN权限）
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const token = await getToken({ req: request as any })
-    
-    // 使用统一认证检查，需要ADMIN权限
-    const authError = requireAuth(token, 'ADMIN')
-    if (authError) return createErrorResponse(authError)
-    
-    const { id } = await params
-    const body = await request.json()
-    const { 
-      username, 
-      displayName, 
-      role, 
-      status, 
-      monthlyTokenLimit, 
-      currentMonthUsage 
-    } = body
-    
-    // 检查用户是否存在
-    const existingUser = await prisma.user.findUnique({
-      where: { id }
-    })
-    
-    if (!existingUser) {
-      return notFound('用户不存在')
-    }
-    
-    // 检查用户名冲突
-    if (username && username !== existingUser.username) {
-      const usernameExists = await prisma.user.findFirst({
-        where: {
-          username,
-          id: { not: id }
-        }
-      })
-      
-      if (usernameExists) {
-        return error('用户名已存在', { status: 409 })
-      }
-    }
-    
-    // 更新用户
-    const updatedUser = await prisma.user.update({
-      where: { id },
-      data: {
-        username,
-        displayName,
-        role,
-        status,
-        monthlyTokenLimit,
-        currentMonthUsage,
-        updatedAt: dt.now(),
-      },
       select: {
         id: true,
         email: true,
@@ -141,52 +44,18 @@ export async function PATCH(
         currentMonthUsage: true,
         totalTokenUsed: true,
         createdAt: true,
-        updatedAt: true,
+        lastActiveAt: true,
       }
     })
-    
-    return success(updatedUser)
+
+    if (!user) {
+      return notFound('用户不存在')
+    }
+
+    return success(user)
   } catch (error) {
-    void error
-    return serverError('更新用户失败')
+    return createErrorResponse(error as Error, generateRequestId())
   }
 }
 
-// 删除用户（需要ADMIN权限）
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const token = await getToken({ req: request as any })
-    
-    // 使用统一认证检查，需要ADMIN权限
-    const authError = requireAuth(token, 'ADMIN')
-    if (authError) return createErrorResponse(authError)
-    
-    const { id } = await params
-    
-    // 检查用户是否存在
-    const existingUser = await prisma.user.findUnique({
-      where: { id }
-    })
-    
-    if (!existingUser) {
-      return notFound('用户不存在')
-    }
-    
-    // 软删除：更新状态为 DELETED
-    const _deletedUser = await prisma.user.update({
-      where: { id },
-      data: {
-        status: 'DELETED',
-        updatedAt: dt.now(),
-      }
-    })
-    
-    return success({ message: '用户删除成功' })
-  } catch (error) {
-    void error
-    return serverError('删除用户失败')
-  }
-}
+// PATCH 和 DELETE 请使用 /api/admin/users/[id]

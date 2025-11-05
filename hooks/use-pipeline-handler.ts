@@ -639,67 +639,37 @@ export function usePipelineHandler(options: UsePipelineHandlerOptions = {}) {
 
     // 处理结果消息的流式和状态同步
     if (event.stage === 'partial') {
-      if (event.source === 'douyin-video') {
-        const payload = event.payload as DouyinPartialEventPayload
-        if (payload.key === 'markdown') {
-          const chunk = typeof payload.data === 'string' ? payload.data : `${payload.data ?? ''}`
-          if (chunk) {
-            if (!initializedResultMessagesRef.current.has(resultMessageId)) {
-              initializedResultMessagesRef.current.add(resultMessageId)
-              emitEvent?.({
-                type: 'pipeline:update',
-                requestId: context.requestId,
-                pendingAssistantId: context.pendingAssistantId,
-                targetMessageId: resultMessageId,
-                pipelineStateId,
-                source: event.source,
-                stage: event.stage,
-                status: 'streaming',
-                linkedMessageId: context.pendingAssistantId
-              })
-            }
+      // 统一处理两种 pipeline 的 partial 事件
+      const payload = event.payload as DouyinPartialEventPayload | DouyinCommentsPartialEventPayload
+      const expectedKey = event.source === 'douyin-video' ? 'markdown' : 'analysis'
 
+      if (payload.key === expectedKey) {
+        const chunk = typeof payload.data === 'string' ? payload.data : `${payload.data ?? ''}`
+        if (chunk) {
+          if (!initializedResultMessagesRef.current.has(resultMessageId)) {
+            initializedResultMessagesRef.current.add(resultMessageId)
             emitEvent?.({
-              type: 'pipeline:result-stream',
+              type: 'pipeline:update',
               requestId: context.requestId,
               pendingAssistantId: context.pendingAssistantId,
               targetMessageId: resultMessageId,
               pipelineStateId,
-              chunk,
-              append: payload.append !== false
+              source: event.source,
+              stage: event.stage,
+              status: 'streaming',
+              linkedMessageId: context.pendingAssistantId
             })
           }
-        }
-      } else {
-        const payload = event.payload as DouyinCommentsPartialEventPayload
-        if (payload.key === 'analysis') {
-          const chunk = typeof payload.data === 'string' ? payload.data : `${payload.data ?? ''}`
-          if (chunk) {
-            if (!initializedResultMessagesRef.current.has(resultMessageId)) {
-              initializedResultMessagesRef.current.add(resultMessageId)
-              emitEvent?.({
-                type: 'pipeline:update',
-                requestId: context.requestId,
-                pendingAssistantId: context.pendingAssistantId,
-                targetMessageId: resultMessageId,
-                pipelineStateId,
-                source: event.source,
-                stage: event.stage,
-                status: 'streaming',
-                linkedMessageId: context.pendingAssistantId
-              })
-            }
 
-            emitEvent?.({
-              type: 'pipeline:result-stream',
-              requestId: context.requestId,
-              pendingAssistantId: context.pendingAssistantId,
-              targetMessageId: resultMessageId,
-              pipelineStateId,
-              chunk,
-              append: payload.append !== false
-            })
-          }
+          emitEvent?.({
+            type: 'pipeline:result-stream',
+            requestId: context.requestId,
+            pendingAssistantId: context.pendingAssistantId,
+            targetMessageId: resultMessageId,
+            pipelineStateId,
+            chunk,
+            append: payload.append !== false
+          })
         }
       }
     }

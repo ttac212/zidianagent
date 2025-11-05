@@ -48,6 +48,9 @@ export class QuotaManager {
     }
 
     try {
+      // 自动检查并重置月度配额（如果需要）
+      await this.checkAndResetMonthlyUsage(userId)
+
       // 检测测试环境 - 使用环境变量或process.env.NODE_ENV
       const isTestEnv = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true'
 
@@ -186,29 +189,46 @@ export class QuotaManager {
           }
         })
 
-        // 原子性调整用户使用量（统一使用条件更新逻辑）
+        // 原子性调整用户使用量（分开处理增加和减少）
         if (adjustment !== 0) {
-          // 使用统一的条件更新逻辑，确保测试和生产表现一致
-          const result = await tx.$executeRaw`
-            UPDATE users
-            SET currentMonthUsage = currentMonthUsage + ${adjustment}
-            WHERE id = ${userId}
-            AND currentMonthUsage + ${adjustment} <= monthlyTokenLimit
-          `
+          let result: number
 
-          if (result === 0) {
-            // 获取当前用户状态来构造详细错误
-            const user = await tx.user.findUnique({
-              where: { id: userId },
-              select: { currentMonthUsage: true, monthlyTokenLimit: true }
-            })
+          if (adjustment > 0) {
+            // 增加使用量：需要检查是否超限
+            result = await tx.$executeRaw`
+              UPDATE users
+              SET currentMonthUsage = currentMonthUsage + ${adjustment}
+              WHERE id = ${userId}
+              AND currentMonthUsage + ${adjustment} <= monthlyTokenLimit
+            `
 
-            throw new QuotaExceededError(
-              `配额调整失败：实际使用(${totalActual})超出限额约束`,
-              user?.currentMonthUsage || 0,
-              user?.monthlyTokenLimit || QuotaManager.DEFAULT_LIMIT,
-              Math.abs(adjustment)
-            )
+            if (result === 0) {
+              // 获取当前用户状态来构造详细错误
+              const user = await tx.user.findUnique({
+                where: { id: userId },
+                select: { currentMonthUsage: true, monthlyTokenLimit: true }
+              })
+
+              throw new QuotaExceededError(
+                `配额调整失败：实际使用(${totalActual})超出限额约束`,
+                user?.currentMonthUsage || 0,
+                user?.monthlyTokenLimit || QuotaManager.DEFAULT_LIMIT,
+                Math.abs(adjustment)
+              )
+            }
+          } else {
+            // 减少使用量（返还配额）：无需检查限制，但确保不会变成负数
+            const absAdjustment = Math.abs(adjustment)
+            result = await tx.$executeRaw`
+              UPDATE users
+              SET currentMonthUsage = currentMonthUsage - ${absAdjustment}
+              WHERE id = ${userId}
+              AND currentMonthUsage >= ${absAdjustment}
+            `
+
+            if (result === 0) {
+              console.error(`[QuotaManager] Failed to return quota: userId=${userId}, returnAmount=${absAdjustment}`)
+            }
           }
         }
 
@@ -287,6 +307,57 @@ export class QuotaManager {
   }
 
   /**
+   * 检查并自动重置月度配额（每月1号自动调用）
+   * @param userId 用户ID
+   * @returns 是否执行了重置
+   */
+  static async checkAndResetMonthlyUsage(userId: string): Promise<boolean> {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { lastResetAt: true }
+      })
+
+      if (!user) {
+        console.error(`[QuotaManager] User not found: ${userId}`)
+        return false
+      }
+
+      const now = new Date()
+      const currentMonth = now.getMonth()
+      const currentYear = now.getFullYear()
+
+      // 检查是否需要重置
+      let needsReset = false
+
+      if (!user.lastResetAt) {
+        // 从未重置过，需要重置
+        needsReset = true
+      } else {
+        const lastReset = new Date(user.lastResetAt)
+        const lastResetMonth = lastReset.getMonth()
+        const lastResetYear = lastReset.getFullYear()
+
+        // 如果年份不同，或者同年但月份不同，需要重置
+        if (lastResetYear !== currentYear || lastResetMonth !== currentMonth) {
+          needsReset = true
+        }
+      }
+
+      if (needsReset) {
+        await this.resetMonthlyUsage(userId)
+        console.info(`[QuotaManager] Monthly quota reset for user: ${userId}`)
+        return true
+      }
+
+      return false
+    } catch (error) {
+      console.error('[QuotaManager] Check and reset monthly usage failed:', error)
+      return false
+    }
+  }
+
+  /**
    * 重置月度使用量（月初调用）
    * @param userId 用户ID
    */
@@ -295,11 +366,32 @@ export class QuotaManager {
       await prisma.user.update({
         where: { id: userId },
         data: {
-          currentMonthUsage: 0
+          currentMonthUsage: 0,
+          lastResetAt: dt.now()
         }
       })
     } catch (error) {
       console.error('[QuotaManager] Reset monthly usage failed:', error)
+    }
+  }
+
+  /**
+   * 批量重置所有用户的月度配额（Cron job调用）
+   * @returns 重置的用户数量
+   */
+  static async resetAllUsersMonthlyUsage(): Promise<number> {
+    try {
+      const result = await prisma.$executeRaw`
+        UPDATE users
+        SET currentMonthUsage = 0,
+            lastResetAt = ${dt.now()}
+        WHERE currentMonthUsage > 0
+      `
+      console.info(`[QuotaManager] Batch reset completed: ${result} users`)
+      return result as number
+    } catch (error) {
+      console.error('[QuotaManager] Batch reset monthly usage failed:', error)
+      return 0
     }
   }
 
