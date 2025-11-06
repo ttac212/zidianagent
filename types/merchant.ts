@@ -47,8 +47,8 @@ export type MerchantListItem = {
   totalCommentCount: number
   totalCollectCount: number
   totalShareCount: number
-  lastCollectedAt?: Date | null
-  createdAt: Date
+  lastCollectedAt?: Date | string | null  // JSON API返回字符串
+  createdAt: Date | string  // JSON API返回字符串
   category?: {
     id: string
     name: string

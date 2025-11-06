@@ -58,6 +58,7 @@ import {
   CONTENT_TYPE_LABELS
 } from '@/types/merchant'
 import { TagAnalysisModal } from '@/components/merchants/tag-analysis-modal'
+import { MonitoringConfig } from '@/components/merchants/monitoring-config'
 import { unwrapApiResponse } from '@/lib/api/http-response'
 import * as dt from '@/lib/utils/date-toolkit'
 
@@ -362,11 +363,11 @@ export default function MerchantDetailPage() {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">创建时间</label>
-                  <div className="font-medium">{new Date(merchant.createdAt).toLocaleString()}</div>
+                  <div className="font-medium">{dt.parse(merchant.createdAt)?.toLocaleString() ?? '未知'}</div>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">更新时间</label>
-                  <div className="font-medium">{new Date(merchant.updatedAt).toLocaleString()}</div>
+                  <div className="font-medium">{dt.parse(merchant.updatedAt)?.toLocaleString() ?? '未知'}</div>
                 </div>
               </div>
 
@@ -471,7 +472,7 @@ export default function MerchantDetailPage() {
                           <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                             <span className="flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
-                              {content.publishedAt ? new Date(content.publishedAt).toLocaleDateString() : '未知'}
+                              {dt.parse(content.publishedAt)?.toLocaleDateString() ?? '未知'}
                             </span>
                             <span className="flex items-center gap-1">
                               <Eye className="h-3 w-3" />
@@ -557,6 +558,17 @@ export default function MerchantDetailPage() {
 
         {/* 侧边栏 */}
         <div className="space-y-6">
+          {/* 自动同步配置 */}
+          {session?.user?.role === 'ADMIN' && (
+            <MonitoringConfig
+              merchantId={merchant.id}
+              initialEnabled={merchant.monitoringEnabled || false}
+              initialInterval={merchant.syncIntervalSeconds || 21600}
+              lastCollectedAt={merchant.lastCollectedAt}
+              nextSyncAt={merchant.nextSyncAt}
+            />
+          )}
+
           {/* 统计数据 */}
           <Card>
             <CardHeader>
@@ -606,10 +618,7 @@ export default function MerchantDetailPage() {
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">最后采集</span>
                   <span className="text-sm">
-                    {merchant.lastCollectedAt 
-                      ? new Date(merchant.lastCollectedAt).toLocaleDateString() 
-                      : '未知'
-                    }
+                    {dt.parse(merchant.lastCollectedAt)?.toLocaleDateString() ?? '未知'}
                   </span>
                 </div>
               </div>

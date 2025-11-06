@@ -13,6 +13,7 @@ import type {
   ProfileCreativeGuide
 } from '@/types/merchant'
 import { Lightbulb, TrendingUp, Target, Hash, Clock } from 'lucide-react'
+import * as dt from '@/lib/utils/date-toolkit'
 
 interface ProfileAISectionProps {
   brief: ProfileBrief | null
@@ -267,7 +268,7 @@ export function ProfileAISection({
       {/* AI元数据 */}
       {aiGeneratedAt && (
         <div className="text-xs text-muted-foreground">
-          生成于: {new Date(aiGeneratedAt).toLocaleString('zh-CN')}
+          生成于: {dt.parse(aiGeneratedAt)?.toLocaleString('zh-CN') ?? '未知'}
           {aiModelUsed && ` | 模型: ${aiModelUsed}`}
           {aiTokenUsed && ` | Token: ${aiTokenUsed}`}
         </div>

@@ -23,6 +23,11 @@ function convertBigIntsToStrings<T>(obj: T): T {
     return String(obj) as unknown as T
   }
 
+  // Date 对象直接返回，不要转换
+  if (obj instanceof Date) {
+    return obj
+  }
+
   if (Array.isArray(obj)) {
     return obj.map(item => convertBigIntsToStrings(item)) as unknown as T
   }
