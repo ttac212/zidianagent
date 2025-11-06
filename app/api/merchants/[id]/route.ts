@@ -9,7 +9,8 @@ import type { MerchantDetailResponse } from '@/types/merchant'
 import { createErrorResponse, generateRequestId } from '@/lib/api/error-handler'
 import {
   validationError,
-  notFound
+  notFound,
+  success
 } from '@/lib/api/http-response'
 import { withMerchantAuth, withMerchantAdminAuth } from '@/lib/api/merchant-auth'
 
@@ -73,7 +74,7 @@ export async function GET(
         }
       }
 
-      return NextResponse.json(response)
+      return success(response)
 
     } catch (error) {
       return createErrorResponse(error as Error, generateRequestId())

@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -13,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import { EditMerchantDialog } from '@/components/merchants/edit-merchant-dialog'
+import { MerchantProfileCard } from '@/components/merchants/merchant-profile-card'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -62,6 +64,7 @@ import * as dt from '@/lib/utils/date-toolkit'
 export default function MerchantDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const { data: session } = useSession()
   const merchantId = Array.isArray(params.id) ? params.id[0] : params.id
   const [merchant, setMerchant] = useState<MerchantWithDetails | null>(null)
   const [contents, setContents] = useState<MerchantContent[]>([])
@@ -288,6 +291,14 @@ export default function MerchantDetailPage() {
           </p>
         </div>
       </div>
+
+      {/* 商家创作档案 */}
+      <MerchantProfileCard
+        merchantId={merchant.id}
+        merchantName={merchant.name}
+        totalContentCount={merchant.totalContentCount}
+        isAdmin={session?.user?.role === 'ADMIN'}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* 主要内容区域 */}

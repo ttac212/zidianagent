@@ -17,8 +17,7 @@ async function checkMerchantData() {
         category: true,
         _count: {
           select: {
-            contents: true,
-            members: true
+            contents: true
           }
         }
       },
@@ -35,7 +34,6 @@ async function checkMerchantData() {
       console.log(`  业务类型: ${merchant.businessType}`)
       console.log(`  状态: ${merchant.status}`)
       console.log(`  内容数量: ${merchant._count.contents}`)
-      console.log(`  成员数量: ${merchant._count.members}`)
       console.log(`  总点赞数: ${merchant.totalDiggCount}`)
       console.log(`  总评论数: ${merchant.totalCommentCount}`)
       console.log(`  总收藏数: ${merchant.totalCollectCount}`)
@@ -68,27 +66,28 @@ async function checkMerchantData() {
       }
     }
 
-    // 4. 检查成员关系
-    console.log('\n👥 检查成员关系...')
-    const memberCount = await prisma.merchantMember.count()
-    console.log(`  总成员记录: ${memberCount}`)
+    // 4. 检查商家档案数据
+    console.log('\n📋 检查商家档案数据...')
+    const profileCount = await prisma.merchantProfile.count()
+    console.log(`  总档案记录: ${profileCount}`)
 
-    // 5. 检查每个商家的成员数
-    const merchantsWithMembers = await prisma.merchant.findMany({
+    // 5. 检查有档案的商家
+    const merchantsWithProfiles = await prisma.merchant.findMany({
       select: {
         id: true,
         name: true,
+        totalContentCount: true,
         _count: {
-          select: { members: true }
+          select: { contents: true }
         }
       },
       take: 10,
       orderBy: { name: 'asc' }
     })
 
-    console.log('\n  商家成员统计（前10个）:')
-    for (const merchant of merchantsWithMembers) {
-      console.log(`    ${merchant.name}: ${merchant._count.members} 个成员`)
+    console.log('\n  商家内容统计（前10个）:')
+    for (const merchant of merchantsWithProfiles) {
+      console.log(`    ${merchant.name}: ${merchant._count.contents} 个内容 | 总计: ${merchant.totalContentCount}`)
     }
 
     // 6. 统计分析

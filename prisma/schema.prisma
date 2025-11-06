@@ -68,6 +68,7 @@ model User {
   messages          Message[]
   sessions          Session[]
   usageStats        UsageStats[]
+  merchantMembers   MerchantMember[]
 
   // 优化索引
   @@index([status])
@@ -182,6 +183,10 @@ model Merchant {
   totalShareCount   Int               @default(0)
   totalEngagement   Int               @default(0)
   totalContentCount Int               @default(0)
+  // 新增字段
+  followerCount     Int               @default(0)       // 粉丝数
+  totalPlayCount    BigInt            @default(0)       // 总播放量
+  avgEngagementRate Float?                              // 平均互动率
   dataSource        String            @default("douyin")
   lastCollectedAt   DateTime?
   status            MerchantStatus    @default(ACTIVE)
@@ -190,6 +195,8 @@ model Merchant {
   updatedAt         DateTime          @updatedAt
   contents          MerchantContent[]
   category          MerchantCategory? @relation(fields: [categoryId], references: [id])
+  profile           MerchantProfile?
+  members           MerchantMember[]
 
   @@index([categoryId])
   @@index([location])
@@ -199,35 +206,69 @@ model Merchant {
 }
 
 model MerchantContent {
-  id                String      @id @default(cuid())
+  id                String                   @id @default(cuid())
   merchantId        String
   externalId        String
   title             String
   content           String?
   transcript        String?
-  contentType       ContentType @default(VIDEO)
+  contentType       ContentType              @default(VIDEO)
   duration          String?
   shareUrl          String?
-  hasTranscript     Boolean     @default(false)
-  diggCount         Int         @default(0)
-  commentCount      Int         @default(0)
-  collectCount      Int         @default(0)
-  shareCount        Int         @default(0)
-  tags              String      @default("[]")
-  textExtra         String      @default("[]")
+  hasTranscript     Boolean                  @default(false)
+  diggCount         Int                      @default(0)
+  commentCount      Int                      @default(0)
+  collectCount      Int                      @default(0)
+  shareCount        Int                      @default(0)
+  // 新增字段
+  playCount         Int                      @default(0)       // 播放量 ⭐ 关键指标
+  forwardCount      Int                      @default(0)       // 转发数
+  likeRate          Float?                                     // 点赞率 (diggCount/playCount)
+  commentRate       Float?                                     // 评论率
+  completionRate    Float?                                     // 完播率
+  avgWatchDuration  Int?                                       // 平均观看时长(秒)
+  // 刷量检测
+  isSuspicious      Boolean                  @default(false)   // 疑似刷量
+  suspiciousReason  String?                                    // 标记原因
+  tags              String                   @default("[]")
+  textExtra         String                   @default("[]")
   publishedAt       DateTime?
   collectedAt       DateTime
   externalCreatedAt DateTime?
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-  merchant          Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  merchant          Merchant                 @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  comments          MerchantContentComment[]
 
   @@unique([externalId, merchantId])
   @@index([merchantId, publishedAt])
+  @@index([merchantId, likeRate(sort: Desc)])  // 按真实互动率排序
   @@index([contentType])
   @@index([externalId])
   @@index([collectedAt])
+  @@index([isSuspicious])
   @@map("merchant_contents")
+}
+
+// 商家内容评论表
+model MerchantContentComment {
+  id          String          @id @default(cuid())
+  contentId   String          // 关联的内容ID
+  externalId  String          @unique // 抖音评论ID (cid)
+  text        String          // 评论文本
+  authorName  String?         // 评论者昵称
+  authorUid   String?         // 评论者UID
+  diggCount   Int             @default(0) // 评论点赞数
+  replyCount  Int             @default(0) // 回复数
+  isTop       Boolean         @default(false) // 是否置顶
+  keywords    String          @default("[]") // 关键词提取 (JSON数组)
+  createdAt   DateTime        // 评论创建时间
+  collectedAt DateTime        @default(now()) // 采集时间
+  content     MerchantContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@index([contentId, diggCount(sort: Desc)]) // 按点赞数排序查询热门评论
+  @@index([contentId, createdAt(sort: Desc)]) // 按时间排序查询最新评论
+  @@map("merchant_content_comments")
 }
 
 enum UserRole {
@@ -269,4 +310,69 @@ enum ContentType {
   IMAGE
   AUDIO
   OTHER
+}
+
+model MerchantProfile {
+  id         String   @id @default(cuid())
+  merchantId String   @unique
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  // === PART 1: 商家Brief(创作简报) ===
+  briefIntro           String? // 商家介绍(3句话:是谁、做什么、有什么特点)
+  briefSellingPoints   String? // 核心卖点(JSON数组:3-5个产品卖点)
+  briefUsageScenarios  String? // 使用场景和痛点(JSON数组)
+  briefAudienceProfile String? // 目标用户画像(年龄、性别、兴趣、消费习惯)
+  briefBrandTone       String? // 品牌调性(正经/搞笑/温情/专业 + 具体描述)
+
+  // === PART 2: 爆款分析 ===
+  topContentAnalysis String? // TOP10爆款分析(JSON: 标题、开头、情绪点、互动数据)
+  goldenThreeSeconds String? // 黄金3秒开头建议(基于历史数据的有效开头模板)
+  emotionalTriggers  String? // 情绪点分析(笑点/痛点/爽点的分布)
+  contentFormats     String? // 内容形式偏好(口播/剧情/对比/教程的占比)
+
+  // === PART 3: 创作指南 ===
+  trendingTopics String? // 热门话题和标签(当前适合的热点)
+  tagStrategy    String? // 标签组合策略(高效标签组合建议)
+  publishingTips String? // 发布策略(最佳时段、内容频率,JSON格式)
+
+  // === 元数据 ===
+  aiGeneratedAt DateTime? // AI生成时间
+  aiModelUsed   String?   // 使用的模型ID
+  aiTokenUsed   Int       @default(0) // 消耗的token数
+
+  // === 用户编辑部分(永久保留) ===
+  customBackground     String? // 商家背景故事(老板、创业历程等)
+  customOfflineInfo    String? // 线下信息(实体店、地理优势等)
+  customProductDetails String? // 产品详细信息(AI不知道的细节)
+  customDosAndDonts    String? // 禁忌清单和必强调点(禁忌词、必须提及的点)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([merchantId])
+  @@map("merchant_profiles")
+}
+
+// 商家成员表 - 用于商家权限管理
+model MerchantMember {
+  id         String             @id @default(cuid())
+  merchantId String
+  userId     String
+  role       MerchantMemberRole @default(EDITOR)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  merchant   Merchant           @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, userId])
+  @@index([userId])
+  @@index([merchantId])
+  @@map("merchant_members")
+}
+
+enum MerchantMemberRole {
+  OWNER  // 拥有者（完全控制权）
+  ADMIN  // 管理员（可管理成员）
+  EDITOR // 编辑者（可编辑内容）
+  VIEWER // 查看者（只读权限）
 }

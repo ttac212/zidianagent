@@ -11,6 +11,36 @@ import { NextResponse } from 'next/server'
 import * as dt from '@/lib/utils/date-toolkit'
 
 /**
+ * 深度转换对象中的 BigInt 为 String
+ * 解决 JSON.stringify() 不支持 BigInt 的问题
+ */
+function convertBigIntsToStrings<T>(obj: T): T {
+  if (obj === null || obj === undefined) {
+    return obj
+  }
+
+  if (typeof obj === 'bigint') {
+    return String(obj) as unknown as T
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(item => convertBigIntsToStrings(item)) as unknown as T
+  }
+
+  if (typeof obj === 'object') {
+    const converted: any = {}
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        converted[key] = convertBigIntsToStrings(obj[key])
+      }
+    }
+    return converted as T
+  }
+
+  return obj
+}
+
+/**
  * 标准化的 API 响应结构
  */
 export interface ApiResponse<T = any> {
@@ -64,7 +94,7 @@ export class HttpResponse {
   ): NextResponse<ApiResponse<T>> {
     const response: ApiResponse<T> = {
       success: true,
-      data,
+      data: convertBigIntsToStrings(data),
       timestamp: dt.toISO()
     }
 
@@ -85,7 +115,7 @@ export class HttpResponse {
     const response: ApiResponse<T> = {
       success: true,
       message,
-      ...(typeof data === 'undefined' ? {} : { data }),
+      ...(typeof data === 'undefined' ? {} : { data: convertBigIntsToStrings(data) }),
       timestamp: dt.toISO()
     }
 
@@ -125,7 +155,7 @@ export class HttpResponse {
   ): NextResponse<PaginatedResponse<T>> {
     const response: PaginatedResponse<T> = {
       success: true,
-      data: items,
+      data: convertBigIntsToStrings(items),
       meta,
       timestamp: dt.toISO()
     }
