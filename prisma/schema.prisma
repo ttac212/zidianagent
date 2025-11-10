@@ -189,6 +189,10 @@ model Merchant {
   avgEngagementRate Float?                              // 平均互动率
   dataSource        String            @default("douyin")
   lastCollectedAt   DateTime?
+  // 自动监控配置
+  monitoringEnabled   Boolean         @default(false)   // 是否启用自动同步
+  syncIntervalSeconds Int             @default(21600)   // 同步间隔（秒），默认6小时
+  nextSyncAt          DateTime?                         // 下次同步时间
   status            MerchantStatus    @default(ACTIVE)
   isVerified        Boolean           @default(false)
   createdAt         DateTime          @default(now())
@@ -197,11 +201,14 @@ model Merchant {
   category          MerchantCategory? @relation(fields: [categoryId], references: [id])
   profile           MerchantProfile?
   members           MerchantMember[]
+  benchmarks        MerchantBenchmark[] @relation("MerchantBenchmarks")
+  benchmarkedBy     MerchantBenchmark[] @relation("BenchmarkFor")
 
   @@index([categoryId])
   @@index([location])
   @@index([status])
   @@index([uid])
+  @@index([monitoringEnabled, nextSyncAt])  // Cron任务查询优化
   @@map("merchants")
 }
 
@@ -375,4 +382,22 @@ enum MerchantMemberRole {
   ADMIN  // 管理员（可管理成员）
   EDITOR // 编辑者（可编辑内容）
   VIEWER // 查看者（只读权限）
+}
+
+// 商家对标账号关联表 - 多对多关系
+model MerchantBenchmark {
+  id          String   @id @default(cuid())
+  merchantId  String   // 签约商家ID
+  benchmarkId String   // 对标账号ID（也是Merchant）
+  notes       String?  // 对标备注
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  merchant  Merchant @relation("MerchantBenchmarks", fields: [merchantId], references: [id], onDelete: Cascade)
+  benchmark Merchant @relation("BenchmarkFor", fields: [benchmarkId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, benchmarkId])
+  @@index([merchantId])
+  @@index([benchmarkId])
+  @@map("merchant_benchmarks")
 }

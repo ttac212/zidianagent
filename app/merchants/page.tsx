@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { Header } from '@/components/header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,9 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Checkbox } from '@/components/ui/checkbox'
 import { AddMerchantDialog } from '@/components/merchants/add-merchant-dialog'
-import { BatchSyncDialog } from '@/components/merchants/batch-sync-dialog'
 import {
   Filter,
   Building2,
@@ -55,9 +53,6 @@ export default function MerchantsPage() {
     limit: 20
   })
 
-  // 多选状态
-  const [selectedMerchants, setSelectedMerchants] = useState<string[]>([])
-
   // 使用 React Query 获取数据
   const { data: merchantsData, isLoading: merchantsLoading, isFetching: merchantsFetching } = useMerchantsQuery(filters)
   const { data: categories = [], isFetching: categoriesFetching } = useMerchantCategoriesQuery()
@@ -68,48 +63,19 @@ export default function MerchantsPage() {
   const merchants = merchantsData?.merchants || []
   const total = merchantsData?.total || 0
   const loading = merchantsLoading
-  const refreshing = merchantsFetching || categoriesFetching || statsFetching
+
+  // 修复 hydration 错误：使用 state + useEffect 延迟更新 fetching 状态
+  const [refreshing, setRefreshing] = useState(false)
+  useEffect(() => {
+    setRefreshing(merchantsFetching || categoriesFetching || statsFetching)
+  }, [merchantsFetching, categoriesFetching, statsFetching])
 
   // 判断用户是否有权限添加商家（仅管理员可添加）
   const canAddMerchant = session?.user?.role === 'ADMIN'
 
-  // 判断用户是否有权限批量同步（仅管理员可同步）
-  const canBatchSync = session?.user?.role === 'ADMIN'
-
   // 强制刷新所有数据
   const handleRefresh = async () => {
     await invalidateAll()
-  }
-
-  // 处理全选/取消全选
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedMerchants(merchants.map((m) => m.id))
-    } else {
-      setSelectedMerchants([])
-    }
-  }
-
-  // 处理单选
-  const handleSelectMerchant = (merchantId: string, checked: boolean) => {
-    if (checked) {
-      setSelectedMerchants([...selectedMerchants, merchantId])
-    } else {
-      setSelectedMerchants(selectedMerchants.filter((id) => id !== merchantId))
-    }
-  }
-
-  // 获取选中的商家对象
-  const getSelectedMerchantObjects = () => {
-    return merchants
-      .filter((m) => selectedMerchants.includes(m.id))
-      .map((m) => ({ id: m.id, name: m.name }))
-  }
-
-  // 批量同步成功后的回调
-  const handleBatchSyncSuccess = async () => {
-    setSelectedMerchants([]) // 清空选择
-    await invalidateAll() // 刷新数据
   }
 
   // 处理搜索
@@ -165,39 +131,6 @@ export default function MerchantsPage() {
         </div>
       </div>
 
-      {/* 批量操作栏 */}
-      {canBatchSync && selectedMerchants.length > 0 && (
-        <Card className="border-blue-200 bg-blue-50/50">
-          <CardContent className="py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Checkbox
-                  checked={selectedMerchants.length === merchants.length}
-                  onCheckedChange={handleSelectAll}
-                />
-                <span className="text-sm font-medium">
-                  已选择 {selectedMerchants.length} 家商家
-                </span>
-                <Button
-                  variant="link"
-                  size="sm"
-                  onClick={() => setSelectedMerchants([])}
-                  className="h-auto p-0 text-blue-600"
-                >
-                  取消选择
-                </Button>
-              </div>
-              <div className="flex items-center gap-2">
-                <BatchSyncDialog
-                  merchants={getSelectedMerchantObjects()}
-                  onSuccess={handleBatchSyncSuccess}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* 统计概览 */}
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -252,22 +185,10 @@ export default function MerchantsPage() {
       {/* 搜索和筛选 */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="h-5 w-5" />
-              搜索筛选
-            </CardTitle>
-            {/* 全选按钮（仅管理员可见） */}
-            {canBatchSync && merchants.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleSelectAll(selectedMerchants.length !== merchants.length)}
-              >
-                {selectedMerchants.length === merchants.length ? '取消全选' : '全选当前页'}
-              </Button>
-            )}
-          </div>
+          <CardTitle className="flex items-center gap-2">
+            <Filter className="h-5 w-5" />
+            搜索筛选
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-4">
@@ -345,49 +266,37 @@ export default function MerchantsPage() {
               <Card key={merchant.id} className="hover:shadow-md transition-shadow">
                 <CardHeader>
                   <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-3 flex-1">
-                      {/* 复选框（仅管理员可见） */}
-                      {canBatchSync && (
-                        <Checkbox
-                          checked={selectedMerchants.includes(merchant.id)}
-                          onCheckedChange={(checked) =>
-                            handleSelectMerchant(merchant.id, checked as boolean)
-                          }
-                          className="mt-1"
-                        />
-                      )}
-                      <div className="space-y-1 flex-1">
-                        <CardTitle className="flex items-center gap-2">
-                          {merchant.name}
-                          {merchant.category && (
-                            <Badge
-                              variant="outline"
-                              style={{
-                                borderColor: merchant.category.color || '#6366f1',
-                                color: merchant.category.color || '#6366f1'
-                              }}
-                            >
-                              {merchant.category.name}
-                            </Badge>
-                          )}
-                        </CardTitle>
-                        <CardDescription className="flex items-center gap-4">
-                          {merchant.location && (
-                            <span className="flex items-center gap-1">
-                              <MapPin className="h-3 w-3" />
-                              {merchant.location}
-                            </span>
-                          )}
+                    <div className="space-y-1 flex-1">
+                      <CardTitle className="flex items-center gap-2">
+                        {merchant.name}
+                        {merchant.category && (
+                          <Badge
+                            variant="outline"
+                            style={{
+                              borderColor: merchant.category.color || '#6366f1',
+                              color: merchant.category.color || '#6366f1'
+                            }}
+                          >
+                            {merchant.category.name}
+                          </Badge>
+                        )}
+                      </CardTitle>
+                      <CardDescription className="flex items-center gap-4">
+                        {merchant.location && (
                           <span className="flex items-center gap-1">
-                            <Building2 className="h-3 w-3" />
-                            {BUSINESS_TYPE_LABELS[merchant.businessType]}
+                            <MapPin className="h-3 w-3" />
+                            {merchant.location}
                           </span>
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {dt.parse(merchant.createdAt)?.toLocaleDateString() ?? '未知'}
-                          </span>
-                        </CardDescription>
-                      </div>
+                        )}
+                        <span className="flex items-center gap-1">
+                          <Building2 className="h-3 w-3" />
+                          {BUSINESS_TYPE_LABELS[merchant.businessType]}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {dt.parse(merchant.createdAt)?.toLocaleDateString() ?? '未知'}
+                        </span>
+                      </CardDescription>
                     </div>
                     <Badge
                       variant={merchant.status === 'ACTIVE' ? 'default' : 'secondary'}

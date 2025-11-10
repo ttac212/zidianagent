@@ -319,7 +319,10 @@ async function optimizeTranscriptWithLLM(
   }
 ): Promise<string | null> {
   try {
-    const apiBase = process.env.LLM_API_BASE || 'https://api.302.ai/v1'
+    // 使用 ZenMux API 进行文案优化
+    const apiBase = process.env.ZENMUX_API_BASE || 'https://zenmux.ai/api/v1'
+    const optimizationModel = process.env.ZENMUX_DEFAULT_MODEL || 'anthropic/claude-sonnet-4.5'
+    const zenmuxApiKey = process.env.ZENMUX_API_KEY || apiKey
 
     // 构建视频上下文信息
     const contextParts = [
@@ -341,10 +344,10 @@ async function optimizeTranscriptWithLLM(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${zenmuxApiKey}`,
       },
       body: JSON.stringify({
-        model: modelId,
+        model: optimizationModel,
         messages: [
           {
             role: 'system',
@@ -362,9 +365,9 @@ async function optimizeTranscriptWithLLM(
 6. **保持原意**：只修正错误，不添加原文没有的内容
 
 **重要原则：**
-- ⚠️ **优先使用视频标题和标签中的词语**：如果转录文本中出现与标题/标签发音相似的词，必须以标题/标签为准
-- ⚠️ **地名、人名必须严格核对**：这类错误最常见，必须仔细比对
-- ⚠️ **专业术语以标签为准**：标签中的写法通常是规范的
+- **优先使用视频标题和标签中的词语**：如果转录文本中出现与标题/标签发音相似的词，必须以标题/标签为准
+- **地名、人名必须严格核对**：这类错误最常见，必须仔细比对
+- **专业术语以标签为准**：标签中的写法通常是规范的
 - 直接输出优化后的文本，不要添加任何说明`,
           },
           {

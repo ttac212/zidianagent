@@ -168,80 +168,113 @@ export class VideoProcessor {
     url: string,
     options?: {
       headers?: HeadersInit;
+      maxRetries?: number;
+      timeoutMs?: number;
     }
   ): Promise<VideoInfo> {
-    try {
-      const headHeaders = new Headers(options?.headers || {});
-      let response = await fetch(url, { method: 'HEAD', headers: headHeaders });
-      let resolvedHeaders = response.headers;
-      let supportsRange =
-        response.headers.get('accept-ranges')?.toLowerCase() === 'bytes';
+    const maxRetries = options?.maxRetries ?? 3;
+    const timeoutMs = options?.timeoutMs ?? 30000; // 30秒超时
+    let lastError: unknown;
 
-      if (!response.ok) {
-        const rangeHeaders = new Headers(options?.headers || {});
-        rangeHeaders.set('Range', 'bytes=0-0');
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const abortController = new AbortController();
+        const timeoutId = setTimeout(() => abortController.abort(), timeoutMs);
 
-        const rangeResponse = await fetch(url, {
-          method: 'GET',
-          headers: rangeHeaders,
-        });
-
-        if (!rangeResponse.ok && rangeResponse.status !== 206) {
-          throw new Error(`无法获取视频信息: ${rangeResponse.status}`);
-        }
-
-        if (rangeResponse.status === 206) {
-          supportsRange = true;
-        }
-
-        resolvedHeaders = rangeResponse.headers;
-        // 消耗body释放连接
         try {
-          await rangeResponse.arrayBuffer();
-        } catch {
-          // 忽略body读取异常
+          const headHeaders = new Headers(options?.headers || {});
+          let response = await fetch(url, {
+            method: 'HEAD',
+            headers: headHeaders,
+            signal: abortController.signal,
+          });
+          let resolvedHeaders = response.headers;
+          let supportsRange =
+            response.headers.get('accept-ranges')?.toLowerCase() === 'bytes';
+
+          if (!response.ok) {
+            const rangeHeaders = new Headers(options?.headers || {});
+            rangeHeaders.set('Range', 'bytes=0-0');
+
+            const rangeResponse = await fetch(url, {
+              method: 'GET',
+              headers: rangeHeaders,
+              signal: abortController.signal,
+            });
+
+            if (!rangeResponse.ok && rangeResponse.status !== 206) {
+              throw new Error(`无法获取视频信息: ${rangeResponse.status}`);
+            }
+
+            if (rangeResponse.status === 206) {
+              supportsRange = true;
+            }
+
+            resolvedHeaders = rangeResponse.headers;
+            // 消耗body释放连接
+            try {
+              await rangeResponse.arrayBuffer();
+            } catch {
+              // 忽略body读取异常
+            }
+          }
+
+          let size = parseInt(resolvedHeaders.get('content-length') || '0', 10);
+
+          const contentRange = resolvedHeaders.get('content-range');
+          if ((!size || size === 0) && contentRange) {
+            const match = contentRange.match(/\/(\d+)$/);
+            if (match) {
+              size = parseInt(match[1], 10);
+            }
+          }
+
+          if (!Number.isFinite(size) || size <= 0) {
+            throw new Error('无法获取视频大小');
+          }
+
+          const contentType = resolvedHeaders.get('content-type') || '';
+
+          // 检查是否支持Range请求
+          const acceptRanges = resolvedHeaders.get('accept-ranges');
+          if (!supportsRange && acceptRanges === 'bytes') {
+            supportsRange = true;
+          }
+
+          if (!supportsRange) {
+            console.warn('服务器不支持Range请求，将使用完整下载');
+          }
+
+          clearTimeout(timeoutId);
+
+          return {
+            url,
+            size,
+            duration: 0, // 需要通过FFmpeg probe获取
+            bitrate: 0,
+            format: contentType.includes('mp4') ? 'mp4' : 'unknown',
+            supportsRange,
+          };
+        } finally {
+          clearTimeout(timeoutId);
         }
-      }
+      } catch (error: any) {
+        lastError = error;
 
-      let size = parseInt(resolvedHeaders.get('content-length') || '0', 10);
-
-      const contentRange = resolvedHeaders.get('content-range');
-      if ((!size || size === 0) && contentRange) {
-        const match = contentRange.match(/\/(\d+)$/);
-        if (match) {
-          size = parseInt(match[1], 10);
+        if (attempt >= maxRetries) {
+          break;
         }
+
+        // 等待后重试（指数退避）
+        const delayMs = Math.min(1000 * Math.pow(2, attempt), 5000);
+        console.warn(`获取视频信息失败 (尝试 ${attempt + 1}/${maxRetries + 1}), ${delayMs}ms后重试:`, error.message);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
       }
-
-      if (!Number.isFinite(size) || size <= 0) {
-        throw new Error('无法获取视频大小');
-      }
-
-      const contentType = resolvedHeaders.get('content-type') || '';
-
-      // 检查是否支持Range请求
-      const acceptRanges = resolvedHeaders.get('accept-ranges');
-      if (!supportsRange && acceptRanges === 'bytes') {
-        supportsRange = true;
-      }
-
-      if (!supportsRange) {
-        console.warn('服务器不支持Range请求，将使用完整下载');
-      }
-
-      return {
-        url,
-        size,
-        duration: 0, // 需要通过FFmpeg probe获取
-        bitrate: 0,
-        format: contentType.includes('mp4') ? 'mp4' : 'unknown',
-        supportsRange,
-      };
-    } catch (error) {
-      throw new Error(
-        `获取视频信息失败: ${error instanceof Error ? error.message : '未知错误'}`
-      );
     }
+
+    throw new Error(
+      `获取视频信息失败，已重试${maxRetries}次: ${lastError instanceof Error ? lastError.message : '未知错误'}`
+    );
   }
 
   /**
@@ -374,6 +407,8 @@ export class VideoProcessor {
         signal,
         onProgress,
         expectedSize: totalSize,
+        maxRetries,
+        timeoutMs: 120000, // 2分钟超时
       });
       return {
         buffer,
@@ -491,22 +526,87 @@ export class VideoProcessor {
       signal?: AbortSignal;
       expectedSize?: number;
       onProgress?: (downloadedBytes: number, totalBytes: number) => void | Promise<void>;
+      maxRetries?: number;
+      timeoutMs?: number;
     },
   ): Promise<Buffer> {
-    const response = await fetch(url, {
-      headers: options.headers,
-      signal: options.signal,
-    });
+    const maxRetries = options.maxRetries ?? 3;
+    const timeoutMs = options.timeoutMs ?? 120000; // 默认2分钟超时
+    let lastError: unknown;
 
-    if (!response.ok) {
-      throw new Error(`下载视频失败: ${response.status}`);
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        // 创建超时控制
+        const abortController = new AbortController();
+        const timeoutId = setTimeout(() => abortController.abort(), timeoutMs);
+
+        // 合并信号
+        const combinedSignal = options.signal
+          ? this.combineAbortSignals([options.signal, abortController.signal])
+          : abortController.signal;
+
+        try {
+          const response = await fetch(url, {
+            headers: options.headers,
+            signal: combinedSignal,
+          });
+
+          if (!response.ok) {
+            throw new Error(`下载视频失败: ${response.status}`);
+          }
+
+          const buffer = Buffer.from(await response.arrayBuffer());
+
+          clearTimeout(timeoutId);
+
+          if (options.onProgress) {
+            await options.onProgress(buffer.length, options.expectedSize ?? buffer.length);
+          }
+
+          return buffer;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      } catch (error: any) {
+        lastError = error;
+
+        // 如果是用户主动取消，直接抛出
+        if (options.signal?.aborted) {
+          throw error;
+        }
+
+        // 如果是最后一次尝试，抛出错误
+        if (attempt >= maxRetries) {
+          break;
+        }
+
+        // 等待后重试（指数退避）
+        const delayMs = Math.min(1000 * Math.pow(2, attempt), 10000);
+        console.warn(`视频下载失败 (尝试 ${attempt + 1}/${maxRetries + 1}), ${delayMs}ms后重试:`, error.message);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
     }
 
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (options.onProgress) {
-      await options.onProgress(buffer.length, options.expectedSize ?? buffer.length);
+    throw new Error(
+      `下载视频失败，已重试${maxRetries}次: ${lastError instanceof Error ? lastError.message : String(lastError)}`
+    );
+  }
+
+  /**
+   * 合并多个 AbortSignal
+   */
+  private static combineAbortSignals(signals: AbortSignal[]): AbortSignal {
+    const controller = new AbortController();
+
+    for (const signal of signals) {
+      if (signal.aborted) {
+        controller.abort();
+        break;
+      }
+      signal.addEventListener('abort', () => controller.abort(), { once: true });
     }
-    return buffer;
+
+    return controller.signal;
   }
 
   private static async fetchChunkWithRetry(

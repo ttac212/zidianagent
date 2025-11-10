@@ -35,7 +35,7 @@ const SYSTEM_PROMPT = `你是抖音短视频文案创作专家。
  */
 export async function generateMerchantProfile(merchantId: string) {
   try {
-    console.log('[ProfileGenerator] 开始生成档案:', merchantId)
+    console.info('[ProfileGenerator] 开始生成档案:', merchantId)
 
     // 1. 获取商家和TOP10内容
     const merchant = await fetchMerchantWithContents(merchantId)
@@ -51,13 +51,13 @@ export async function generateMerchantProfile(merchantId: string) {
     // 2. 构建Prompt
     const userPrompt = buildUserPrompt(merchant)
 
-    console.log('[ProfileGenerator] Prompt长度:', userPrompt.length)
+    console.info('[ProfileGenerator] Prompt长度:', userPrompt.length)
 
     // 3. 调用LLM API
     const aiResponse = await callLLMAPI(userPrompt)
 
-    console.log('[ProfileGenerator] AI响应长度:', aiResponse.content.length)
-    console.log('[ProfileGenerator] Token使用:', aiResponse.usage)
+    console.info('[ProfileGenerator] AI响应长度:', aiResponse.content.length)
+    console.info('[ProfileGenerator] Token使用:', aiResponse.usage)
 
     // 4. 解析响应
     const parsed = parseProfileResponse(aiResponse.content)
@@ -81,7 +81,7 @@ export async function generateMerchantProfile(merchantId: string) {
       }
     })
 
-    console.log('[ProfileGenerator] 档案已保存:', profile.id)
+    console.info('[ProfileGenerator] 档案已保存:', profile.id)
 
     return {
       profile,
@@ -139,9 +139,6 @@ function buildUserPrompt(merchant: any): string {
 
     // 获取前3秒文案
     const opening = c.transcript ? c.transcript.substring(0, 100) : '(无转录)'
-
-    // 计算互动总数
-    const engagement = c.diggCount + c.commentCount + c.collectCount + c.shareCount
 
     return `[第${idx + 1}名]
 - 标题: ${c.title}

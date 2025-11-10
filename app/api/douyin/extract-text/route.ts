@@ -319,6 +319,11 @@ async function optimizeTextWithLLM(
   }
 ): Promise<string | null> {
   try {
+    // 使用 ZenMux API 进行文案优化
+    const apiBase = process.env.ZENMUX_API_BASE || 'https://zenmux.ai/api/v1'
+    const optimizationModel = process.env.ZENMUX_DEFAULT_MODEL || 'anthropic/claude-sonnet-4.5'
+    const zenmuxApiKey = process.env.ZENMUX_API_KEY || apiKey
+
     // 构建视频上下文信息
     const contextParts = [
       `视频标题：${videoInfo.title}`,
@@ -335,14 +340,14 @@ async function optimizeTextWithLLM(
 
     const contextInfo = contextParts.join('\n')
 
-    const response = await fetch('https://api.302.ai/v1/chat/completions', {
+    const response = await fetch(`${apiBase}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${zenmuxApiKey}`,
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5-20250929',
+        model: optimizationModel,
         messages: [
           {
             role: 'system',

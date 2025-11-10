@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
+import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -15,6 +16,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import { EditMerchantDialog } from '@/components/merchants/edit-merchant-dialog'
 import { MerchantProfileCard } from '@/components/merchants/merchant-profile-card'
+import { BenchmarkDialog } from '@/components/merchants/benchmark-dialog'
+import { BatchTranscribeDialog } from '@/components/merchants/batch-transcribe-dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,7 +46,8 @@ import {
   Hash,
   BarChart3,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  RefreshCw
 } from 'lucide-react'
 import type {
   MerchantWithDetails,
@@ -82,6 +86,10 @@ export default function MerchantDetailPage() {
   })
   const [tagAnalysisOpen, setTagAnalysisOpen] = useState(false)
   const [exportLoading, setExportLoading] = useState(false)
+  const [syncingContentId, setSyncingContentId] = useState<string | null>(null)
+  const [selectedContentIds, setSelectedContentIds] = useState<string[]>([])
+  const [selectMode, setSelectMode] = useState(false)
+  const [syncing, setSyncing] = useState(false)
 
   // 获取商家详情
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -213,28 +221,28 @@ export default function MerchantDetailPage() {
   // 导出数据
   const handleExport = async (type: 'content' | 'analytics' | 'tags') => {
     if (!merchant) return
-    
+
     try {
       setExportLoading(true)
       const response = await fetch(`/api/merchants/${merchant.id}/export?type=${type}&format=csv`)
-      
+
       if (response.ok) {
         const blob = await response.blob()
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        
+
         // 从响应头获取文件名
         const contentDisposition = response.headers.get('content-disposition')
         let filename = `${merchant.name}_${type}_${dt.toISO().split('T')[0]}.csv`
-        
+
         if (contentDisposition) {
           const matches = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
           if (matches && matches[1]) {
             filename = decodeURIComponent(matches[1].replace(/['"]/g, ''))
           }
         }
-        
+
         a.download = filename
         document.body.appendChild(a)
         a.click()
@@ -245,6 +253,112 @@ export default function MerchantDetailPage() {
     } catch (_error) {
       } finally {
       setExportLoading(false)
+    }
+  }
+
+  // 批量选择功能
+  const toggleSelectContent = (contentId: string) => {
+    setSelectedContentIds((prev) =>
+      prev.includes(contentId)
+        ? prev.filter((id) => id !== contentId)
+        : [...prev, contentId]
+    )
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedContentIds.length === contents.length) {
+      setSelectedContentIds([])
+    } else {
+      setSelectedContentIds(contents.map((c) => c.id))
+    }
+  }
+
+  const clearSelection = () => {
+    setSelectedContentIds([])
+    setSelectMode(false)
+  }
+
+  // 立即同步商家数据
+  const handleSyncMerchant = async () => {
+    if (!merchant || syncing) return
+
+    try {
+      setSyncing(true)
+      toast.info('开始同步数据...', {
+        description: '正在从抖音获取最新数据'
+      })
+
+      const response = await fetch('/api/merchants/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          merchantIds: [merchant.id],
+          limit: 50
+        })
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || '同步失败')
+      }
+
+      const data = await response.json()
+      const result = data.data?.results?.[0]
+
+      if (result?.success) {
+        toast.success('数据同步成功', {
+          description: `新增 ${result.newVideos} 个视频，更新 ${result.updatedVideos} 个视频`
+        })
+        // 刷新商家和内容数据
+        await Promise.all([fetchMerchant(), fetchContents()])
+      } else {
+        const errorMsg = result?.errors?.[0] || '同步失败'
+        toast.error('同步失败', {
+          description: errorMsg
+        })
+      }
+    } catch (error: any) {
+      console.error('同步商家数据失败:', error)
+      toast.error('同步失败', {
+        description: error.message || '无法同步数据，请稍后重试'
+      })
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  // 同步单个视频数据
+  const handleSyncContent = async (contentId: string) => {
+    if (!merchant) return
+
+    try {
+      setSyncingContentId(contentId)
+      const response = await fetch(
+        `/api/merchants/${merchant.id}/contents/${contentId}/sync`,
+        { method: 'POST' }
+      )
+
+      if (response.ok) {
+        const _result = await response.json()
+        // 刷新内容列表
+        await fetchContents()
+        toast.success('视频数据已更新', {
+          description: '标题、互动数据已同步为最新版本'
+        })
+      } else {
+        const error = await response.text()
+        console.error('同步失败:', error)
+        toast.error('同步失败', {
+          description: error || '无法更新视频数据'
+        })
+      }
+    } catch (error) {
+      console.error('同步异常:', error)
+      toast.error('同步异常', {
+        description: '网络错误或服务异常'
+      })
+    } finally {
+      setSyncingContentId(null)
     }
   }
 
@@ -280,17 +394,31 @@ export default function MerchantDetailPage() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* 页面头部 */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4" />
-          返回
-        </Button>
-        <div>
-          <h1 className="text-3xl font-bold">{merchant.name}</h1>
-          <p className="text-muted-foreground mt-1">
-            商家详情和内容分析
-          </p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="sm" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+            返回
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold">{merchant.name}</h1>
+            <p className="text-muted-foreground mt-1">
+              商家详情和内容分析
+            </p>
+          </div>
         </div>
+        {/* 立即同步按钮（仅管理员可见） */}
+        {session?.user?.role === 'ADMIN' && (
+          <Button
+            onClick={handleSyncMerchant}
+            disabled={syncing}
+            className="gap-2"
+            variant="default"
+          >
+            <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? '同步中...' : '立即同步数据'}
+          </Button>
+        )}
       </div>
 
       {/* 商家创作档案 */}
@@ -404,9 +532,16 @@ export default function MerchantDetailPage() {
                   <Play className="h-5 w-5" />
                   内容列表
                 </span>
-                <Badge variant="outline">{merchant.totalContentCount} 条内容</Badge>
+                <div className="flex items-center gap-2">
+                  {selectedContentIds.length > 0 && (
+                    <Badge variant="secondary">
+                      已选择 {selectedContentIds.length} 个视频
+                    </Badge>
+                  )}
+                  <Badge variant="outline">{merchant.totalContentCount} 条内容</Badge>
+                </div>
               </CardTitle>
-              <div className="flex gap-2 items-center">
+              <div className="flex gap-2 items-center flex-wrap">
                 <Input
                   placeholder="搜索内容..."
                   value={contentFilters.search}
@@ -434,10 +569,10 @@ export default function MerchantDetailPage() {
                 <Button
                   variant="outline"
                   size="icon"
-                  onClick={() => setContentFilters({ 
-                    ...contentFilters, 
+                  onClick={() => setContentFilters({
+                    ...contentFilters,
                     sortOrder: contentFilters.sortOrder === 'desc' ? 'asc' : 'desc',
-                    page: 1 
+                    page: 1
                   })}
                   title={contentFilters.sortOrder === 'desc' ? '降序' : '升序'}
                 >
@@ -447,6 +582,46 @@ export default function MerchantDetailPage() {
                     <ArrowUp className="h-4 w-4" />
                   )}
                 </Button>
+
+                {/* 批量选择控制 */}
+                {session?.user?.role === 'ADMIN' && (
+                  <>
+                    <Button
+                      variant={selectMode ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => {
+                        setSelectMode(!selectMode)
+                        if (selectMode) {
+                          clearSelection()
+                        }
+                      }}
+                    >
+                      {selectMode ? '取消选择' : '批量选择'}
+                    </Button>
+
+                    {selectMode && contents.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={toggleSelectAll}
+                      >
+                        {selectedContentIds.length === contents.length ? '取消全选' : '全选'}
+                      </Button>
+                    )}
+
+                    {selectedContentIds.length > 0 && (
+                      <BatchTranscribeDialog
+                        merchantId={merchant.id}
+                        merchantName={merchant.name}
+                        contentIds={selectedContentIds}
+                        onSuccess={() => {
+                          clearSelection()
+                          fetchContents()
+                        }}
+                      />
+                    )}
+                  </>
+                )}
               </div>
             </CardHeader>
             <CardContent>
@@ -462,44 +637,114 @@ export default function MerchantDetailPage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {contents.map((content) => (
-                    <div key={content.id} className="space-y-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h4 className="font-medium line-clamp-2 mb-1">
-                            {content.title || '无标题'}
-                          </h4>
-                          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              {dt.parse(content.publishedAt)?.toLocaleDateString() ?? '未知'}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Eye className="h-3 w-3" />
-                              {CONTENT_TYPE_LABELS[content.contentType]}
-                            </span>
-                            {content.duration && (
+                  {contents.map((content) => {
+                    const isSelected = selectedContentIds.includes(content.id)
+                    return (
+                      <div
+                        key={content.id}
+                        className={`space-y-3 rounded-lg p-4 transition-all ${
+                          selectMode && session?.user?.role === 'ADMIN'
+                            ? 'cursor-pointer hover:bg-accent/50 border-2'
+                            : 'border-2 border-transparent'
+                        } ${
+                          isSelected
+                            ? 'bg-primary/10 border-primary shadow-sm'
+                            : 'bg-background border-border/40'
+                        }`}
+                        onClick={() => {
+                          if (selectMode && session?.user?.role === 'ADMIN') {
+                            toggleSelectContent(content.id)
+                          }
+                        }}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-start gap-3 mb-1">
+                              {/* 选中状态指示器 */}
+                              {selectMode && session?.user?.role === 'ADMIN' && (
+                                <div className={`flex-shrink-0 mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                  isSelected
+                                    ? 'bg-primary border-primary'
+                                    : 'border-muted-foreground/30 bg-background'
+                                }`}>
+                                  {isSelected && (
+                                    <svg
+                                      className="w-3.5 h-3.5 text-primary-foreground"
+                                      fill="none"
+                                      strokeWidth="3"
+                                      stroke="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M5 13l4 4L19 7"
+                                      />
+                                    </svg>
+                                  )}
+                                </div>
+                              )}
+                              <h4 className="font-medium line-clamp-2 flex-1">
+                                {content.title || '无标题'}
+                              </h4>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                               <span className="flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                {formatDuration(content.duration)}
+                                <Calendar className="h-3 w-3" />
+                                {dt.parse(content.publishedAt)?.toLocaleDateString() ?? '未知'}
                               </span>
-                            )}
-                            {content.hasTranscript && (
-                              <Badge variant="outline" className="text-xs">
-                                有转录
-                              </Badge>
-                            )}
+                              <span className="flex items-center gap-1">
+                                <Eye className="h-3 w-3" />
+                                {CONTENT_TYPE_LABELS[content.contentType]}
+                              </span>
+                              {content.duration && (
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {formatDuration(content.duration)}
+                                </span>
+                              )}
+                              {content.hasTranscript && (
+                                <Badge variant="outline" className="text-xs">
+                                  有转录
+                                </Badge>
+                              )}
+                            </div>
                           </div>
+                          <div
+                            className="flex items-center gap-1"
+                            onClick={(e) => {
+                              // 防止点击按钮时触发选择
+                              if (selectMode && session?.user?.role === 'ADMIN') {
+                                e.stopPropagation()
+                              }
+                            }}
+                          >
+                          {/* 仅管理员可见的更新按钮 */}
+                          {session?.user?.role === 'ADMIN' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleSyncContent(content.id)}
+                              disabled={syncingContentId === content.id}
+                              title="更新视频数据"
+                            >
+                              <RefreshCw
+                                className={`h-4 w-4 ${
+                                  syncingContentId === content.id ? 'animate-spin' : ''
+                                }`}
+                              />
+                            </Button>
+                          )}
+                          {content.shareUrl && (
+                            <Button variant="ghost" size="sm" asChild>
+                              <a href={content.shareUrl} target="_blank" rel="noopener noreferrer">
+                                <ExternalLink className="h-4 w-4" />
+                              </a>
+                            </Button>
+                          )}
                         </div>
-                        {content.shareUrl && (
-                          <Button variant="ghost" size="sm" asChild>
-                            <a href={content.shareUrl} target="_blank" rel="noopener noreferrer">
-                              <ExternalLink className="h-4 w-4" />
-                            </a>
-                          </Button>
-                        )}
                       </div>
-                      
+
                       <div className="grid grid-cols-5 gap-4 text-sm">
                         <div className="flex items-center gap-1">
                           <Heart className="h-3 w-3 text-red-500" />
@@ -522,7 +767,7 @@ export default function MerchantDetailPage() {
                           <span className="font-medium">{formatNumber(getEngagementScore(content))}</span>
                         </div>
                       </div>
-                      
+
                       {/* 标签 */}
                       {content.parsedTags && content.parsedTags.length > 0 && (
                         <div className="flex flex-wrap gap-1">
@@ -533,23 +778,21 @@ export default function MerchantDetailPage() {
                           ))}
                         </div>
                       )}
-                      
-                      {/* 转录文本预览 */}
+
+                      {/* 转录文本完整显示 */}
                       {content.transcript && (
                         <details className="group">
                           <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
-                            查看转录文本
+                            查看转录文本 ({content.transcript.length} 字)
                           </summary>
-                          <div className="mt-2 p-3 bg-muted/50 rounded-md text-sm max-h-32 overflow-y-auto">
-                            {content.transcript.substring(0, 200)}
-                            {content.transcript.length > 200 && '...'}
+                          <div className="mt-2 p-3 bg-muted/50 rounded-md text-sm max-h-64 overflow-y-auto whitespace-pre-wrap">
+                            {content.transcript}
                           </div>
                         </details>
                       )}
-                      
-                      <Separator />
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </CardContent>
@@ -631,6 +874,10 @@ export default function MerchantDetailPage() {
               <CardTitle>快捷操作</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
+              <BenchmarkDialog
+                merchantId={merchant.id}
+                merchantName={merchant.name}
+              />
               <Button variant="outline" className="w-full" asChild>
                 <a href={`/merchants/${merchant.id}/analytics`}>
                   <BarChart3 className="h-4 w-4 mr-2" />

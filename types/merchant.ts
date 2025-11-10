@@ -314,3 +314,30 @@ export interface AIProfileResponse {
   viralAnalysis: ProfileViralAnalysis
   creativeGuide: ProfileCreativeGuide
 }
+
+// ============= 商家对标账号相关类型 =============
+
+// 对标账号关联信息
+export interface MerchantBenchmark {
+  id: string
+  notes: string | null
+  createdAt: Date | string
+  updatedAt: Date | string
+  benchmark: MerchantWithDetails
+}
+
+// 对标账号列表响应
+export interface MerchantBenchmarksResponse {
+  benchmarks: MerchantBenchmark[]
+}
+
+// 添加对标账号请求
+export interface AddBenchmarkData {
+  benchmarkId: string
+  notes?: string
+}
+
+// 删除对标账号请求
+export interface RemoveBenchmarkData {
+  benchmarkId: string
+}

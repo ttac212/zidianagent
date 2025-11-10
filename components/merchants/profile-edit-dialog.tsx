@@ -70,7 +70,7 @@ export function ProfileEditDialog({
         <DialogHeader>
           <DialogTitle>编辑创作档案</DialogTitle>
           <DialogDescription>
-            仅编辑人工补充部分,AI分析部分请点击"刷新档案"重新生成。
+            仅编辑人工补充部分,AI分析部分请点击&ldquo;刷新档案&rdquo;重新生成。
           </DialogDescription>
         </DialogHeader>
 

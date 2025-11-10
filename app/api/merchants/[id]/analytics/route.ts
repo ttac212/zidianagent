@@ -29,16 +29,11 @@ export async function GET(
         return validationError('商家ID不能为空')
       }
 
-    // 获取商家基本信息
+    // 获取商家基本信息（不加载全部内容）
     const merchant = await prisma.merchant.findUnique({
       where: { id },
       include: {
         category: true,
-        contents: {
-          orderBy: {
-            publishedAt: 'desc'
-          }
-        }
       }
     })
 
@@ -46,7 +41,6 @@ export async function GET(
       return notFound('商家不存在')
     }
 
-    // 计算互动统计
     const totalEngagement = merchant.totalEngagement ?? (
       merchant.totalDiggCount +
       merchant.totalCommentCount +
@@ -57,46 +51,123 @@ export async function GET(
       ? Math.round(totalEngagement / merchant.totalContentCount)
       : 0
 
-    // 计算互动趋势（基于真实时间数据）
-    let engagementTrend = 0
     const now = dt.now()
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
     const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000)
+    const timelineStart = new Date(now.getTime() - 120 * 24 * 60 * 60 * 1000)
+    const analyticsSampleSize = 1000
 
-    // 计算最近30天的平均互动
-    const recentContents = merchant.contents.filter(c =>
-      c.publishedAt && c.publishedAt >= thirtyDaysAgo
-    )
-    const recentEngagement = recentContents.reduce((sum, c) =>
-      sum + c.diggCount + c.commentCount + c.collectCount + c.shareCount, 0
-    )
-    const recentAvg = recentContents.length > 0
-      ? recentEngagement / recentContents.length
+    const [
+      recentAgg,
+      previousAgg,
+      contentTypeStats,
+      transcriptStats,
+      topContentRaw,
+      analyticsContents,
+    ] = await Promise.all([
+      prisma.merchantContent.aggregate({
+        where: {
+          merchantId: id,
+          publishedAt: { gte: thirtyDaysAgo }
+        },
+        _count: { _all: true },
+        _sum: {
+          diggCount: true,
+          commentCount: true,
+          collectCount: true,
+          shareCount: true,
+        }
+      }),
+      prisma.merchantContent.aggregate({
+        where: {
+          merchantId: id,
+          publishedAt: {
+            gte: sixtyDaysAgo,
+            lt: thirtyDaysAgo,
+          }
+        },
+        _count: { _all: true },
+        _sum: {
+          diggCount: true,
+          commentCount: true,
+          collectCount: true,
+          shareCount: true,
+        }
+      }),
+      prisma.merchantContent.groupBy({
+        by: ['contentType'],
+        where: { merchantId: id },
+        _count: { _all: true }
+      }),
+      prisma.merchantContent.groupBy({
+        by: ['hasTranscript'],
+        where: { merchantId: id },
+        _count: { _all: true }
+      }),
+      prisma.merchantContent.findMany({
+        where: { merchantId: id },
+        select: {
+          id: true,
+          title: true,
+          diggCount: true,
+          commentCount: true,
+          collectCount: true,
+          shareCount: true,
+          publishedAt: true,
+        },
+        orderBy: [
+          { diggCount: 'desc' },
+          { commentCount: 'desc' },
+          { collectCount: 'desc' },
+          { shareCount: 'desc' },
+        ],
+        take: 50,
+      }),
+      prisma.merchantContent.findMany({
+        where: {
+          merchantId: id,
+          publishedAt: { not: null, gte: timelineStart }
+        },
+        select: {
+          tags: true,
+          publishedAt: true,
+          diggCount: true,
+          commentCount: true,
+          collectCount: true,
+          shareCount: true,
+        },
+        orderBy: { publishedAt: 'desc' },
+        take: analyticsSampleSize,
+      }),
+    ])
+
+    const sumEngagement = (sum?: {
+      diggCount: number | null
+      commentCount: number | null
+      collectCount: number | null
+      shareCount: number | null
+    }) =>
+      (sum?.diggCount ?? 0) +
+      (sum?.commentCount ?? 0) +
+      (sum?.collectCount ?? 0) +
+      (sum?.shareCount ?? 0)
+
+    const recentCount = recentAgg._count._all || 0
+    const previousCount = previousAgg._count._all || 0
+    const recentEngagement = sumEngagement(recentAgg._sum)
+    const previousEngagement = sumEngagement(previousAgg._sum)
+
+    const recentAvg = recentCount > 0 ? recentEngagement / recentCount : 0
+    const previousAvg = previousCount > 0 ? previousEngagement / previousCount : 0
+    const engagementTrend = previousAvg > 0
+      ? ((recentAvg - previousAvg) / previousAvg) * 100
       : 0
 
-    // 计算之前30天的平均互动
-    const previousContents = merchant.contents.filter(c =>
-      c.publishedAt && c.publishedAt >= sixtyDaysAgo && c.publishedAt < thirtyDaysAgo
-    )
-    const previousEngagement = previousContents.reduce((sum, c) =>
-      sum + c.diggCount + c.commentCount + c.collectCount + c.shareCount, 0
-    )
-    const previousAvg = previousContents.length > 0
-      ? previousEngagement / previousContents.length
-      : 0
+    const videoCount = contentTypeStats.find(s => s.contentType === 'VIDEO')?._count._all || 0
+    const otherCount = Math.max(merchant.totalContentCount - videoCount, 0)
+    const withTranscript = transcriptStats.find(s => s.hasTranscript === true)?._count._all || 0
 
-    // 计算趋势百分比
-    if (previousAvg > 0) {
-      engagementTrend = ((recentAvg - previousAvg) / previousAvg) * 100
-    }
-
-    // 内容统计
-    const videoCount = merchant.contents.filter(c => c.contentType === 'VIDEO').length
-    const otherCount = merchant.contents.filter(c => c.contentType !== 'VIDEO').length
-    const withTranscript = merchant.contents.filter(c => c.hasTranscript).length
-
-    // 热门内容（按互动评分排序）
-    const topContent = merchant.contents
+    const topContent = topContentRaw
       .map(content => ({
         id: content.id,
         title: content.title,
@@ -104,40 +175,14 @@ export async function GET(
         commentCount: content.commentCount,
         collectCount: content.collectCount,
         shareCount: content.shareCount,
-        engagementScore: content.diggCount + content.commentCount * 2 + 
+        engagementScore: content.diggCount + content.commentCount * 2 +
                         content.collectCount * 3 + content.shareCount * 4,
         publishedAt: content.publishedAt?.toISOString() || null
       }))
       .sort((a, b) => b.engagementScore - a.engagementScore)
       .slice(0, 10)
 
-    // 标签统计
     const tagMap = new Map<string, { count: number; engagementSum: number }>()
-    
-    merchant.contents.forEach(content => {
-      const tags = parseAndCleanTags(content.tags)
-      const engagement = content.diggCount + content.commentCount + 
-                        content.collectCount + content.shareCount
-      
-      tags.forEach(tag => {
-        const cleanTag = tag.toLowerCase()
-        const existing = tagMap.get(cleanTag) || { count: 0, engagementSum: 0 }
-        tagMap.set(cleanTag, {
-          count: existing.count + 1,
-          engagementSum: existing.engagementSum + engagement
-        })
-      })
-    })
-
-    const tagStats = Array.from(tagMap.entries())
-      .map(([tag, stats]) => ({
-        tag,
-        count: stats.count,
-        engagementSum: stats.engagementSum
-      }))
-      .sort((a, b) => b.engagementSum - a.engagementSum)
-
-    // 时间线统计（按发布日期聚合，简化版）
     const timelineMap = new Map<string, {
       diggCount: number
       commentCount: number
@@ -146,7 +191,19 @@ export async function GET(
       contentCount: number
     }>()
 
-    merchant.contents.forEach(content => {
+    analyticsContents.forEach(content => {
+      const engagement = content.diggCount + content.commentCount +
+                        content.collectCount + content.shareCount
+
+      parseAndCleanTags(content.tags).forEach(tag => {
+        const cleanTag = tag.toLowerCase()
+        const existing = tagMap.get(cleanTag) || { count: 0, engagementSum: 0 }
+        tagMap.set(cleanTag, {
+          count: existing.count + 1,
+          engagementSum: existing.engagementSum + engagement
+        })
+      })
+
       if (content.publishedAt) {
         const date = content.publishedAt.toISOString().split('T')[0]
         const existing = timelineMap.get(date) || {
@@ -156,7 +213,7 @@ export async function GET(
           shareCount: 0,
           contentCount: 0
         }
-        
+
         timelineMap.set(date, {
           diggCount: existing.diggCount + content.diggCount,
           commentCount: existing.commentCount + content.commentCount,
@@ -166,6 +223,15 @@ export async function GET(
         })
       }
     })
+
+    const tagStats = Array.from(tagMap.entries())
+      .map(([tag, stats]) => ({
+        tag,
+        count: stats.count,
+        engagementSum: stats.engagementSum
+      }))
+      .sort((a, b) => b.engagementSum - a.engagementSum)
+      .slice(0, 50)
 
     const timelineStats = Array.from(timelineMap.entries())
       .map(([date, stats]) => ({
@@ -177,7 +243,6 @@ export async function GET(
     const analytics = {
       merchant: {
         ...merchant,
-        contents: undefined // 减少响应大小
       },
       engagementStats: {
         totalEngagement,

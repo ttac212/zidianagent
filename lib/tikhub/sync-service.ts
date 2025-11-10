@@ -254,12 +254,6 @@ export async function updateMerchantVideos(
   try {
     const merchant = await prisma.merchant.findUnique({
       where: { id: merchantId },
-      include: {
-        contents: {
-          orderBy: { publishedAt: 'desc' },
-          take: 1,
-        },
-      },
     })
 
     if (!merchant) {
@@ -290,17 +284,10 @@ export async function updateMerchantVideos(
       count: options.limit || 20,
     })
 
-    const latestPublishedAt = merchant.contents[0]?.publishedAt || null
-    const filteredVideos = latestPublishedAt
-      ? videosResponse.aweme_list.filter((video) => {
-          const timestamp = video.create_time ? new Date(video.create_time * 1000) : null
-          return !timestamp || timestamp > latestPublishedAt
-        })
-      : videosResponse.aweme_list
-
+    // 直接使用全部返回的视频，让 upsert 自动识别新增和更新
     const { contents, errors: contentErrors } = prepareContentPayloads(
       merchantId,
-      filteredVideos,
+      videosResponse.aweme_list,
     )
     if (contentErrors.length) {
       errors.push(...contentErrors)
@@ -508,7 +495,7 @@ async function bulkUpsertMerchantContents(
   }
 
   const values = rows.map((row) =>
-    Prisma.sql`(${row.id}, ${row.merchantId}, ${row.externalId}, ${row.title}, ${row.content ?? null}, ${row.transcript ?? null}, ${row.contentType}, ${row.duration ?? null}, ${row.shareUrl ?? null}, ${row.hasTranscript}, ${row.diggCount}, ${row.commentCount}, ${row.collectCount}, ${row.shareCount}, ${row.tags}, ${row.textExtra}, ${row.publishedAt ?? null}, ${row.collectedAt}, ${row.externalCreatedAt ?? null}, ${row.createdAt}, ${row.updatedAt})`
+    Prisma.sql`(${row.id}, ${row.merchantId}, ${row.externalId}, ${row.title}, ${row.content ?? null}, ${row.transcript ?? null}, ${row.contentType}, ${row.duration ?? null}, ${row.shareUrl ?? null}, ${row.hasTranscript}, ${row.diggCount}, ${row.commentCount}, ${row.collectCount}, ${row.shareCount}, ${row.playCount}, ${row.forwardCount}, ${row.likeRate ?? null}, ${row.commentRate ?? null}, ${row.completionRate ?? null}, ${row.avgWatchDuration ?? null}, ${row.isSuspicious}, ${row.suspiciousReason ?? null}, ${row.tags}, ${row.textExtra}, ${row.publishedAt ?? null}, ${row.collectedAt}, ${row.externalCreatedAt ?? null}, ${row.createdAt}, ${row.updatedAt})`
   )
 
   const query = Prisma.sql`
@@ -527,6 +514,14 @@ async function bulkUpsertMerchantContents(
       "commentCount",
       "collectCount",
       "shareCount",
+      "playCount",
+      "forwardCount",
+      "likeRate",
+      "commentRate",
+      "completionRate",
+      "avgWatchDuration",
+      "isSuspicious",
+      "suspiciousReason",
       "tags",
       "textExtra",
       "publishedAt",
@@ -539,15 +534,21 @@ async function bulkUpsertMerchantContents(
     ON CONFLICT("externalId", "merchantId") DO UPDATE SET
       "title" = excluded."title",
       "content" = excluded."content",
-      "transcript" = excluded."transcript",
       "contentType" = excluded."contentType",
       "duration" = excluded."duration",
       "shareUrl" = excluded."shareUrl",
-      "hasTranscript" = excluded."hasTranscript",
       "diggCount" = excluded."diggCount",
       "commentCount" = excluded."commentCount",
       "collectCount" = excluded."collectCount",
       "shareCount" = excluded."shareCount",
+      "playCount" = excluded."playCount",
+      "forwardCount" = excluded."forwardCount",
+      "likeRate" = excluded."likeRate",
+      "commentRate" = excluded."commentRate",
+      "completionRate" = excluded."completionRate",
+      "avgWatchDuration" = excluded."avgWatchDuration",
+      "isSuspicious" = excluded."isSuspicious",
+      "suspiciousReason" = excluded."suspiciousReason",
       "tags" = excluded."tags",
       "textExtra" = excluded."textExtra",
       "publishedAt" = excluded."publishedAt",
@@ -571,6 +572,8 @@ async function updateMerchantAggregates(
       commentCount: true,
       collectCount: true,
       shareCount: true,
+      playCount: true,
+      forwardCount: true,
     },
   })
 
@@ -579,8 +582,14 @@ async function updateMerchantAggregates(
   const totalCommentCount = aggregates._sum?.commentCount ?? 0
   const totalCollectCount = aggregates._sum?.collectCount ?? 0
   const totalShareCount = aggregates._sum?.shareCount ?? 0
+  const totalPlayCount = aggregates._sum?.playCount ?? 0
   const totalEngagement =
     totalDiggCount + totalCommentCount + totalCollectCount + totalShareCount
+
+  // 计算平均互动率（避免除零）
+  const avgEngagementRate = totalPlayCount > 0
+    ? (totalEngagement / totalPlayCount) * 100
+    : null
 
   await tx.merchant.update({
     where: { id: merchantId },
@@ -591,6 +600,8 @@ async function updateMerchantAggregates(
       totalCollectCount,
       totalShareCount,
       totalEngagement,
+      totalPlayCount: BigInt(totalPlayCount),
+      avgEngagementRate,
       lastCollectedAt: dt.now(),
     },
   })
@@ -646,6 +657,99 @@ function buildProfileFromVideoAuthor(video: DouyinVideo, fallbackSecUid: string)
     live_agreement: 0,
     live_commerce: false,
     forward_count: 0,
+  }
+}
+
+/**
+ * 更新单个视频的数据（强制刷新）
+ */
+export async function updateSingleVideo(
+  merchantId: string,
+  externalId: string
+): Promise<{
+  success: boolean
+  updated: boolean
+  errors: string[]
+}> {
+  const client = getTikHubClient()
+  const errors: string[] = []
+
+  try {
+    // 1. 获取商家信息
+    const merchant = await prisma.merchant.findUnique({
+      where: { id: merchantId },
+    })
+
+    if (!merchant) {
+      throw new Error('商家不存在')
+    }
+
+    // 2. 获取 sec_uid
+    let secUid: string | undefined
+    try {
+      const contactInfo = typeof merchant.contactInfo === 'string'
+        ? JSON.parse(merchant.contactInfo)
+        : (merchant.contactInfo as any)
+      secUid = contactInfo?.sec_uid
+    } catch (_e) {
+      // ignore parse errors
+    }
+
+    if (!secUid) {
+      secUid = merchant.uid
+    }
+
+    if (!secUid) {
+      throw new Error('商家缺少 sec_uid/uid 信息，无法同步视频')
+    }
+
+    // 3. 获取该商家的最新视频列表（获取足够多的视频以找到目标视频）
+    const videosResponse = await client.getUserVideos({
+      sec_uid: secUid,
+      count: 100, // 获取更多视频以确保能找到目标视频
+    })
+
+    // 4. 查找目标视频
+    const targetVideo = videosResponse.aweme_list.find(
+      (video) => video.aweme_id === externalId
+    )
+
+    if (!targetVideo) {
+      throw new Error(`未找到视频 ${externalId}，可能已被删除或不在最新100个视频中`)
+    }
+
+    // 5. 映射视频数据
+    const { contents, errors: contentErrors } = prepareContentPayloads(
+      merchantId,
+      [targetVideo] // 只处理这一个视频
+    )
+
+    if (contentErrors.length) {
+      errors.push(...contentErrors)
+    }
+
+    if (contents.length === 0) {
+      throw new Error('视频数据验证失败')
+    }
+
+    // 6. 准备更新数据
+    const { rows } = await prepareContentSyncRows(merchantId, contents)
+
+    // 7. 执行更新
+    await persistMerchantSync(merchantId, rows)
+
+    return {
+      success: true,
+      updated: true,
+      errors,
+    }
+  } catch (error: any) {
+    errors.push(error.message)
+    return {
+      success: false,
+      updated: false,
+      errors,
+    }
   }
 }
 

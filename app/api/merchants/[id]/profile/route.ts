@@ -4,7 +4,7 @@
  * PATCH /api/merchants/[id]/profile - 更新用户编辑部分
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import type { MerchantProfileResponse, UpdateProfileData } from '@/types/merchant'
 import { createErrorResponse, generateRequestId } from '@/lib/api/error-handler'

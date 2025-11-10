@@ -3,7 +3,7 @@
  * GET /api/merchants/[id] - 获取商家详情
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import type { MerchantDetailResponse } from '@/types/merchant'
 import { createErrorResponse, generateRequestId } from '@/lib/api/error-handler'
@@ -114,6 +114,9 @@ export async function PATCH(
         businessType,
         status,
         categoryId,
+        monitoringEnabled,
+        syncIntervalSeconds,
+        nextSyncAt,
       } = body
 
       // 验证必填字段
@@ -142,6 +145,10 @@ export async function PATCH(
           ...(businessType !== undefined && { businessType }),
           ...(status !== undefined && { status }),
           ...(categoryId !== undefined && { categoryId: categoryId || null }),
+          // 监控配置字段
+          ...(monitoringEnabled !== undefined && { monitoringEnabled }),
+          ...(syncIntervalSeconds !== undefined && { syncIntervalSeconds }),
+          ...(nextSyncAt !== undefined && { nextSyncAt: nextSyncAt ? new Date(nextSyncAt) : null }),
           updatedAt: new Date(),
         },
         include: {
@@ -149,11 +156,8 @@ export async function PATCH(
         },
       })
 
-      return NextResponse.json({
-        success: true,
-        data: {
-          merchant: updatedMerchant
-        }
+      return success({
+        merchant: updatedMerchant
       })
 
     } catch (error) {

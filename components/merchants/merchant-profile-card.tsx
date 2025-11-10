@@ -29,7 +29,7 @@ interface MerchantProfileCardProps {
 
 export function MerchantProfileCard({
   merchantId,
-  merchantName,
+  merchantName: _merchantName,
   totalContentCount,
   isAdmin
 }: MerchantProfileCardProps) {
