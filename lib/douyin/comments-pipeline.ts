@@ -6,7 +6,6 @@
 import { parseDouyinVideoShare } from '@/lib/douyin/share-link'
 import { getTikHubClient } from '@/lib/tikhub'
 import type { DouyinComment } from '@/lib/tikhub/types'
-import { selectApiKey } from '@/lib/ai/key-manager'
 import {
   DOUYIN_COMMENTS_PIPELINE_STEPS,
   type DouyinCommentsPipelineStep,
@@ -187,7 +186,8 @@ async function analyzeWithLLM(
   emit: DouyinCommentsPipelineEmitter,
   signal?: AbortSignal
 ): Promise<string> {
-  const apiBase = process.env.LLM_API_BASE || 'https://api.302.ai/v1'
+  // 使用 ZenMux API 替代 302.AI
+  const apiBase = process.env.ZENMUX_API_BASE || 'https://zenmux.ai/api/v1'
 
   // 构建分析提示词
   const prompt = `请分析以下抖音视频的评论数据，给出专业的洞察报告：
@@ -297,11 +297,17 @@ ${data.locationStats.map(({ location, count }) => `- ${location}: ${count}条`).
       buffer = lines.pop() || ''
 
       for (const line of lines) {
-        if (!line.trim() || line.trim() === 'data: [DONE]') continue
+        if (!line.trim()) continue
 
-        if (line.startsWith('data: ')) {
+        // ZenMux 的格式是 "data:[DONE]" (没有空格)
+        if (line.trim() === 'data:[DONE]' || line.trim() === 'data: [DONE]') continue
+
+        // ZenMux 使用 "data:" 而不是 "data: " (注意没有空格)
+        if (line.startsWith('data:')) {
           try {
-            const data = JSON.parse(line.slice(6))
+            // 移除 "data:" 前缀（可能有或没有空格）
+            const jsonStr = line.startsWith('data: ') ? line.slice(6) : line.slice(5)
+            const data = JSON.parse(jsonStr)
             const delta = data.choices?.[0]?.delta?.content
 
             if (delta) {
@@ -343,14 +349,13 @@ export async function runDouyinCommentsPipeline(
   const maxComments = options.maxComments || 100
   const maxPages = options.maxPages || 5
 
-  // 使用Key Manager选择合适的API Key
-  // 使用claude-sonnet-4-5（从MODEL_ALLOWLIST中选择可用模型）
-  const modelId = 'claude-sonnet-4-5-20250929'
-  const { apiKey } = selectApiKey(modelId)
+  // 使用 ZenMux API
+  const modelId = process.env.ZENMUX_DEFAULT_MODEL || 'anthropic/claude-sonnet-4.5'
+  const apiKey = process.env.ZENMUX_API_KEY
 
   if (!apiKey) {
     const error = new DouyinCommentsPipelineStepError(
-      `未配置 ${modelId} 模型的 API 密钥，请检查环境变量 LLM_CLAUDE_API_KEY 或 LLM_API_KEY`,
+      `未配置 ZENMUX_API_KEY 环境变量，请检查 .env.local 配置`,
       'parse-link'
     )
     await emit({
