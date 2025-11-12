@@ -26,13 +26,13 @@ import {
 } from '@/lib/api/http-response'
 import {
   detectDouyinLink,
-  extractDouyinLink,
-  isDouyinShareRequest,
-  isDouyinVideoExtractionRequest
+  extractDouyinLink
 } from "@/lib/douyin/link-detector"
-import { runDouyinPipeline } from "@/lib/douyin/pipeline"
-import { runDouyinCommentsPipeline } from "@/lib/douyin/comments-pipeline"
 import { handleDouyinPipeline } from "@/lib/douyin/sse-handler"
+import { selectDouyinStrategy } from "./douyin-strategy"
+
+// 设置最大执行时间为5分钟（抖音视频处理可能需要较长时间）
+export const maxDuration = 300
 
 export async function POST(request: NextRequest) {
   try {
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     return validationError('messages 参数不能为空')
   }
 
-  // === 抖音链接处理：默认评论分析，除非明确要求视频提取 ===
+  // === 抖音链接处理：策略模式（数据驱动） ===
   const lastUserMessage = messages[messages.length - 1]
 
   if (lastUserMessage?.role === 'user' && detectDouyinLink(lastUserMessage.content)) {
@@ -88,45 +88,27 @@ export async function POST(request: NextRequest) {
       return validationError('无法提取抖音链接')
     }
 
-    const { DOUYIN_ESTIMATED_TOKENS } = await import('@/lib/constants/douyin-quota')
+    // 策略选择：根据用户消息内容自动选择合适的处理策略
+    const strategy = selectDouyinStrategy(lastUserMessage.content)
 
-    // 优先检查是否明确请求视频文案提取
-    if (isDouyinVideoExtractionRequest(lastUserMessage.content)) {
-      console.info('[Douyin] 明确请求视频文案提取')
-
-      return handleDouyinPipeline({
-        shareLink,
-        userId,
-        conversationId,
-        model,
-        estimatedTokens: DOUYIN_ESTIMATED_TOKENS.VIDEO_EXTRACTION,
-        request,
-        userMessage: lastUserMessage.content,
-        pipeline: runDouyinPipeline,
-        eventPrefix: 'douyin',
-        featureName: 'Douyin'
-      })
-    }
-
-    // 默认：评论分析（只要是纯分享请求）
-    if (isDouyinShareRequest(lastUserMessage.content)) {
-      console.info('[Douyin Comments] 默认处理评论分析请求')
+    if (strategy) {
+      console.info(`[Douyin] 使用策略: ${strategy.name}`)
 
       return handleDouyinPipeline({
         shareLink,
         userId,
         conversationId,
         model,
-        estimatedTokens: DOUYIN_ESTIMATED_TOKENS.COMMENTS_ANALYSIS,
+        estimatedTokens: strategy.getEstimatedTokens(),
         request,
         userMessage: lastUserMessage.content,
-        pipeline: runDouyinCommentsPipeline,
-        eventPrefix: 'comments',
-        featureName: 'Douyin Comments'
+        pipeline: strategy.pipeline,
+        eventPrefix: strategy.eventPrefix,
+        featureName: strategy.name
       })
     }
 
-    console.info('[Douyin] 检测到抖音链接但不是纯分享请求,保持原样进入普通聊天')
+    console.info('[Douyin] 检测到抖音链接但无匹配策略，进入普通聊天')
   }
 
   // 服务端统一裁剪（防止客户端绕过限制）- 基于实际模型上限
