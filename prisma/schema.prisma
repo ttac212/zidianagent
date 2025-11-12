@@ -227,6 +227,7 @@ model MerchantContent {
   commentCount      Int                      @default(0)
   collectCount      Int                      @default(0)
   shareCount        Int                      @default(0)
+  totalEngagement   Int                      @default(0)       // 总互动量 = diggCount + commentCount + collectCount + shareCount
   // 新增字段
   playCount         Int                      @default(0)       // 播放量 ⭐ 关键指标
   forwardCount      Int                      @default(0)       // 转发数
@@ -249,6 +250,7 @@ model MerchantContent {
 
   @@unique([externalId, merchantId])
   @@index([merchantId, publishedAt])
+  @@index([merchantId, totalEngagement(sort: Desc)])  // 按总互动量排序优化
   @@index([merchantId, likeRate(sort: Desc)])  // 按真实互动率排序
   @@index([contentType])
   @@index([externalId])
@@ -330,17 +332,6 @@ model MerchantProfile {
   briefUsageScenarios  String? // 使用场景和痛点(JSON数组)
   briefAudienceProfile String? // 目标用户画像(年龄、性别、兴趣、消费习惯)
   briefBrandTone       String? // 品牌调性(正经/搞笑/温情/专业 + 具体描述)
-
-  // === PART 2: 爆款分析 ===
-  topContentAnalysis String? // TOP10爆款分析(JSON: 标题、开头、情绪点、互动数据)
-  goldenThreeSeconds String? // 黄金3秒开头建议(基于历史数据的有效开头模板)
-  emotionalTriggers  String? // 情绪点分析(笑点/痛点/爽点的分布)
-  contentFormats     String? // 内容形式偏好(口播/剧情/对比/教程的占比)
-
-  // === PART 3: 创作指南 ===
-  trendingTopics String? // 热门话题和标签(当前适合的热点)
-  tagStrategy    String? // 标签组合策略(高效标签组合建议)
-  publishingTips String? // 发布策略(最佳时段、内容频率,JSON格式)
 
   // === 元数据 ===
   aiGeneratedAt DateTime? // AI生成时间
