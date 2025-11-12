@@ -58,13 +58,15 @@ export async function GET(request: NextRequest) {
     if (filters.businessType) {
       where.businessType = filters.businessType
     }
-    
-    if (filters.status) {
+
+    // 状态过滤：支持"ALL"表示全部状态，否则默认只显示ACTIVE
+    if (filters.status && filters.status !== ('ALL' as any)) {
       where.status = filters.status
-    } else {
-      // 默认只显示ACTIVE状态的商家，避免误操作已删除/停用的商家
+    } else if (!filters.status) {
+      // 如果没有传status参数，默认只显示ACTIVE状态
       where.status = 'ACTIVE'
     }
+    // 如果 filters.status === 'ALL'，则不添加where.status条件，显示所有状态
 
     // 排序配置
     const orderBy: any = {}

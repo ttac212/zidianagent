@@ -248,7 +248,7 @@ export default function MerchantsPage() {
               
               <Select
                 value={filters.status || "ACTIVE"}
-                onValueChange={(value) => handleFilter('status', value === "ALL" ? "" : value)}
+                onValueChange={(value) => handleFilter('status', value)}
               >
                 <SelectTrigger className="w-40">
                   <SelectValue placeholder="商家状态" />

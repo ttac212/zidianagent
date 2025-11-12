@@ -98,12 +98,14 @@ export async function GET(
 
     // 排序配置
     const orderBy: any = {}
-    // 使用数据库层的 totalEngagement 字段进行排序（已优化性能）
+    const needsPostSorting = filters.sortBy === 'engagement' // 标记是否需要后处理排序
+
     if (filters.sortBy === 'shareCount') {
       orderBy.shareCount = filters.sortOrder
     } else if (filters.sortBy === 'engagement') {
-      // 使用数据库字段 totalEngagement 排序，避免内存计算
-      orderBy.totalEngagement = filters.sortOrder
+      // 注意：由于历史数据的 totalEngagement 可能为 0，我们在后处理中排序
+      // 这里先按 publishedAt 排序作为备用，避免查询出错
+      orderBy.publishedAt = 'desc'
     } else {
       orderBy[filters.sortBy || 'publishedAt'] = filters.sortOrder
     }
@@ -114,6 +116,9 @@ export async function GET(
 
     // 注意：不在数据库层面过滤 minEngagement，因为历史数据的 totalEngagement 可能为 0
     // 我们将在查询后动态计算并过滤
+    // 如果需要按 engagement 排序或过滤，我们需要获取更多数据以便后处理
+    const shouldFetchMore = needsPostSorting || (filters.minEngagement !== undefined && filters.minEngagement > 0)
+    const actualTake = shouldFetchMore ? take * 3 : take // 多取一些数据以备过滤
 
     // 统一查询路径（不再区分 engagement 排序）
     const [contents, total] = await Promise.all([
@@ -121,7 +126,7 @@ export async function GET(
         where,
         orderBy,
         skip,
-        take,
+        take: actualTake,
       }),
       prisma.merchantContent.count({ where })
     ])
@@ -158,6 +163,19 @@ export async function GET(
       processedContents = processedContents.filter(
         content => content.totalEngagement >= filters.minEngagement!
       )
+    }
+
+    // 如果按 engagement 排序，在后处理中排序（因为动态计算了 totalEngagement）
+    if (needsPostSorting) {
+      processedContents.sort((a, b) => {
+        const diff = b.totalEngagement - a.totalEngagement
+        return filters.sortOrder === 'asc' ? -diff : diff
+      })
+    }
+
+    // 应用分页（如果之前多取了数据）
+    if (shouldFetchMore) {
+      processedContents = processedContents.slice(0, take)
     }
 
     // 格式化响应数据
