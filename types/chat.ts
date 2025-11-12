@@ -16,6 +16,8 @@ import type {
   DouyinCommentsStatistics
 } from '@/lib/douyin/comments-pipeline-steps'
 
+import type { PipelinePartialKey } from '@/lib/douyin/schema'
+
 export type PipelineSource = 'douyin-video' | 'douyin-comments'
 export type PipelineRole = 'progress' | 'result'
 export type PipelineStage = 'progress' | 'info' | 'partial' | 'done' | 'error'
@@ -272,7 +274,7 @@ export interface DouyinInfoEventPayload {
 }
 
 export interface DouyinPartialEventPayload {
-  key: 'transcript' | 'markdown'
+  key: PipelinePartialKey  // 使用统一契约定义
   data: string
   append?: boolean
 }
@@ -313,7 +315,7 @@ export interface DouyinCommentsInfoEventPayload {
 }
 
 export interface DouyinCommentsPartialEventPayload {
-  key: 'analysis'
+  key: Extract<PipelinePartialKey, 'analysis' | 'warn'>  // 评论只使用这两个key
   data: string
   append?: boolean
 }

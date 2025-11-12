@@ -21,6 +21,7 @@ import type {
 import type { UnifiedPipelineEvent } from '@/lib/chat/events'
 import { DOUYIN_PIPELINE_STEPS, type DouyinPipelineStep } from '@/lib/douyin/pipeline-steps'
 import { DOUYIN_COMMENTS_PIPELINE_STEPS, type DouyinCommentsPipelineStep } from '@/lib/douyin/comments-pipeline-steps'
+import { RESULT_MESSAGE_KEYS } from '@/lib/douyin/schema'
 
 interface DouyinVideoPipelineState {
   id: string
@@ -641,9 +642,12 @@ export function usePipelineHandler(options: UsePipelineHandlerOptions = {}) {
     if (event.stage === 'partial') {
       // 统一处理两种 pipeline 的 partial 事件
       const payload = event.payload as DouyinPartialEventPayload | DouyinCommentsPartialEventPayload
-      const expectedKey = event.source === 'douyin-video' ? 'markdown' : 'analysis'
 
-      if (payload.key === expectedKey) {
+      // 定义哪些 key 应该发送到结果消息区
+      // 使用统一契约定义，确保前后端同步
+      const resultKeys = new Set(RESULT_MESSAGE_KEYS)
+
+      if (resultKeys.has(payload.key)) {
         const chunk = typeof payload.data === 'string' ? payload.data : `${payload.data ?? ''}`
         if (chunk) {
           if (!initializedResultMessagesRef.current.has(resultMessageId)) {
