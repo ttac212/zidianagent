@@ -13,6 +13,8 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   FileText,
   CheckCircle2,
@@ -54,6 +56,7 @@ export function BatchTranscribeDialog({
 }: BatchTranscribeDialogProps) {
   const [open, setOpen] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
+  const [mode, setMode] = useState<'missing' | 'all' | 'force'>('missing')
   const [progress, setProgress] = useState<TranscribeProgress>({
     total: 0,
     processed: 0,
@@ -74,8 +77,8 @@ export function BatchTranscribeDialog({
     setProgress({ total: 0, processed: 0, succeeded: 0, failed: 0, skipped: 0 })
     setItems([])
 
-    // 创建 SSE 连接
-    const url = `/api/merchants/${merchantId}/contents/batch-transcribe/stream?contentIds=${contentIds.join(',')}&mode=missing&concurrent=100`
+    // 创建 SSE 连接，使用选择的mode
+    const url = `/api/merchants/${merchantId}/contents/batch-transcribe/stream?contentIds=${contentIds.join(',')}&mode=${mode}&concurrent=100`
     const es = new EventSource(url)
 
     setEventSource(es)
@@ -177,8 +180,18 @@ export function BatchTranscribeDialog({
   const progressPercent =
     progress.total > 0 ? (progress.processed / progress.total) * 100 : 0
 
+  // 处理对话框关闭 - 重置所有状态
+  const handleOpenChange = (newOpen: boolean) => {
+    setOpen(newOpen)
+    if (!newOpen) {
+      // 对话框关闭时重置状态，确保下次打开时显示干净的界面
+      setItems([])
+      setProgress({ total: 0, processed: 0, succeeded: 0, failed: 0, skipped: 0 })
+    }
+  }
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button variant="outline" className="w-full">
           <FileText className="h-4 w-4 mr-2" />
@@ -194,6 +207,48 @@ export function BatchTranscribeDialog({
         </DialogHeader>
 
         <div className="flex-1 space-y-4 overflow-hidden flex flex-col">
+          {/* 转录模式选择 - 允许用户随时切换 */}
+          {!isTranscribing && (
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">转录模式</Label>
+              <RadioGroup value={mode} onValueChange={(v) => setMode(v as any)}>
+                <div className="flex items-start space-x-3 space-y-0">
+                  <RadioGroupItem value="missing" id="mode-missing" />
+                  <div className="flex-1">
+                    <Label htmlFor="mode-missing" className="font-medium cursor-pointer">
+                      仅缺失内容
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      只转录没有转录文本的视频（推荐）
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start space-x-3 space-y-0">
+                  <RadioGroupItem value="all" id="mode-all" />
+                  <div className="flex-1">
+                    <Label htmlFor="mode-all" className="font-medium cursor-pointer">
+                      所有内容
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      处理所有选中的视频，跳过已有转录的
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start space-x-3 space-y-0">
+                  <RadioGroupItem value="force" id="mode-force" />
+                  <div className="flex-1">
+                    <Label htmlFor="mode-force" className="font-medium cursor-pointer">
+                      强制覆盖
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      强制重新转录所有视频，覆盖已有转录
+                    </p>
+                  </div>
+                </div>
+              </RadioGroup>
+            </div>
+          )}
+
           {/* 进度统计 */}
           <div className="grid grid-cols-5 gap-4">
             <div className="text-center">

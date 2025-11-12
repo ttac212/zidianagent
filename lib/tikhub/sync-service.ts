@@ -495,7 +495,7 @@ async function bulkUpsertMerchantContents(
   }
 
   const values = rows.map((row) =>
-    Prisma.sql`(${row.id}, ${row.merchantId}, ${row.externalId}, ${row.title}, ${row.content ?? null}, ${row.transcript ?? null}, ${row.contentType}, ${row.duration ?? null}, ${row.shareUrl ?? null}, ${row.hasTranscript}, ${row.diggCount}, ${row.commentCount}, ${row.collectCount}, ${row.shareCount}, ${row.playCount}, ${row.forwardCount}, ${row.likeRate ?? null}, ${row.commentRate ?? null}, ${row.completionRate ?? null}, ${row.avgWatchDuration ?? null}, ${row.isSuspicious}, ${row.suspiciousReason ?? null}, ${row.tags}, ${row.textExtra}, ${row.publishedAt ?? null}, ${row.collectedAt}, ${row.externalCreatedAt ?? null}, ${row.createdAt}, ${row.updatedAt})`
+    Prisma.sql`(${row.id}, ${row.merchantId}, ${row.externalId}, ${row.title}, ${row.content ?? null}, ${row.transcript ?? null}, ${row.contentType}, ${row.duration ?? null}, ${row.shareUrl ?? null}, ${row.hasTranscript}, ${row.diggCount}, ${row.commentCount}, ${row.collectCount}, ${row.shareCount}, ${row.playCount}, ${row.forwardCount}, ${row.totalEngagement}, ${row.likeRate ?? null}, ${row.commentRate ?? null}, ${row.completionRate ?? null}, ${row.avgWatchDuration ?? null}, ${row.isSuspicious}, ${row.suspiciousReason ?? null}, ${row.tags}, ${row.textExtra}, ${row.publishedAt ?? null}, ${row.collectedAt}, ${row.externalCreatedAt ?? null}, ${row.createdAt}, ${row.updatedAt})`
   )
 
   const query = Prisma.sql`
@@ -516,6 +516,7 @@ async function bulkUpsertMerchantContents(
       "shareCount",
       "playCount",
       "forwardCount",
+      "totalEngagement",
       "likeRate",
       "commentRate",
       "completionRate",
@@ -543,6 +544,7 @@ async function bulkUpsertMerchantContents(
       "shareCount" = excluded."shareCount",
       "playCount" = excluded."playCount",
       "forwardCount" = excluded."forwardCount",
+      "totalEngagement" = excluded."totalEngagement",
       "likeRate" = excluded."likeRate",
       "commentRate" = excluded."commentRate",
       "completionRate" = excluded."completionRate",
