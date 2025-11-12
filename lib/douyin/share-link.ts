@@ -1,20 +1,9 @@
 import { DOUYIN_DEFAULT_HEADERS } from '@/lib/douyin/constants';
+import { DOMAIN_SET as ALLOWED_DOUYIN_DOMAINS } from '@/lib/douyin/domains';
 
 const VIDEO_ID_RE = /\/(?:video|note|slides)\/(\d{19})/;
 const USER_ID_RE = /\/user\/([A-Za-z0-9_-]+)/;
 const LIVE_REDIRECT_RE = /\/douyin\/webcast\/reflow\//;
-
-/**
- * 抖音官方域名白名单
- * 严格限制只允许抖音官方域名，防止SSRF攻击
- */
-const ALLOWED_DOUYIN_DOMAINS = new Set([
-  'v.douyin.com',          // 短链接域名
-  'www.douyin.com',        // 主站域名
-  'douyin.com',            // 顶级域名
-  'm.douyin.com',          // 移动端域名
-  'www.iesdouyin.com',     // 视频服务域名（重定向目标）
-]);
 
 /**
  * 验证URL是否属于抖音官方域名

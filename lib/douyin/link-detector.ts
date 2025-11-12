@@ -8,7 +8,14 @@
  * - 图集链接: https://www.douyin.com/slides/[19位ID]
  * - 账号主页: https://www.douyin.com/user/[用户ID]
  * - 分享链接: https://www.iesdouyin.com/share/video/[19位ID]
+ *
+ * 域名定义：
+ * - 所有域名定义来自 @/lib/douyin/domains
+ * - 新增域名时，请同时更新 domains.ts 和本文件的 PATTERNS
  */
+
+import { processSSEStream } from '@/lib/utils/sse-parser'
+import { ALLOWED_DOUYIN_DOMAINS } from '@/lib/douyin/domains'
 
 
 /**
@@ -65,6 +72,34 @@ const PATTERNS = {
   // 纯19位作品ID
   videoId: /\b(\d{19})\b/,
 };
+
+/**
+ * 开发时验证：确保 PATTERNS 中的域名与 ALLOWED_DOUYIN_DOMAINS 保持一致
+ * 这个检查在开发环境运行，帮助及早发现不一致
+ */
+if (process.env.NODE_ENV === 'development') {
+  const patternDomains = new Set<string>();
+
+  // 从所有正则中提取域名
+  Object.values(PATTERNS).forEach(pattern => {
+    const match = pattern.source.match(/(?:https?:\\\/\\\/)([\w.-]+)/);
+    if (match && match[1]) {
+      // 反转义域名中的点号
+      const domain = match[1].replace(/\\\./g, '.');
+      patternDomains.add(domain);
+    }
+  });
+
+  // 检查是否所有提取的域名都在允许列表中
+  for (const domain of patternDomains) {
+    if (!ALLOWED_DOUYIN_DOMAINS.includes(domain as any)) {
+      console.warn(
+        `[link-detector] 警告: PATTERNS中的域名 "${domain}" 不在 ALLOWED_DOUYIN_DOMAINS 中。\n` +
+        `请更新 lib/douyin/domains.ts 或修改本文件的正则表达式。`
+      );
+    }
+  }
+}
 
 /**
  * 检测文本中是否包含任何抖音链接
@@ -436,34 +471,23 @@ export async function processDouyinVideo(shareLink: string): Promise<{
       };
     }
 
-    const decoder = new TextDecoder();
-    let buffer = '';
     let result: any = null;
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-
-      // 处理完整的SSE事件
-      const lines = buffer.split('\n\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const dataStr = line.substring(6);
-          try {
-            const event = JSON.parse(dataStr);
-            if (event.type === 'done') {
-              result = event;
-            }
-          } catch (_error) {
-            // 忽略解析错误
+    // 使用统一的 SSE 解析器 (支持 ZenMux 和标准格式)
+    await processSSEStream(reader, {
+      onMessage: (message) => {
+        // 查找 type === 'done' 的事件
+        if (message.payload && typeof message.payload === 'object') {
+          const payload = message.payload as Record<string, any>
+          if (payload.type === 'done') {
+            result = payload
           }
         }
+      },
+      onError: (error) => {
+        console.error('[链接检测] SSE错误:', error)
       }
-    }
+    })
 
     if (!result) {
       return {
