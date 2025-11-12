@@ -116,7 +116,6 @@ export async function PATCH(
         categoryId,
         monitoringEnabled,
         syncIntervalSeconds,
-        nextSyncAt,
       } = body
 
       // 验证必填字段
@@ -134,6 +133,40 @@ export async function PATCH(
         }
       }
 
+      // 智能计算nextSyncAt（不允许前端直接传递）
+      let nextSyncAt: Date | null | undefined = undefined
+
+      if (monitoringEnabled !== undefined || syncIntervalSeconds !== undefined) {
+        const currentEnabled = existingMerchant.monitoringEnabled
+        const currentInterval = existingMerchant.syncIntervalSeconds
+        const newEnabled = monitoringEnabled ?? currentEnabled
+        const newInterval = syncIntervalSeconds ?? currentInterval
+        const lastSync = existingMerchant.lastCollectedAt
+
+        if (newEnabled) {
+          // 启用监控
+          if (!currentEnabled) {
+            // 首次启用 → 立即执行
+            nextSyncAt = new Date()
+          } else if (syncIntervalSeconds !== undefined && syncIntervalSeconds !== currentInterval) {
+            // 只修改了频率 → 基于最后同步时间重新计算
+            if (lastSync) {
+              const calculatedNextSync = new Date(lastSync.getTime() + newInterval * 1000)
+              const now = new Date()
+              // 如果计算出的时间已过期，使用当前时间（立即执行）
+              nextSyncAt = calculatedNextSync > now ? calculatedNextSync : now
+            } else {
+              // 没有最后同步时间，立即执行
+              nextSyncAt = new Date()
+            }
+          }
+          // 否则保持现有的nextSyncAt不变
+        } else {
+          // 禁用监控 → 清空nextSyncAt
+          nextSyncAt = null
+        }
+      }
+
       // 更新商家信息
       const updatedMerchant = await prisma.merchant.update({
         where: { id },
@@ -148,7 +181,8 @@ export async function PATCH(
           // 监控配置字段
           ...(monitoringEnabled !== undefined && { monitoringEnabled }),
           ...(syncIntervalSeconds !== undefined && { syncIntervalSeconds }),
-          ...(nextSyncAt !== undefined && { nextSyncAt: nextSyncAt ? new Date(nextSyncAt) : null }),
+          // nextSyncAt由后端智能计算，只在需要时更新
+          ...(nextSyncAt !== undefined && { nextSyncAt }),
           updatedAt: new Date(),
         },
         include: {

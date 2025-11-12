@@ -42,7 +42,7 @@ export function MerchantProfileCard({
   const profile = data?.profile
 
   // 解析JSON字段
-  const parsed = profile ? parseStoredProfile(profile) : { brief: null, viralAnalysis: null, creativeGuide: null }
+  const parsed = profile ? parseStoredProfile(profile) : { brief: null }
 
   const handleGenerate = async () => {
     if (totalContentCount === 0) {
@@ -200,8 +200,6 @@ export function MerchantProfileCard({
             {/* AI生成内容 */}
             <ProfileAISection
               brief={parsed.brief}
-              viralAnalysis={parsed.viralAnalysis}
-              creativeGuide={parsed.creativeGuide}
               aiGeneratedAt={profile.aiGeneratedAt}
               aiModelUsed={profile.aiModelUsed}
               aiTokenUsed={profile.aiTokenUsed}

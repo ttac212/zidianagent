@@ -48,7 +48,7 @@ export const DOUYIN_PIPELINE_STEPS: DouyinPipelineStepDefinition[] = [
   {
     key: 'fetch-detail',
     label: '获取详情',
-    description: '调用 TikHub 获取视频元数据'
+    description: '获取视频元数据'
   },
   {
     key: 'download-video',
@@ -58,7 +58,7 @@ export const DOUYIN_PIPELINE_STEPS: DouyinPipelineStepDefinition[] = [
   {
     key: 'extract-audio',
     label: '提取音频',
-    description: '使用 FFmpeg 从视频中分离音频轨'
+    description: '从视频中分离音频轨'
   },
   {
     key: 'transcribe-audio',

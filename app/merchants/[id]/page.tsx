@@ -130,23 +130,12 @@ export default function MerchantDetailPage() {
       setContentLoading(true)
       const params = new URLSearchParams()
 
-      // 保持与 API 兼容的排序字段
-      let apiSortBy = contentFilters.sortBy
-      if (contentFilters.sortBy === 'engagement' || contentFilters.sortBy === 'shareCount') {
-        apiSortBy = 'publishedAt'
-      }
-
+      // 直接使用 contentFilters 的 sortBy，API 现在支持所有排序字段
       Object.entries(contentFilters).forEach(([key, value]) => {
-        if (value && value !== '' && key !== 'sortBy') {
-          if (key === 'sortBy' && (contentFilters.sortBy === 'engagement' || contentFilters.sortBy === 'shareCount')) {
-            return
-          }
+        if (value && value !== '') {
           params.append(key, String(value))
         }
       })
-
-      params.append('sortBy', apiSortBy)
-      params.append('sortOrder', contentFilters.sortOrder)
 
       const response = await fetch(`/api/merchants/${targetId}/contents?${params.toString()}`)
       if (!response.ok) {
@@ -156,29 +145,15 @@ export default function MerchantDetailPage() {
 
       const result = await response.json()
       const data = unwrapApiResponse<ContentListResponse>(result)
-      let sortedContents = data.contents || []
 
-      if (contentFilters.sortBy === 'engagement') {
-        sortedContents = [...sortedContents].sort((a, b) => {
-          const scoreA = getEngagementScore(a)
-          const scoreB = getEngagementScore(b)
-          return contentFilters.sortOrder === 'desc' ? scoreB - scoreA : scoreA - scoreB
-        })
-      } else if (contentFilters.sortBy === 'shareCount') {
-        sortedContents = [...sortedContents].sort((a, b) => {
-          return contentFilters.sortOrder === 'desc'
-            ? b.shareCount - a.shareCount
-            : a.shareCount - b.shareCount
-        })
-      }
-
-      setContents(sortedContents)
+      // 直接使用API返回的数据，不再在客户端排序
+      setContents(data.contents || [])
     } catch (error) {
       console.error('加载商户内容异常', error)
     } finally {
       setContentLoading(false)
     }
-  }, [contentFilters, merchant?.id, merchantId, getEngagementScore])
+  }, [contentFilters, merchant?.id, merchantId])
 
   useEffect(() => {
     fetchMerchant()
@@ -807,8 +782,6 @@ export default function MerchantDetailPage() {
               merchantId={merchant.id}
               initialEnabled={merchant.monitoringEnabled || false}
               initialInterval={merchant.syncIntervalSeconds || 21600}
-              lastCollectedAt={merchant.lastCollectedAt}
-              nextSyncAt={merchant.nextSyncAt}
             />
           )}
 

@@ -111,6 +111,12 @@ export function mapVideoToMerchantContent(
     commentCount: video.statistics?.comment_count || 0,
     collectCount: video.statistics?.collect_count || 0,
     shareCount: video.statistics?.share_count || 0,
+    // 计算总互动量
+    totalEngagement:
+      (video.statistics?.digg_count || 0) +
+      (video.statistics?.comment_count || 0) +
+      (video.statistics?.collect_count || 0) +
+      (video.statistics?.share_count || 0),
     // 新增字段
     playCount: video.statistics?.play_count || 0,
     forwardCount: video.statistics?.forward_count || 0,

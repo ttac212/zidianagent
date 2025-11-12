@@ -61,8 +61,10 @@ export async function GET(request: NextRequest) {
     
     if (filters.status) {
       where.status = filters.status
+    } else {
+      // 默认只显示ACTIVE状态的商家，避免误操作已删除/停用的商家
+      where.status = 'ACTIVE'
     }
-    // 不再默认过滤状态，显示所有商家（包括ACTIVE、SUSPENDED等）
 
     // 排序配置
     const orderBy: any = {}

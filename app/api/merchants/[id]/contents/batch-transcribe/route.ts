@@ -424,10 +424,10 @@ export async function POST(
         (c) => !c.transcript || !c.hasTranscript
       )
     } else if (mode === 'all') {
-      // 处理所有内容，跳过已有转录的
-      // （实际上不跳过，但在处理时会检查）
+      // 处理所有内容，但跳过已有转录的（不重新转录）
+      // 不需要过滤，但后续处理时会检查
     } else if (mode === 'force') {
-      // 强制覆盖所有内容
+      // 强制覆盖所有内容，不过滤
     }
 
     if (targetContents.length === 0) {
@@ -450,15 +450,22 @@ export async function POST(
     const results = await processBatch(
       targetContents,
       async (content) => {
-        // 对于 'all' 模式，跳过已有转录的内容
-        if (mode === 'all' && content.transcript && content.hasTranscript) {
-          return {
-            contentId: content.id,
-            status: 'skipped',
-            reason: 'already_has_transcript',
+        // 根据不同mode处理已有转录的内容
+        if (content.transcript && content.hasTranscript) {
+          if (mode === 'all') {
+            // all 模式：跳过已有转录的内容
+            return {
+              contentId: content.id,
+              status: 'skipped',
+              reason: 'already_has_transcript',
+            }
+          } else if (mode === 'force') {
+            // force 模式：强制覆盖已有转录
+            return transcribeContent(content.id, merchantId, apiKey)
           }
         }
 
+        // missing 模式和没有转录的内容：正常转录
         return transcribeContent(content.id, merchantId, apiKey)
       },
       concurrent

@@ -9,9 +9,7 @@
 
 import type {
   AIProfileResponse,
-  ProfileBrief,
-  ProfileViralAnalysis,
-  ProfileCreativeGuide
+  ProfileBrief
 } from '@/types/merchant'
 
 interface ParseResult {
@@ -20,15 +18,6 @@ interface ParseResult {
   briefUsageScenarios: string | null
   briefAudienceProfile: string | null
   briefBrandTone: string | null
-
-  topContentAnalysis: string | null
-  goldenThreeSeconds: string | null
-  emotionalTriggers: string | null
-  contentFormats: string | null
-
-  trendingTopics: string | null
-  tagStrategy: string | null
-  publishingTips: string | null
 }
 
 /**
@@ -96,13 +85,9 @@ function extractJSON(text: string): string | null {
 function validateStructure(data: any): data is AIProfileResponse {
   if (!data || typeof data !== 'object') return false
 
-  // 验证三个主要部分存在
-  if (!data.brief || !data.viralAnalysis || !data.creativeGuide) {
-    console.warn('[Profile Parser] 缺少主要部分:', {
-      hasBrief: !!data.brief,
-      hasViralAnalysis: !!data.viralAnalysis,
-      hasCreativeGuide: !!data.creativeGuide
-    })
+  // 验证brief部分存在
+  if (!data.brief) {
+    console.warn('[Profile Parser] 缺少brief部分')
     return false
   }
 
@@ -113,20 +98,6 @@ function validateStructure(data: any): data is AIProfileResponse {
     return false
   }
 
-  // 验证爆款分析结构
-  const viral = data.viralAnalysis
-  if (!Array.isArray(viral.goldenThreeSeconds) || !viral.emotionalTriggers) {
-    console.warn('[Profile Parser] ViralAnalysis结构不完整')
-    return false
-  }
-
-  // 验证创作指南结构
-  const guide = data.creativeGuide
-  if (!Array.isArray(guide.trendingTopics) || !guide.tagStrategy || !guide.publishingTips) {
-    console.warn('[Profile Parser] CreativeGuide结构不完整')
-    return false
-  }
-
   return true
 }
 
@@ -134,7 +105,7 @@ function validateStructure(data: any): data is AIProfileResponse {
  * 将AI响应转换为数据库存储格式
  */
 function convertToStorageFormat(data: AIProfileResponse): ParseResult {
-  const { brief, viralAnalysis, creativeGuide } = data
+  const { brief } = data
 
   return {
     // PART 1: Brief
@@ -142,20 +113,7 @@ function convertToStorageFormat(data: AIProfileResponse): ParseResult {
     briefSellingPoints: JSON.stringify(brief.sellingPoints || []),
     briefUsageScenarios: JSON.stringify(brief.usageScenarios || []),
     briefAudienceProfile: JSON.stringify(brief.audienceProfile || null),
-    briefBrandTone: brief.brandTone || null,
-
-    // PART 2: 爆款分析
-    topContentAnalysis: JSON.stringify(viralAnalysis.topContents || []),
-    goldenThreeSeconds: JSON.stringify(viralAnalysis.goldenThreeSeconds || []),
-    emotionalTriggers: JSON.stringify(viralAnalysis.emotionalTriggers || {}),
-    contentFormats: JSON.stringify(viralAnalysis.contentFormats || {}),
-
-    // PART 3: 创作指南
-    trendingTopics: JSON.stringify(creativeGuide.trendingTopics || []),
-    tagStrategy: typeof creativeGuide.tagStrategy === 'string'
-      ? creativeGuide.tagStrategy
-      : JSON.stringify(creativeGuide.tagStrategy),
-    publishingTips: JSON.stringify(creativeGuide.publishingTips || {})
+    briefBrandTone: brief.brandTone || null
   }
 }
 
@@ -168,16 +126,7 @@ function createEmptyResult(): ParseResult {
     briefSellingPoints: null,
     briefUsageScenarios: null,
     briefAudienceProfile: null,
-    briefBrandTone: null,
-
-    topContentAnalysis: null,
-    goldenThreeSeconds: null,
-    emotionalTriggers: null,
-    contentFormats: null,
-
-    trendingTopics: null,
-    tagStrategy: null,
-    publishingTips: null
+    briefBrandTone: null
   }
 }
 
@@ -186,8 +135,6 @@ function createEmptyResult(): ParseResult {
  */
 export function parseStoredProfile(profile: any): {
   brief: ProfileBrief | null
-  viralAnalysis: ProfileViralAnalysis | null
-  creativeGuide: ProfileCreativeGuide | null
 } {
   try {
     const brief: ProfileBrief | null = profile.briefIntro ? {
@@ -198,24 +145,9 @@ export function parseStoredProfile(profile: any): {
       brandTone: profile.briefBrandTone || ''
     } : null
 
-    const viralAnalysis: ProfileViralAnalysis | null = profile.topContentAnalysis ? {
-      topContents: JSON.parse(profile.topContentAnalysis || '[]'),
-      goldenThreeSeconds: JSON.parse(profile.goldenThreeSeconds || '[]'),
-      emotionalTriggers: JSON.parse(profile.emotionalTriggers || '{}'),
-      contentFormats: JSON.parse(profile.contentFormats || '{}')
-    } : null
-
-    const creativeGuide: ProfileCreativeGuide | null = profile.trendingTopics ? {
-      trendingTopics: JSON.parse(profile.trendingTopics || '[]'),
-      tagStrategy: profile.tagStrategy ?
-        (profile.tagStrategy.startsWith('{') ? JSON.parse(profile.tagStrategy) : profile.tagStrategy)
-        : '',
-      publishingTips: JSON.parse(profile.publishingTips || '{}')
-    } : null
-
-    return { brief, viralAnalysis, creativeGuide }
+    return { brief }
   } catch (error) {
     console.error('[Profile Parser] 前端解析失败:', error)
-    return { brief: null, viralAnalysis: null, creativeGuide: null }
+    return { brief: null }
   }
 }

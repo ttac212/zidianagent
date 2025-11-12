@@ -101,7 +101,7 @@ export type ContentFilters = {
   dateTo?: Date
   hasTranscript?: boolean
   minEngagement?: number
-  sortBy?: 'publishedAt' | 'diggCount' | 'commentCount' | 'collectCount'
+  sortBy?: 'publishedAt' | 'diggCount' | 'commentCount' | 'collectCount' | 'shareCount' | 'engagement'
   sortOrder?: 'asc' | 'desc'
   page?: number
   limit?: number
@@ -194,7 +194,7 @@ export const CATEGORY_COLORS = [
 
 // ============= 商家创作档案相关类型 =============
 
-// 商家Brief结构(PART 1)
+// 商家Brief结构
 export interface ProfileBrief {
   intro: string                    // 3句话介绍(字符串格式)
   sellingPoints: string[]          // 核心卖点
@@ -208,53 +208,17 @@ export interface ProfileBrief {
   brandTone: string                // 品牌调性
 }
 
-// 爆款分析结构(PART 2)
-export interface ProfileViralAnalysis {
-  topContents: Array<{
-    rank: number
-    title: string
-    opening: string
-    emotionType: string            // 笑点/痛点/爽点/知识点
-    format: string                 // 口播/剧情/对比/教程/探店
-    engagement: number
-  }>
-  goldenThreeSeconds: string[]     // 黄金3秒开头模板
-  emotionalTriggers: Record<string, number>  // 情绪点百分比
-  contentFormats: Record<string, number>     // 内容形式百分比
-}
-
-// 创作指南结构(PART 3)
-export interface ProfileCreativeGuide {
-  trendingTopics: string[]         // 热门话题
-  tagStrategy: string | any         // 标签组合策略(完整说明，兼容对象格式)
-  publishingTips: {
-    bestTime: string
-    frequency: string
-  }
-}
-
 // 商家档案完整类型
 export interface MerchantProfile {
   id: string
   merchantId: string
 
-  // PART 1: 商家Brief
+  // PART 1: 商家Brief（创作简报）
   briefIntro?: string | null
   briefSellingPoints?: string | null     // JSON字符串
   briefUsageScenarios?: string | null    // JSON字符串
   briefAudienceProfile?: string | null   // JSON字符串
   briefBrandTone?: string | null
-
-  // PART 2: 爆款分析
-  topContentAnalysis?: string | null     // JSON字符串
-  goldenThreeSeconds?: string | null     // JSON字符串
-  emotionalTriggers?: string | null      // JSON字符串
-  contentFormats?: string | null         // JSON字符串
-
-  // PART 3: 创作指南
-  trendingTopics?: string | null         // JSON字符串
-  tagStrategy?: string | null            // JSON字符串
-  publishingTips?: string | null         // JSON字符串
 
   // 元数据
   aiGeneratedAt?: Date | string | null
@@ -274,14 +238,10 @@ export interface MerchantProfile {
 // 解析后的档案类型(前端使用)
 export interface ParsedMerchantProfile extends Omit<
   MerchantProfile,
-  'briefSellingPoints' | 'briefUsageScenarios' | 'briefAudienceProfile' |
-  'topContentAnalysis' | 'goldenThreeSeconds' | 'emotionalTriggers' |
-  'contentFormats' | 'trendingTopics' | 'tagStrategy' | 'publishingTips'
+  'briefSellingPoints' | 'briefUsageScenarios' | 'briefAudienceProfile'
 > {
   // 解析后的JSON字段
   brief?: ProfileBrief | null
-  viralAnalysis?: ProfileViralAnalysis | null
-  creativeGuide?: ProfileCreativeGuide | null
 }
 
 // 档案API响应类型
@@ -311,8 +271,6 @@ export interface UpdateProfileData {
 // AI生成档案的原始响应结构
 export interface AIProfileResponse {
   brief: ProfileBrief
-  viralAnalysis: ProfileViralAnalysis
-  creativeGuide: ProfileCreativeGuide
 }
 
 // ============= 商家对标账号相关类型 =============

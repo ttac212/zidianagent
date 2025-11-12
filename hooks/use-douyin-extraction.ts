@@ -4,6 +4,7 @@
  */
 
 import { useState, useCallback, useRef } from 'react';
+import { processSSEStream } from '@/lib/utils/sse-parser';
 
 export interface ExtractionProgress {
   stage:
@@ -24,16 +25,9 @@ export interface ExtractionProgress {
   total?: number;
 }
 
-export interface PartialResult {
-  index: number;
-  text: string;
-  timestamp: number;
-}
-
 export interface ExtractionResult {
   text: string;
   originalText: string;
-  segments: PartialResult[];
   videoInfo: {
     title?: string;
     author?: string;
@@ -41,8 +35,6 @@ export interface ExtractionResult {
     duration?: number;
   };
   stats: {
-    totalSegments: number;
-    successSegments: number;
     totalCharacters: number;
   };
 }
@@ -51,7 +43,6 @@ export interface UseDouyinExtractionReturn {
   // 状态
   isExtracting: boolean;
   progress: ExtractionProgress;
-  partialResults: PartialResult[];
   result: ExtractionResult | null;
   error: string | null;
 
@@ -68,7 +59,6 @@ export function useDouyinExtraction(): UseDouyinExtractionReturn {
     message: '',
     percent: 0,
   });
-  const [partialResults, setPartialResults] = useState<PartialResult[]>([]);
   const [result, setResult] = useState<ExtractionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,7 +68,6 @@ export function useDouyinExtraction(): UseDouyinExtractionReturn {
     // 重置状态
     setIsExtracting(true);
     setProgress({ stage: 'parsing', message: '开始处理...', percent: 0 });
-    setPartialResults([]);
     setResult(null);
     setError(null);
 
@@ -104,33 +93,35 @@ export function useDouyinExtraction(): UseDouyinExtractionReturn {
         throw new Error('响应体为空');
       }
 
-      // 处理SSE流
+      // 使用统一的 SSE 解析器 (支持 ZenMux 和标准格式)
       const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-
-      while (true) {
-        const { done, value } = await reader.read();
-
-        if (done) {
-          break;
-        }
-
-        // 解码数据
-        const text = decoder.decode(value, { stream: true });
-
-        // 处理多个SSE消息
-        const lines = text.split('\n');
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              handleSSEEvent(data);
-            } catch (e) {
-              console.error('解析SSE数据失败:', e);
+      await processSSEStream(reader, {
+        onMessage: (message) => {
+          // 修复：正确处理带有 event: 头的消息
+          // 将 payload 展开到顶层，确保 handleSSEEvent 能访问到 stage/percent 等字段
+          if (message.payload && typeof message.payload === 'object') {
+            const payload = message.payload as Record<string, any>
+            // 如果 payload 有 type 字段，直接使用
+            if (payload.type) {
+              handleSSEEvent(payload)
             }
+            // 如果有 event 但 payload 没有 type，将 event 作为 type 并展开 payload
+            else if (message.event) {
+              handleSSEEvent({ type: message.event, ...payload })
+            }
+            // 否则使用整个 message 作为事件数据
+            else {
+              handleSSEEvent(message)
+            }
+          } else {
+            // 兼容标准格式（没有 event 头，直接是 data）
+            handleSSEEvent(message as Record<string, any>)
           }
+        },
+        onError: (error) => {
+          console.error('[抖音提取] SSE错误:', error)
         }
-      }
+      })
 
       setIsExtracting(false);
     } catch (error: any) {
@@ -168,30 +159,10 @@ export function useDouyinExtraction(): UseDouyinExtractionReturn {
         }));
         break;
 
-      case 'partial':
-        setPartialResults((prev) => [
-          ...prev,
-          {
-            index: payload.index,
-            text: payload.text,
-            timestamp: payload.timestamp,
-          },
-        ]);
-        setProgress((prev) => ({
-          ...prev,
-          percent: payload.progress || prev.percent,
-        }));
-        break;
-
-      case 'warning':
-        console.warn('警告:', payload.message);
-        break;
-
       case 'done':
         setResult({
           text: payload.text,
           originalText: payload.originalText,
-          segments: payload.segments,
           videoInfo: payload.videoInfo,
           stats: payload.stats,
         });
@@ -226,7 +197,6 @@ export function useDouyinExtraction(): UseDouyinExtractionReturn {
   const reset = useCallback(() => {
     setIsExtracting(false);
     setProgress({ stage: 'idle', message: '', percent: 0 });
-    setPartialResults([]);
     setResult(null);
     setError(null);
   }, []);
@@ -234,7 +204,6 @@ export function useDouyinExtraction(): UseDouyinExtractionReturn {
   return {
     isExtracting,
     progress,
-    partialResults,
     result,
     error,
     extractText,

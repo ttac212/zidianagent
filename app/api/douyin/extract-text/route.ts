@@ -2,18 +2,18 @@
  * 抖音视频文案提取 API (GPT-4o Audio Preview)
  *
  * 流程:
- * 1. 下载视频
- * 2. 提取音频
- * 3. 使用 GPT-4o Audio Preview 转录
- * 4. 使用LLM优化文案
+ * 1. 解析分享链接并获取视频信息
+ * 2. 下载视频
+ * 3. 提取音频
+ * 4. 使用 GPT-4o Audio Preview 转录
+ * 5. 使用LLM优化文案
  */
 
 import { NextRequest } from 'next/server';
 import { VideoProcessor } from '@/lib/video/video-processor';
-import { parseDouyinVideoShare } from '@/lib/douyin/share-link';
+import { createVideoSourceFromShareLink } from '@/lib/douyin/video-source';
+import { mapStageProgress } from '@/lib/douyin/progress-mapper';
 import { DOUYIN_DEFAULT_HEADERS } from '@/lib/douyin/constants';
-import { getTikHubClient } from '@/lib/tikhub';
-import type { DouyinVideo } from '@/lib/tikhub/types';
 
 export async function POST(req: NextRequest) {
   try {
@@ -43,80 +43,61 @@ export async function POST(req: NextRequest) {
         };
 
         try {
-          // 1. 解析抖音链接
-          sendEvent('progress', { stage: 'parsing', message: '正在解析抖音链接...' });
-
-          const tikhubClient = getTikHubClient();
-          const shareResult = await parseDouyinVideoShare(shareLink);
-
-          if (!shareResult.videoId) {
-            throw new Error('无法从链接中提取视频ID');
-          }
-
-          sendEvent('info', {
-            stage: 'parsed',
-            message: '短链解析成功',
-            videoInfo: { videoId: shareResult.videoId },
+          // 1. 解析分享链接并获取视频信息
+          sendEvent('progress', {
+            stage: 'parsing',
+            message: '正在解析抖音链接...',
+            percent: 0,
           });
 
-          // 2. 获取视频详情
-          sendEvent('progress', { stage: 'analyzing', message: '正在获取视频详情...' });
-
-          const videoDetail = await tikhubClient.getVideoDetail({
-            aweme_id: shareResult.videoId,
-          });
-
-          const awemeDetail = videoDetail?.aweme_detail;
-          if (!awemeDetail) {
-            throw new Error('TikHub未返回视频详情数据');
-          }
-
-          const videoUrl = resolvePlayableVideoUrl(awemeDetail);
-          if (!videoUrl) {
-            throw new Error('未能获取可用的视频播放地址');
-          }
-
-          const videoDuration = normalizeDurationSeconds(awemeDetail.video?.duration) || 0;
+          const videoSource = await createVideoSourceFromShareLink(shareLink);
 
           sendEvent('info', {
             stage: 'analyzed',
             message: '视频信息获取成功',
-            duration: videoDuration ? videoDuration.toFixed(1) + '秒' : '未知',
+            duration: videoSource.duration ? videoSource.duration.toFixed(1) + '秒' : '未知',
             videoInfo: {
-              title: awemeDetail.desc || '未知标题',
-              author: awemeDetail.author?.nickname || '未知作者',
+              title: videoSource.title,
+              author: videoSource.author,
             },
           });
 
-          // 3. 下载视频
-          sendEvent('progress', { stage: 'downloading', message: '正在下载视频...', percent: 20 });
+          // 2. 下载视频
+          sendEvent('progress', {
+            stage: 'downloading',
+            message: '正在下载视频...',
+            percent: mapStageProgress('downloading', 0),
+          });
 
           const requestHeaders: Record<string, string> = {
             ...DOUYIN_DEFAULT_HEADERS,
           };
 
           // 先获取视频大小
-          const videoInfo = await VideoProcessor.getVideoInfo(videoUrl, {
+          const videoInfo = await VideoProcessor.getVideoInfo(videoSource.playUrl, {
             headers: requestHeaders,
           });
 
           let lastDownloadPercent = -1;
-          const downloadResult = await VideoProcessor.downloadVideo(videoUrl, videoInfo, {
-            headers: requestHeaders,
-            signal: req.signal,
-            onProgress: async (downloaded, total) => {
-              if (!total) return;
-              const percent = Math.floor((downloaded / total) * 100);
-              if (percent === lastDownloadPercent) return;
-              lastDownloadPercent = percent;
-              const mappedPercent = Math.min(40, Math.max(20, 20 + Math.floor((percent / 100) * 20)));
-              sendEvent('progress', {
-                stage: 'downloading',
-                message: `下载进度 ${percent}%`,
-                percent: mappedPercent,
-              });
-            },
-          });
+          const downloadResult = await VideoProcessor.downloadVideo(
+            videoSource.playUrl,
+            videoInfo,
+            {
+              headers: requestHeaders,
+              signal: req.signal,
+              onProgress: async (downloaded, total) => {
+                if (!total) return;
+                const percent = Math.floor((downloaded / total) * 100);
+                if (percent === lastDownloadPercent) return;
+                lastDownloadPercent = percent;
+                sendEvent('progress', {
+                  stage: 'downloading',
+                  message: `下载进度 ${percent}%`,
+                  percent: mapStageProgress('downloading', percent),
+                });
+              },
+            }
+          );
           const videoBuffer = downloadResult.buffer;
 
           sendEvent('info', {
@@ -126,8 +107,12 @@ export async function POST(req: NextRequest) {
             size: (videoBuffer.length / (1024 * 1024)).toFixed(2) + ' MB',
           });
 
-          // 4. 提取音频
-          sendEvent('progress', { stage: 'extracting', message: '正在提取音频...', percent: 40 });
+          // 3. 提取音频
+          sendEvent('progress', {
+            stage: 'extracting',
+            message: '正在提取音频...',
+            percent: mapStageProgress('extracting', 0),
+          });
 
           const audioBuffer = await VideoProcessor.extractAudio(videoBuffer, {
             format: 'mp3',
@@ -142,8 +127,12 @@ export async function POST(req: NextRequest) {
             size: (audioBuffer.length / (1024 * 1024)).toFixed(2) + ' MB',
           });
 
-          // 5. 使用 GPT-4o Audio Preview 转录
-          sendEvent('progress', { stage: 'transcribing', message: '正在转录语音...', percent: 60 });
+          // 4. 使用 GPT-4o Audio Preview 转录
+          sendEvent('progress', {
+            stage: 'transcribing',
+            message: '正在转录语音...',
+            percent: mapStageProgress('transcribing', 0),
+          });
 
           const base64Audio = audioBuffer.toString('base64');
 
@@ -162,7 +151,7 @@ export async function POST(req: NextRequest) {
                   content: [
                     {
                       type: 'text',
-                      text: `这是一段抖音视频的音频转录任务。请仔细转录音频内容，注意以下要点：
+                      text: `请转录这段音频的内容。注意以下要点：
 
 1. **准确识别**：尽可能准确地识别每个字词，特别注意处理方言口音和不标准发音
 2. **同音字辨析**：遇到同音字时，结合上下文语境选择正确的汉字
@@ -205,34 +194,29 @@ export async function POST(req: NextRequest) {
             textLength: transcribedText.length,
           });
 
-          // 6. 使用LLM优化文案
-          sendEvent('progress', { stage: 'optimizing', message: '正在优化文案...', percent: 90 });
-
-          // 提取视频元数据
-          const hashtags = awemeDetail.text_extra
-            ?.filter((item: any) => item.hashtag_name)
-            .map((item: any) => item.hashtag_name) || []
-
-          const videoTags = awemeDetail.video_tag
-            ?.map((tag: any) => tag.tag_name)
-            .filter(Boolean) || []
-
-          const optimizedText = await optimizeTextWithLLM(transcribedText, apiKey, {
-            title: awemeDetail.desc || '未知标题',
-            author: awemeDetail.author?.nickname || '未知作者',
-            hashtags,
-            videoTags
+          // 5. 使用LLM优化文案
+          sendEvent('progress', {
+            stage: 'optimizing',
+            message: '正在优化文案...',
+            percent: mapStageProgress('optimizing', 0),
           });
 
-          // 7. 返回最终结果
+          const optimizedText = await optimizeTextWithLLM(transcribedText, apiKey, {
+            title: videoSource.title,
+            author: videoSource.author,
+            hashtags: videoSource.hashtags,
+            videoTags: videoSource.videoTags,
+          });
+
+          // 6. 返回最终结果
           sendEvent('done', {
             text: optimizedText || transcribedText,
             originalText: transcribedText,
             videoInfo: {
-              title: awemeDetail.desc || '未知标题',
-              author: awemeDetail.author?.nickname || '未知作者',
-              duration: videoDuration,
-              videoId: shareResult.videoId,
+              title: videoSource.title,
+              author: videoSource.author,
+              duration: videoSource.duration,
+              videoId: videoSource.videoId,
             },
             stats: {
               totalCharacters: transcribedText.length,
@@ -272,40 +256,6 @@ export async function POST(req: NextRequest) {
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
-}
-
-function resolvePlayableVideoUrl(video: DouyinVideo): string | null {
-  const videoData: any = video.video || video;
-  if (!videoData) return null;
-
-  const candidates: Array<string | undefined> = [];
-
-  if (Array.isArray(videoData.play_addr?.url_list)) {
-    candidates.push(...videoData.play_addr.url_list);
-  }
-
-  if (Array.isArray(videoData.bit_rate)) {
-    for (const item of videoData.bit_rate) {
-      if (Array.isArray(item?.play_addr?.url_list)) {
-        candidates.push(...item.play_addr.url_list);
-      }
-    }
-  }
-
-  if (Array.isArray(videoData.download_addr?.url_list)) {
-    candidates.push(...videoData.download_addr.url_list);
-  }
-
-  const sanitized = candidates
-    .map((url) => (url?.includes('playwm') ? url.replace('playwm', 'play') : url))
-    .filter((url): url is string => Boolean(url));
-
-  return sanitized.find((url) => url.includes('aweme')) || sanitized[0] || null;
-}
-
-function normalizeDurationSeconds(duration?: number | null): number {
-  if (!duration || Number.isNaN(duration)) return 0;
-  return duration >= 1000 ? duration / 1000 : duration;
 }
 
 async function optimizeTextWithLLM(

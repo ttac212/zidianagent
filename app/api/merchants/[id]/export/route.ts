@@ -113,7 +113,12 @@ export async function GET(
       
       const videoCount = merchant.contents.filter(c => c.contentType === 'VIDEO').length
       const withTranscript = merchant.contents.filter(c => c.hasTranscript).length
-      
+
+      // 计算转录覆盖率，添加分母保护
+      const transcriptCoverage = merchant.totalContentCount > 0
+        ? `${Math.round((withTranscript / merchant.totalContentCount) * 100)}%`
+        : 'N/A'
+
       // CSV 内容
       const analyticsData = [
         ['指标', '数值', '说明'],
@@ -127,7 +132,7 @@ export async function GET(
         ['视频内容数', videoCount.toString(), ''],
         ['其他内容数', (merchant.totalContentCount - videoCount).toString(), ''],
         ['带转录内容', withTranscript.toString(), ''],
-        ['转录覆盖率', `${Math.round((withTranscript / merchant.totalContentCount) * 100)}%`, ''],
+        ['转录覆盖率', transcriptCoverage, ''],
         ['', '', ''], // 空行
         ['互动统计', '', ''],
         ['总点赞数', merchant.totalDiggCount.toString(), ''],

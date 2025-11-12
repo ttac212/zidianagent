@@ -7,6 +7,7 @@ import { NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { processSSEStream } from '@/lib/utils/sse-parser'
 
 // 移除maxDuration限制，允许长视频转录任务自然完成
 // 之前设置的300秒限制会导致长视频转录被Next.js强制终止
@@ -92,7 +93,13 @@ async function transcribeContent(
 
     // 2. 调用对话模块的转录API
     console.log(`[批量转录] 调用转录API, shareUrl: ${content.shareUrl.substring(0, 60)}...`)
-    const response = await fetch('http://localhost:3007/api/douyin/extract-text', {
+
+    // 修复：构建完整URL，避免localhost硬编码
+    // 优先使用环境变量，回退到请求的origin（在route handler中不可用），最后使用localhost开发
+    const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3007'
+    const apiUrl = new URL('/api/douyin/extract-text', baseUrl).toString()
+
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -111,37 +118,26 @@ async function transcribeContent(
       throw new Error('转录API未返回响应体')
     }
 
-    // 3. 解析SSE流，获取最终结果
+    // 3. 使用统一的 SSE 解析器 (支持 ZenMux 和标准格式)
     let finalText = ''
     const reader = response.body.getReader()
-    const decoder = new TextDecoder()
 
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      const text = decoder.decode(value, { stream: true })
-      const lines = text.split('\n')
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const data = JSON.parse(line.slice(6))
-            if (data.type === 'done') {
-              finalText = data.text
-              break
-            }
-            if (data.type === 'error') {
-              throw new Error(data.message)
-            }
-          } catch (e) {
-            console.error('[批量转录] 解析SSE数据失败:', e)
+    await processSSEStream(reader, {
+      onMessage: (message) => {
+        // 查找 type === 'done' 的事件
+        if (message.payload && typeof message.payload === 'object') {
+          const data = message.payload as Record<string, any>
+          if (data.type === 'done' && data.text) {
+            finalText = data.text
+          } else if (data.type === 'error' && data.message) {
+            throw new Error(data.message)
           }
         }
+      },
+      onError: (error) => {
+        console.error('[批量转录] SSE错误:', error)
       }
-
-      if (finalText) break
-    }
+    })
 
     if (!finalText) {
       throw new Error('转录API未返回文本')
@@ -254,9 +250,16 @@ export async function GET(
 
         // 过滤逻辑
         if (mode === 'missing') {
+          // missing 模式：只处理没有转录的内容
           targetContents = targetContents.filter(
             (c) => !c.transcript || !c.hasTranscript
           )
+        } else if (mode === 'all') {
+          // all 模式：处理所有内容，但后续会跳过已有转录的
+          // 不需要过滤
+        } else if (mode === 'force') {
+          // force 模式：强制处理所有内容
+          // 不需要过滤
         }
 
         sendSSE(controller, 'filtered', {
@@ -287,13 +290,19 @@ export async function GET(
           const batch = targetContents.slice(i, i + concurrent)
 
           const promises = batch.map(async (content) => {
-            // 跳过已有转录的内容（all 模式）
-            if (mode === 'all' && content.transcript && content.hasTranscript) {
-              return {
-                contentId: content.id,
-                status: 'skipped' as const,
-                reason: 'already_has_transcript',
-                title: content.title,
+            // 根据不同mode处理已有转录的内容
+            if (content.transcript && content.hasTranscript) {
+              if (mode === 'all') {
+                // all 模式：跳过已有转录的内容
+                return {
+                  contentId: content.id,
+                  status: 'skipped' as const,
+                  reason: 'already_has_transcript',
+                  title: content.title,
+                }
+              } else if (mode === 'force') {
+                // force 模式：强制转录，即使已有转录也重新处理
+                // 继续执行下面的转录逻辑
               }
             }
 

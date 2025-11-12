@@ -12,12 +12,12 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Copy, Download, CheckCircle2 } from 'lucide-react';
+import { Copy, Download, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function DouyinExtractor() {
   const [shareLink, setShareLink] = useState('');
-  const { isExtracting, progress, partialResults, result, error, extractText, cancel, reset } =
+  const { isExtracting, progress, result, error, extractText, cancel, reset } =
     useDouyinExtraction();
 
   const handleExtract = async () => {
@@ -106,30 +106,6 @@ export function DouyinExtractor() {
             </Alert>
           )}
 
-          {/* 实时部分结果 */}
-          {partialResults.length > 0 && !result && (
-            <Card className="bg-muted/50">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  正在识别中... ({partialResults.length} 段已完成)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="max-h-60 space-y-2 overflow-y-auto text-sm">
-                  {partialResults.map((partial, index) => (
-                    <div key={index} className="rounded border bg-background p-2">
-                      <div className="mb-1 text-xs text-muted-foreground">
-                        第 {partial.index + 1} 段 ({partial.timestamp.toFixed(1)}秒)
-                      </div>
-                      <div>{partial.text}</div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {/* 最终结果 */}
           {result && (
             <div className="space-y-4">
@@ -185,9 +161,6 @@ export function DouyinExtractor() {
                   </div>
                   <div className="mt-4 flex gap-4 text-xs text-muted-foreground">
                     <span>共 {result.stats.totalCharacters} 字</span>
-                    <span>
-                      {result.stats.successSegments}/{result.stats.totalSegments} 段识别成功
-                    </span>
                   </div>
                 </CardContent>
               </Card>

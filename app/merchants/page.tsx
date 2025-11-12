@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AddMerchantDialog } from '@/components/merchants/add-merchant-dialog'
+import { MerchantSyncProgressDialog } from '@/components/merchants/merchant-sync-progress-dialog'
 import {
   Filter,
   Building2,
@@ -39,6 +40,7 @@ import {
   useMerchantStatsQuery,
   useInvalidateMerchants
 } from '@/hooks/api/use-merchants-query'
+import { useMerchantSyncStream } from '@/hooks/use-merchant-sync-stream'
 import * as dt from '@/lib/utils/date-toolkit'
 
 export default function MerchantsPage() {
@@ -47,6 +49,7 @@ export default function MerchantsPage() {
     search: '',
     categoryId: '',
     location: '',
+    status: 'ACTIVE',  // 默认显示活跃商家
     sortBy: 'createdAt',
     sortOrder: 'desc',
     page: 1,
@@ -59,6 +62,9 @@ export default function MerchantsPage() {
   const { data: stats, isFetching: statsFetching } = useMerchantStatsQuery()
   const { invalidateAll } = useInvalidateMerchants()
 
+  // 使用 SSE 流式同步
+  const { status: syncStatus, progress: syncProgress, result: syncResult, error: syncError, startSync, cancelSync } = useMerchantSyncStream()
+
   // 从 React Query 数据中提取
   const merchants = merchantsData?.merchants || []
   const total = merchantsData?.total || 0
@@ -70,13 +76,32 @@ export default function MerchantsPage() {
     setRefreshing(merchantsFetching || categoriesFetching || statsFetching)
   }, [merchantsFetching, categoriesFetching, statsFetching])
 
-  // 判断用户是否有权限添加商家（仅管理员可添加）
-  const canAddMerchant = session?.user?.role === 'ADMIN'
+  // 控制同步进度对话框的显示
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false)
 
-  // 强制刷新所有数据
+  // 判断用户是否有权限（仅管理员）
+  const isAdmin = session?.user?.role === 'ADMIN'
+
+  // 流式同步商家数据（仅 ADMIN）
   const handleRefresh = async () => {
-    await invalidateAll()
+    if (!isAdmin) {
+      return // 非管理员不允许操作
+    }
+
+    // 打开进度对话框
+    setSyncDialogOpen(true)
+
+    // 开始同步（传递当前筛选条件）
+    await startSync(filters, 20)
   }
+
+  // 同步完成后刷新列表
+  useEffect(() => {
+    if (syncStatus === 'done') {
+      // 同步完成后，刷新所有数据
+      invalidateAll()
+    }
+  }, [syncStatus, invalidateAll])
 
   // 处理搜索
   const handleSearch = (value: string) => {
@@ -112,17 +137,20 @@ export default function MerchantsPage() {
           <Badge variant="outline" className="px-3 py-1">
             共 {total} 家商家
           </Badge>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="gap-2"
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? '刷新中...' : '刷新'}
-          </Button>
-          {canAddMerchant && (
+          {/* 刷新按钮 - 仅 ADMIN 可见，触发流式同步 */}
+          {isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={syncStatus === 'syncing'}
+              className="gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
+              {syncStatus === 'syncing' ? '同步中...' : '同步数据'}
+            </Button>
+          )}
+          {isAdmin && (
             <AddMerchantDialog
               categories={categories}
               onSuccess={invalidateAll}
@@ -218,6 +246,22 @@ export default function MerchantsPage() {
                 </SelectContent>
               </Select>
               
+              <Select
+                value={filters.status || "ACTIVE"}
+                onValueChange={(value) => handleFilter('status', value === "ALL" ? "" : value)}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="商家状态" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">全部状态</SelectItem>
+                  <SelectItem value="ACTIVE">正常</SelectItem>
+                  <SelectItem value="INACTIVE">停用</SelectItem>
+                  <SelectItem value="SUSPENDED">暂停</SelectItem>
+                  <SelectItem value="DELETED">已删除</SelectItem>
+                </SelectContent>
+              </Select>
+
               <Select
                 value={filters.sortBy}
                 onValueChange={(value) => handleFilter('sortBy', value)}
@@ -361,6 +405,17 @@ export default function MerchantsPage() {
         </div>
       )}
       </main>
+
+      {/* 同步进度对话框 */}
+      <MerchantSyncProgressDialog
+        open={syncDialogOpen}
+        onOpenChange={setSyncDialogOpen}
+        status={syncStatus}
+        progress={syncProgress}
+        result={syncResult}
+        error={syncError}
+        onCancel={cancelSync}
+      />
     </div>
   )
 }
