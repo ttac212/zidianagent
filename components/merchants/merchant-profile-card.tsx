@@ -199,10 +199,12 @@ export function MerchantProfileCard({
           <CardContent className="space-y-6">
             {/* AI生成内容 */}
             <ProfileAISection
+              merchantId={merchantId}
               brief={parsed.brief}
               aiGeneratedAt={profile.aiGeneratedAt}
               aiModelUsed={profile.aiModelUsed}
               aiTokenUsed={profile.aiTokenUsed}
+              isAdmin={isAdmin}
             />
 
             {/* 用户自定义内容 */}

@@ -6,6 +6,7 @@ import type {
   Merchant as PrismaMerchant,
   MerchantCategory as PrismaMerchantCategory,
   MerchantContent as PrismaMerchantContent,
+  MerchantContentComment as PrismaMerchantContentComment,
   BusinessType,
   MerchantStatus,
   ContentType
@@ -19,9 +20,12 @@ export type MerchantCategory = PrismaMerchantCategory & {
 }
 
 // 商家内容类型
+export type MerchantContentComment = PrismaMerchantContentComment
+
 export type MerchantContent = PrismaMerchantContent & {
   parsedTags?: string[]
   parsedTextExtra?: string[]
+  comments?: MerchantContentComment[]
 }
 
 // 商家详细信息类型

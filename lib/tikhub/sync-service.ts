@@ -100,7 +100,7 @@ export async function batchSyncMerchants(
 ): Promise<MerchantSyncTask[]> {
   const client = getTikHubClient()
   const tasks: MerchantSyncTask[] = []
-  const { merchantUids, maxConcurrent = 3, onProgress, onComplete } = config
+  const { merchantUids, maxConcurrent = 10, onProgress, onComplete } = config
 
   for (const uid of merchantUids) {
     tasks.push({
@@ -159,8 +159,9 @@ export async function batchSyncMerchants(
 
     await Promise.all(promises)
 
+    // 批次间延迟1秒，确保符合1秒10个并发的速率限制
     if (i + maxConcurrent < tasks.length) {
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      await new Promise((resolve) => setTimeout(resolve, 1000))
     }
   }
 

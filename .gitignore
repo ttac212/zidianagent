@@ -38,3 +38,8 @@ playwright/.cache/
 # Backups and reports (temporary data)
 /backups/
 /reports/
+nul
+temp-audio.mp3
+tmp.txt
+tmp_pipeline.txt
+test-env.mjs

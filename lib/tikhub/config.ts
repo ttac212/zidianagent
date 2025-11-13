@@ -21,8 +21,8 @@ export const TIKHUB_CONFIG = {
   // 重试延迟（毫秒）
   retryDelay: 1000,
 
-  // 并发请求限制
-  maxConcurrent: 5,
+  // 并发请求限制（根据TikHub官方推荐：1秒10个并发）
+  maxConcurrent: 10,
 
   // 定价配置（每次请求费用，单位：美元）
   pricing: {

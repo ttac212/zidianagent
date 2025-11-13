@@ -1,3 +1,8 @@
+// 加载环境变量（必须在所有导入之前）
+import dotenv from 'dotenv'
+import path from 'path'
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') })
+
 /**
  * 商家视频数据增强脚本
  *
@@ -143,11 +148,16 @@ async function enhanceVideo(
       aweme_ids: content.externalId,
     })
 
-    const stats = statsResponse.statistics[0]
-    if (!stats) {
+    // 兼容两种响应格式：statistics_list 或 statistics
+    const statisticsList =
+      (statsResponse as { statistics_list?: typeof statsResponse.statistics } | undefined)
+        ?.statistics_list ?? statsResponse.statistics
+
+    if (!statisticsList || statisticsList.length === 0) {
       throw new Error('未获取到统计数据')
     }
 
+    const stats = statisticsList[0]
     console.log(`  ✅ 播放量: ${stats.play_count.toLocaleString()}`)
 
     // 2. 获取评论
@@ -327,7 +337,14 @@ async function main() {
 
     // 2. 初始化TikHub客户端
     console.log(`\n🔌 连接TikHub API...`)
-    const client = getTikHubClient()
+
+    // 显式传递API密钥以避免单例初始化时序问题
+    const apiKey = process.env.TIKHUB_API_KEY
+    if (!apiKey) {
+      throw new Error('TIKHUB_API_KEY not found in environment variables')
+    }
+
+    const client = getTikHubClient({ apiKey })
     const connected = await client.testConnection()
 
     if (!connected) {
@@ -336,10 +353,16 @@ async function main() {
 
     console.log(`✅ API连接成功`)
 
-    // 检查余额
-    const userInfo = await client.getUserInfo()
-    console.log(`💰 账户余额: $${userInfo.balance}`)
-    console.log(`📊 今日请求: ${userInfo.daily_requests}`)
+    // 检查余额（可选）
+    try {
+      const userInfo = await client.getUserInfo()
+      if (userInfo) {
+        console.log(`💰 账户余额: $${userInfo.balance || 'N/A'}`)
+        console.log(`📊 今日请求: ${userInfo.daily_requests || 0}`)
+      }
+    } catch (error) {
+      console.log(`⚠️  无法获取账户信息，继续处理...`)
+    }
 
     // 3. 批量处理视频
     console.log(`\n🚀 开始处理视频...\n`)

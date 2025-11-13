@@ -203,6 +203,7 @@ model Merchant {
   members           MerchantMember[]
   benchmarks        MerchantBenchmark[] @relation("MerchantBenchmarks")
   benchmarkedBy     MerchantBenchmark[] @relation("BenchmarkFor")
+  audienceAnalysis  MerchantAudienceAnalysis?
 
   @@index([categoryId])
   @@index([location])
@@ -247,6 +248,7 @@ model MerchantContent {
   updatedAt         DateTime                 @updatedAt
   merchant          Merchant                 @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   comments          MerchantContentComment[]
+  analysis          MerchantContentAnalysis?
 
   @@unique([externalId, merchantId])
   @@index([merchantId, publishedAt])
@@ -278,6 +280,72 @@ model MerchantContentComment {
   @@index([contentId, diggCount(sort: Desc)]) // 按点赞数排序查询热门评论
   @@index([contentId, createdAt(sort: Desc)]) // 按时间排序查询最新评论
   @@map("merchant_content_comments")
+}
+
+// 商家内容评论分析表
+model MerchantContentAnalysis {
+  id        String   @id @default(cuid())
+  contentId String   @unique
+
+  // LLM分析结果（结构化存储）
+  sentimentAnalysis String? // JSON: 情感分析 { positive: %, neutral: %, negative: % }
+  coreTopics        String? // JSON: 核心话题 [{ topic, count, examples[] }]
+  userProfile       String? // JSON: 用户画像 { demographics, interests, behaviors }
+  suggestions       String? // JSON: 改进建议 [{ category, suggestion, priority }]
+
+  // 完整报告
+  rawMarkdown String? // LLM生成的完整Markdown报告
+
+  // 元数据
+  commentCount  Int      @default(0) // 分析的评论数
+  commentSource String   @default("db") // 'db' | 'tikhub'
+  analyzedAt    DateTime @default(now())
+  modelUsed     String // 使用的模型ID
+  tokenUsed     Int      @default(0)
+
+  // 关联关系
+  content MerchantContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@index([contentId])
+  @@index([analyzedAt])
+  @@map("merchant_content_analyses")
+}
+
+// 商家客群分析表（聚合多个视频的评论数据）
+model MerchantAudienceAnalysis {
+  id         String   @id @default(cuid())
+  merchantId String   @unique // 商家ID，每个商家只有一条最新分析记录
+
+  // 聚合统计
+  videosAnalyzed   Int      @default(0) // 分析的视频数量
+  commentsAnalyzed Int      @default(0) // 分析的评论总数
+  videoIds         String   @default("[]") // JSON数组：参与分析的视频ID列表
+
+  // 地域分布（JSON）
+  locationStats String? // JSON: [{ location, count, percentage }]
+
+  // 结构化洞察（JSON，可选，向下兼容历史 API）
+  audienceProfile String? // JSON: 综合客群画像
+  demographics    String? // JSON: 人群统计 { ageGroups, genderDist, locations }
+  behaviors       String? // JSON: 购买/决策行为
+  interests       String? // JSON: 兴趣偏好
+  painPoints      String? // JSON: 用户痛点
+  suggestions     String? // JSON: 改进建议
+
+  // 完整报告（包含基本信息、TOP视频列表、地域分布和LLM分析）
+  rawMarkdown String? // 完整的Markdown分析报告
+
+  // 元数据
+  analyzedAt DateTime @default(now())
+  modelUsed  String // 使用的模型ID
+  tokenUsed  Int      @default(0)
+
+  // 关联关系
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([analyzedAt])
+  @@map("merchant_audience_analyses")
 }
 
 enum UserRole {

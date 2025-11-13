@@ -15,7 +15,7 @@ import { z } from 'zod'
 // 请求体验证schema
 const batchSyncRequestSchema = z.object({
   merchantUids: z.array(z.string()).min(1, '至少需要一个商家UID'),
-  maxConcurrent: z.number().min(1).max(10).optional(),
+  maxConcurrent: z.number().min(1).max(20).optional(), // 提高上限以支持10个并发
 })
 
 export async function POST(request: NextRequest) {
@@ -43,10 +43,10 @@ export async function POST(request: NextRequest) {
 
     const { merchantUids, maxConcurrent } = validation.data
 
-    // 3. 执行批量同步
+    // 3. 执行批量同步（使用配置的默认并发数10）
     const tasks = await batchSyncMerchants({
       merchantUids,
-      maxConcurrent: maxConcurrent || 3,
+      maxConcurrent: maxConcurrent || 10,
     })
 
     // 4. 统计结果

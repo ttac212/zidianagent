@@ -104,6 +104,41 @@ function ensureActive(signal: AbortSignal | undefined) {
   }
 }
 
+const STAT_KEYS: Array<keyof DouyinCommentsStatistics> = [
+  'play_count',
+  'digg_count',
+  'comment_count',
+  'share_count',
+  'collect_count',
+  'download_count'
+]
+
+type RawDouyinStatistics = Record<string, any> | null | undefined
+
+function normalizeStatisticsValue(value: number | string | null | undefined): number {
+  if (value === null || value === undefined) {
+    return 0
+  }
+  const parsed = typeof value === 'string' ? Number(value) : value
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function normalizeStatisticsData(raw: RawDouyinStatistics): DouyinCommentsStatistics | null {
+  if (!raw) {
+    return null
+  }
+
+  const hasValidField = STAT_KEYS.some((key) => raw[key] !== undefined && raw[key] !== null)
+  if (!hasValidField) {
+    return null
+  }
+
+  return STAT_KEYS.reduce((acc, key) => {
+    acc[key] = normalizeStatisticsValue(raw[key])
+    return acc
+  }, {} as DouyinCommentsStatistics)
+}
+
 async function emitProgress(
   emit: DouyinCommentsPipelineEmitter,
   step: DouyinCommentsPipelineStep,
@@ -428,45 +463,86 @@ export async function runDouyinCommentsPipeline(
     await emitProgress(emit, 'fetch-detail', 'completed')
 
     // 步骤3: 获取播放数据
-    await emitProgress(emit, 'fetch-statistics', 'active')
-    let statistics: DouyinCommentsStatistics
+    await emitProgress(emit, 'fetch-statistics', 'active', '正在获取视频统计数据...')
+    let statistics: DouyinCommentsStatistics | null = null
+    let usedFallback = false
+
+    // 首先尝试使用专门的统计 API
     try {
+      console.log(`[COMMENTS_STATS] 正在获取视频统计数据，videoId: ${shareResult.videoId}`)
+
       const statsResponse = await tikhubClient.getVideoStatistics({
         aweme_ids: shareResult.videoId
       })
 
+      console.log('[COMMENTS_STATS] API响应:', JSON.stringify({
+        hasStatisticsList: !!(statsResponse as any).statistics_list,
+        hasStatistics: !!statsResponse.statistics,
+        response: statsResponse
+      }, null, 2))
+
+      // TikHub API 返回的字段名可能是 statistics_list 或 statistics
       const statisticsList =
         (statsResponse as { statistics_list?: typeof statsResponse.statistics } | undefined)
           ?.statistics_list ?? statsResponse.statistics
 
       if (!statisticsList || statisticsList.length === 0) {
-        throw new Error('未获取到统计数据')
+        console.warn('[COMMENTS_STATS] API未返回统计数据，将使用降级方案')
+        throw new Error('API未返回统计数据')
       }
 
       const stats = statisticsList[0]
-      statistics = {
-        play_count: stats.play_count || 0,
-        digg_count: stats.digg_count || 0,
-        comment_count: stats.comment_count || 0,
-        share_count: stats.share_count || 0,
-        collect_count: stats.collect_count || 0,
-        download_count: stats.download_count || 0
+      const normalizedStats = normalizeStatisticsData(stats)
+
+      if (normalizedStats) {
+        statistics = normalizedStats
+        console.log('[COMMENTS_STATS] 统计数据处理成功:', statistics)
+      } else {
+        console.warn('[COMMENTS_STATS] 统计数据字段不完整，将使用降级方案')
       }
     } catch (error) {
-      throw new DouyinCommentsPipelineStepError(
-        error instanceof Error ? error.message : '获取统计数据失败',
-        'fetch-statistics',
-        error
-      )
+      console.warn('[COMMENTS_STATS] 获取统计数据失败，尝试降级方案:', error)
+
+      // 详细记录错误信息用于调试
+      if (error && typeof error === 'object' && 'code' in error) {
+        const apiError = error as any
+        console.error(`[COMMENTS_STATS] TikHub API错误 (code: ${apiError.code}): ${apiError.message}`)
+        if (apiError.details) {
+          console.error('[COMMENTS_STATS] 错误详情:', apiError.details)
+        }
+      }
+    }
+
+    // 降级方案：使用视频详情中的统计数据
+    if (!statistics) {
+      await emitProgress(emit, 'fetch-statistics', 'active', '使用视频详情中的统计数据...')
+      const fallbackStatistics = normalizeStatisticsData(awemeDetail.statistics)
+
+      if (fallbackStatistics) {
+        statistics = fallbackStatistics
+        usedFallback = true
+        console.log('[COMMENTS_STATS] 成功使用降级数据源:', statistics)
+      } else {
+        // 如果降级方案也失败,抛出错误
+        throw new DouyinCommentsPipelineStepError(
+          '无法获取视频统计数据（主API和降级方案均失败）',
+          'fetch-statistics'
+        )
+      }
     }
     ensureActive(signal)
+
+    // 完成统计数据获取步骤
+    const completionDetail = usedFallback
+      ? '已获取统计数据（使用降级数据源）'
+      : '已获取统计数据'
+    await emitProgress(emit, 'fetch-statistics', 'completed', completionDetail)
 
     await emit({
       type: 'info',
       videoInfo,
       statistics
     })
-    await emitProgress(emit, 'fetch-statistics', 'completed')
 
     // 步骤4: 采集评论
     await emitProgress(emit, 'fetch-comments', 'active', '正在采集第1页评论...')

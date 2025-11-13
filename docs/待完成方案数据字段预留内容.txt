@@ -1,0 +1,19 @@
+• - prisma/schema.prisma:320 重新引入 audienceProfile/demographics/behaviors/interests/painPoints/suggestions 六个 JSON
+    字段，确保 MerchantAudienceAnalysis 的结构与历史契约保持一致，并用 pnpm prisma db push 同步本地 SQLite（命令成功，但    prisma generate 在重命名 query engine 时被 Windows 拒绝，需要你本地重新执行 pnpm prisma generate）。
+  - app/api/merchants/[id]/analyze-audience/route.ts:56 GET 接口再次序列化上述字段，即使目前仍为 null 也会向调用方返回，    避免老脚本因缺字段崩溃。
+  - lib/merchant/audience-analysis-pipeline.ts:72 & 724 新增公用 AudienceAnalysisStructuredFields，SSE done 事件携带全部    字段（暂以 null 占位），前后端对齐同一 DTO，后续要填充结构化洞察时代码改动范围最小。
+  - hooks/api/use-merchant-audience-analysis.ts:24-55, 197-222 Hook 引入 AudienceAnalysisStructuredFields，Query 与 SSE
+    结果都继承这组字段；setResult 在收到事件时补齐占位，result || data 渲染链不再出现 undefined。
+  - 数据库同步 已执行 pnpm prisma db push 让 prisma/dev.db 恢复这些列；如果你的远程环境曾经运行过删除列的 db push，请在
+    对应环境再跑一次以恢复表结构。
+
+  验证
+
+  - pnpm prisma db push ✔️（生成 Prisma Client 时的 EPERM rename 需要在本地重新执行 pnpm prisma generate 或清理
+    node_modules/.prisma）
+
+  后续建议
+
+  1. 在 pipeline 中真正填充这些结构化字段（现在只是 null 占位），否则 API 虽不再破坏契约，但仍缺可用数据。
+  2. 受 Windows 权限影响的 prisma generate 建议在管理员 PowerShell 或 WSL 中单独运行。
+  3. 部署前在目标环境重复 pnpm prisma db push/pnpm prisma generate，确保数据库列与最新 schema 完全一致。

@@ -1,7 +1,5 @@
 import type { DefaultSession, NextAuthOptions } from "next-auth"
 import Credentials from "next-auth/providers/credentials"
-import { PrismaAdapter } from "@auth/prisma-adapter"
-import { prisma } from "@/lib/prisma"
 import { authenticate } from './auth/strategies'
 
 // Augment session user with extra fields we expose to client
@@ -40,7 +38,8 @@ declare module "next-auth/jwt" {
 }
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma) as any,
+  // 移除 PrismaAdapter - 我们使用 JWT 策略，不需要数据库会话
+  // adapter: PrismaAdapter(prisma) as any,
   session: { strategy: "jwt" },
   debug: false,
   providers: [

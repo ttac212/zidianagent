@@ -1,0 +1,19 @@
+• 代码审查
+
+  - components/merchants/audience-analysis-section.tsx:173-289：用 const analysisData = result || data，但 hooks/api/
+    use-merchant-audience-analysis.ts:206-216 的 result 只有 markdown/videosAnalyzed/...，没有 rawMarkdown/analyzedAt/
+    modelUsed 等字段。组件随后访问 analysisData.rawMarkdown、analysisData.analyzedAt，一旦 SSE 流返回 result，这些字段就    是 undefined，UI 直接空白。要么让 hook 返回与 AudienceAnalysisData 一致的 DTO，要么在组件里针对 result 做字段映射，
+    否则“生成后立刻看不到内容”的 bug 永远存在。
+  - lib/merchant/audience-analysis-pipeline.ts:668-718：Pipeline 只把 analysisText 写入 rawMarkdown，而真正包含“基本信息    + TOP 视频 + 地域分布 + analysisText”的完整 Markdown（buildMarkdown() 返回值，见 694-701 行）从未入库，刷新后只能看
+    到裸的 LLM 段落。app/api/merchants/[id]/analyze-audience/route.ts:56-74 也只读取 rawMarkdown，所以任何页面刷新都会丢    失 TOP 区块。应在 upsert 时把完整 markdown 写回（复用现有列或新增列），并确保 API 返回的就是这个完整版本。
+  - prisma/schema.prisma:324-334 定义了一堆结构化 JSON 字段，但 lib/merchant/audience-analysis-pipeline.ts:668-689 从不
+    填它们，API 虽然 JSON.parse 后返回，实际永远是 null。这不仅让 UI 无法展示“完整”的客群洞察，也为后续筛选埋了雷。一旦
+    客户端和运营依赖这些字段，就会变成“break userspace”。至少要么移除这些字段避免误导，要么马上从 LLM 输出中解析并写入，    保持接口契约真实可靠。
+  - 类型层面目前一团糟：hooks/api/use-merchant-audience-analysis.ts:20-54 的 AudienceAnalysisResult、
+    AudienceAnalysisData、lib/merchant/audience-analysis-pipeline.ts:111-117 的 AudienceAnalysisPipelineResult、
+    types/merchant.ts 中的定义互不相容。结果就是你不得不用 result || data 这种 hack。抽一个统一的 DTO（带 rawMarkdown/
+    markdown、结构化字段、统计字段），所有 API/Hooks/组件只处理这一种，才能真正消灭那些“if (analysisData) ...”的特殊
+    情况。
+
+  想继续推进，建议优先落实上面两个致命问题：1) 让 pipeline/数据库/API/Hook 统一字段名，把完整 Markdown 写入；2) 填充或去
+  掉那些从不赋值的 JSON 字段。完成后再考虑如何让 LLM 输出结构化块。

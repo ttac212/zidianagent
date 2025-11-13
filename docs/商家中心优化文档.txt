@@ -1,0 +1,12 @@
+  - app/api/merchants/[id]/route.ts:33-45 仍然把 contents 查询硬限制为最新 20 条，再加 comments.take=5。因此“点赞/评论/
+    互动评分 TOP5”只是在最近 20 条里的局部排序，完全不覆盖历史高表现视频，业务口径被扭曲。
+  - components/merchants/merchant-profile-card.tsx:24-52 将评论洞察依附于 UI 上的 contents 状态，这个数组会随着用户搜索/    分页/ 排序而变化，导致“聚合结果”会跟着筛选条件一起跳，只是“当前列表的前5”而不是“商家全量的前5”，与需求不符。
+  - components/merchants/profile-ai-section.tsx:179-244 展示的只是 MerchantContentComment 原始文本，没有任何 LLM 分析、
+    也没有把“点赞/评论/互动评分”聚合到评论层级，更谈不上“保留分析结果”。刷新页面后依旧只能看到即时抓取的评论，需求里强调    的“每 个视频都要保留分析内容”完全缺失。
+
+  【改进方向】
+
+  - 后端要么取消 take:20，要么改成按指标聚合（SQL 排序+LIMIT）直接返回 TOP5，别让分页限制破坏统计。
+  - 评论洞察应该由独立接口返回固定结果，并存储在数据库（如 MerchantContentAnalysis），而不是复用前端可变列表；Profile 卡    片只读该聚合数据即可。
+  - Pipeline 需要把 LLM 的分析结果保存下来，并在 UI 中展示结构化聚合（统计值 + 评论摘要），否则显示原始评论既不满足“分
+    析”也无法复用。

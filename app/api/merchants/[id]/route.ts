@@ -23,24 +23,32 @@ export async function GET(
   return withMerchantAuth(request, params, async (_userId, _req, params) => {
     try {
       const { id } = await params
+      const { searchParams } = new URL(request.url)
 
       if (!id) {
         return validationError('商家ID不能为空')
       }
 
+      const includeContentsParam = searchParams.get('includeContents')
+      const includeContents = includeContentsParam !== 'false'
+      const requestedLimit = Number(searchParams.get('contentLimit') || '20')
+      const contentLimit = Number.isFinite(requestedLimit)
+        ? Math.min(Math.max(requestedLimit, 1), 50)
+        : 20
+
       const merchant = await prisma.merchant.findUnique({
         where: { id },
         include: {
           category: true,
-          contents: {
-            orderBy: {
-              publishedAt: 'desc'
-            },
-            take: 20 // 默认只返回最新的20条内容
-          },
           _count: {
             select: { contents: true }
-          }
+          },
+          ...(includeContents && {
+            contents: {
+              orderBy: { publishedAt: 'desc' },
+              take: contentLimit
+            }
+          })
         }
       })
 
@@ -48,29 +56,10 @@ export async function GET(
         return notFound('商家不存在')
       }
 
-      // 处理内容数据，解析JSON字段
-      const processedContents = merchant.contents.map(content => ({
-        ...content,
-        parsedTags: (() => {
-          try {
-            return JSON.parse(content.tags)
-          } catch {
-            return []
-          }
-        })(),
-        parsedTextExtra: (() => {
-          try {
-            return JSON.parse(content.textExtra)
-          } catch {
-            return []
-          }
-        })()
-      }))
-
       const response: MerchantDetailResponse = {
         merchant: {
           ...merchant,
-          contents: processedContents
+          contents: includeContents ? merchant.contents ?? [] : [] // 默认附带一批内容，兼容旧版 UI
         }
       }
 

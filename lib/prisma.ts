@@ -41,6 +41,9 @@ export const prisma = globalForPrisma.prisma ?? new PrismaClient({
 // 数据库连接初始化和优化
 async function initializeDatabase() {
   try {
+    // 确保连接已建立
+    await prisma.$connect()
+
     // 执行SQLite优化配置（区分查询和执行类型）
     for (const opt of sqliteOptimizations) {
       try {
@@ -63,9 +66,12 @@ async function initializeDatabase() {
 // 开发环境缓存实例
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma
-  // 开发环境立即初始化
-  initializeDatabase().catch(console.warn)
+}
+
+// 延迟初始化数据库优化（避免阻塞模块加载）
+// 使用 setImmediate 而不是 setTimeout，确保在事件循环的下一个tick执行
+if (typeof setImmediate !== 'undefined') {
+  setImmediate(() => initializeDatabase().catch(console.warn))
 } else {
-  // 生产环境延迟初始化
-  setTimeout(() => initializeDatabase().catch(console.warn), 1000)
+  setTimeout(() => initializeDatabase().catch(console.warn), 0)
 }

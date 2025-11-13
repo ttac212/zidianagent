@@ -19,6 +19,7 @@ import { runDouyinPipeline } from '@/lib/douyin/pipeline'
 import { runDouyinCommentsPipeline } from '@/lib/douyin/comments-pipeline'
 import {
   isDouyinVideoExtractionRequest,
+  isDouyinCommentsAnalysisRequest,
   isDouyinShareRequest
 } from '@/lib/douyin/link-detector'
 import { DOUYIN_ESTIMATED_TOKENS } from '@/lib/constants/douyin-quota'
@@ -70,14 +71,24 @@ export const DOUYIN_STRATEGIES: DouyinStrategy[] = [
     priority: 1
   },
 
-  // 策略2: 评论分析（默认策略，纯分享链接）
+  // 策略2: 明确的评论分析请求（高优先级，用户明确说了"评论"）
   {
-    name: 'COMMENTS_ANALYSIS',
-    detect: isDouyinShareRequest,
+    name: 'COMMENTS_ANALYSIS_EXPLICIT',
+    detect: isDouyinCommentsAnalysisRequest,
     pipeline: runDouyinCommentsPipeline,
     eventPrefix: 'comments',
     getEstimatedTokens: () => DOUYIN_ESTIMATED_TOKENS.COMMENTS_ANALYSIS,
     priority: 2
+  },
+
+  // 策略3: 默认评论分析（兜底策略，纯分享链接）
+  {
+    name: 'COMMENTS_ANALYSIS_DEFAULT',
+    detect: isDouyinShareRequest,
+    pipeline: runDouyinCommentsPipeline,
+    eventPrefix: 'comments',
+    getEstimatedTokens: () => DOUYIN_ESTIMATED_TOKENS.COMMENTS_ANALYSIS,
+    priority: 3
   }
 
   // 未来扩展示例：
@@ -87,7 +98,7 @@ export const DOUYIN_STRATEGIES: DouyinStrategy[] = [
   //   pipeline: runDouyinAccountPipeline,
   //   eventPrefix: 'account',
   //   getEstimatedTokens: () => DOUYIN_ESTIMATED_TOKENS.ACCOUNT_ANALYSIS,
-  //   priority: 3
+  //   priority: 4
   // }
 ]
 

@@ -327,6 +327,40 @@ export function isDouyinVideoExtractionRequest(text: string): boolean {
 }
 
 /**
+ * 检查文本是否明确请求评论分析(需要关键词)
+ */
+export function isDouyinCommentsAnalysisRequest(text: string): boolean {
+  const trimmed = text.trim();
+
+  // 检查是否包含抖音链接
+  const shareLink = extractDouyinLink(trimmed);
+  if (!shareLink) return false;
+
+  // 如果明确请求视频提取,不走评论分析
+  if (isDouyinVideoExtractionRequest(text)) {
+    return false;
+  }
+
+  // 评论分析关键词
+  const commentsKeywords = [
+    '评论',
+    '分析评论',
+    '评论分析',
+    '看看评论',
+    '评论怎么样',
+    '查看评论',
+    '评论区',
+    '用户反馈',
+    '用户评价',
+    '反馈',
+    '口碑'
+  ];
+
+  // 检查是否包含评论关键词
+  return commentsKeywords.some((keyword) => trimmed.includes(keyword));
+}
+
+/**
  * 检查文本是否主要是抖音分享请求(默认评论分析)
  */
 export function isDouyinShareRequest(text: string): boolean {
@@ -341,23 +375,26 @@ export function isDouyinShareRequest(text: string): boolean {
     return false;
   }
 
+  // 如果明确请求评论分析,走评论分析（优先级已通过新增函数处理）
+  if (isDouyinCommentsAnalysisRequest(text)) {
+    return true;
+  }
+
   // 去掉链接后的剩余文本
   const withoutLink = trimmed.replace(shareLink, '').trim();
 
-  // 对话意图的特征词(如果包含这些,说明用户想讨论而不是提取)
+  // 对话意图的特征词 - 仅保留强对话意图特征（放宽检测）
+  // 移除了 '?', '怎么样', '为什么' 等容易误判的词
   const conversationIndicators = [
     '你怎么看',
-    '你觉得',
+    '你觉得怎么样',  // 更完整的短语，减少误判
     '对吗',
     '是不是',
-    '为什么',
-    '怎么样',
     '我觉得',
     '我认为',
-    '?', // 问号通常表示对话意图
   ];
 
-  // 如果包含对话意图,不认为是纯分享请求
+  // 如果包含强对话意图,不认为是纯分享请求
   if (conversationIndicators.some((indicator) => withoutLink.includes(indicator))) {
     return false;
   }
@@ -371,9 +408,6 @@ export function isDouyinShareRequest(text: string): boolean {
     '复制此内容',
     '长按复制',
   ];
-
-  // 用户请求处理视频的关键词(去掉这些,因为默认是评论分析)
-  // const requestKeywords = ['帮我', '提取', '分析', '转录', '文案'];
 
   // 1. 如果包含抖音官方分享文案特征,肯定是分享请求(默认评论分析)
   if (shareIndicators.some((indicator) => trimmed.includes(indicator))) {
