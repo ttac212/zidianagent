@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu"
-import { ChevronDown, Check, Sparkles, Brain } from "lucide-react"
+import { ChevronDown, Check, Sparkles, Brain, Zap, Gem } from "lucide-react"
 import { ALLOWED_MODELS } from "@/lib/ai/models"
 import { cn } from "@/lib/utils"
 import { AnimatePresence, motion } from "framer-motion"
@@ -22,6 +22,14 @@ interface ModelSelectorAnimatedProps {
   className?: string
   disabled?: boolean
   buttonProps?: ButtonHTMLAttributes<HTMLButtonElement>
+}
+
+type ModelDisplay = {
+  shortName: string
+  fullName: string
+  description: string
+  icon: React.ComponentType<{ className?: string }>
+  iconClass: string
 }
 
 export function ModelSelectorAnimated({
@@ -35,9 +43,45 @@ export function ModelSelectorAnimated({
   const isEmpty = ALLOWED_MODELS.length === 0
   const [open, setOpen] = React.useState(false)
 
-  // 简化显示名称（只保留核心信息）
-  const getDisplayName = (_model: typeof ALLOWED_MODELS[0]) => {
-    return 'Sonnet 4.5'  // 统一显示为 Sonnet 4.5
+  const getModelDisplay = (model: typeof ALLOWED_MODELS[0]): ModelDisplay => {
+    const isThinking = model.id.includes(':thinking')
+
+    switch (model.capabilities.family) {
+      case 'gpt':
+        return {
+          shortName: 'GPT-5.1',
+          fullName: 'GPT-5.1',
+          description: 'OpenAI 最新推理模型，擅长复杂逻辑与代码生成',
+          icon: Zap,
+          iconClass: 'text-emerald-600'
+        }
+      case 'gemini':
+        return {
+          shortName: 'Gemini',
+          fullName: 'Gemini 2.5 Pro',
+          description: 'Google 多模态模型，支持图像与长文本输入',
+          icon: Gem,
+          iconClass: 'text-sky-600'
+        }
+      case 'claude':
+      default:
+        if (isThinking) {
+          return {
+            shortName: 'Sonnet 4.5',
+            fullName: 'Claude Sonnet 4.5 · 深度思考',
+            description: '启用深度推理，适合复杂问题与架构设计',
+            icon: Brain,
+            iconClass: 'text-purple-500'
+          }
+        }
+        return {
+          shortName: 'Sonnet 4.5',
+          fullName: 'Claude Sonnet 4.5 · 标准',
+          description: '快速响应，适合日常对话与分析任务',
+          icon: Sparkles,
+          iconClass: 'text-primary'
+        }
+    }
   }
 
   const button = (
@@ -67,14 +111,17 @@ export function ModelSelectorAnimated({
           className="flex items-center gap-1.5"
         >
           {/* 模型图标 */}
-          {current?.capabilities.supportsReasoning ? (
-            <Brain className="w-3.5 h-3.5 text-purple-500" aria-hidden="true" />
-          ) : (
-            <Sparkles className="w-3.5 h-3.5 text-primary" aria-hidden="true" />
-          )}
+          {(() => {
+            if (!current) {
+              return <Sparkles className="w-3.5 h-3.5 text-primary" aria-hidden="true" />
+            }
+            const display = getModelDisplay(current)
+            const Icon = display.icon
+            return <Icon className={cn("w-3.5 h-3.5", display.iconClass)} aria-hidden="true" />
+          })()}
 
           <span className="text-secondary-foreground">
-            {current ? getDisplayName(current) : modelId}
+            {current ? getModelDisplay(current).shortName : modelId}
           </span>
 
           <ChevronDown
@@ -117,7 +164,8 @@ export function ModelSelectorAnimated({
           </DropdownMenuItem>
         ) : (
           ALLOWED_MODELS.map((m) => {
-            const isThinking = m.id.includes(':thinking')
+            const display = getModelDisplay(m)
+            const Icon = display.icon
             return (
               <DropdownMenuItem
                 key={m.id}
@@ -125,27 +173,20 @@ export function ModelSelectorAnimated({
                 className="flex items-start gap-3 py-2.5 cursor-pointer"
               >
                 <div className="flex items-center justify-center w-8 h-8 rounded-md bg-muted/50 flex-shrink-0 mt-0.5">
-                  {isThinking ? (
-                    <Brain className="w-4 h-4 text-purple-500" aria-hidden="true" />
-                  ) : (
-                    <Sparkles className="w-4 h-4 text-primary" aria-hidden="true" />
-                  )}
+                  <Icon className={cn("w-4 h-4", display.iconClass)} aria-hidden="true" />
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="font-medium text-sm">
-                      {isThinking ? '深度思考模式' : '标准模式'}
+                      {display.fullName}
                     </span>
                     {modelId === m.id && (
                       <Check className="w-3.5 h-3.5 text-primary flex-shrink-0" aria-hidden="true" />
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground line-clamp-2">
-                    {isThinking
-                      ? '启用深度推理，适合复杂问题和逻辑分析'
-                      : '快速响应，适合日常对话和简单任务'
-                    }
+                    {display.description}
                   </p>
                 </div>
               </DropdownMenuItem>

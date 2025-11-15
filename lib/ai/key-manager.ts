@@ -61,13 +61,21 @@ const MODEL_KEY_CONFIGS: ModelKeyConfig[] = [
     provider: 'Google',
     priority: 1
   },
-  // GPT 模型
+  // GPT 模型（ZenMux格式：openai/gpt-xxx）
+  {
+    pattern: 'openai/gpt-',
+    envKey: 'LLM_OPENAI_API_KEY',
+    fallbacks: ['ZENMUX_API_KEY', 'LLM_API_KEY'],
+    provider: 'OpenAI',
+    priority: 1
+  },
+  // GPT 模型（传统格式：gpt-xxx）
   {
     pattern: 'gpt-',
     envKey: 'LLM_OPENAI_API_KEY',
     fallbacks: ['LLM_API_KEY'],
     provider: 'OpenAI',
-    priority: 1
+    priority: 2
   }
 ]
 

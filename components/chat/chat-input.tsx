@@ -23,6 +23,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { ModelSelectorAnimated } from '@/components/chat/model-selector-animated'
 
 const MAX_LENGTH = 100_000
 const MIN_HEIGHT = 56
@@ -285,9 +286,13 @@ const ChatInputComponent = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                 </div>
 
                 {/* 模型标识（固定显示，不可点击） */}
-                <div className="h-6 px-2 text-xs font-medium shrink-0 flex items-center gap-1.5 text-muted-foreground">
-                  <Sparkles className="h-3 w-3" />
-                  <span className="hidden sm:inline">Sonnet 4.5</span>
+                <div className="shrink-0">
+                  <ModelSelectorAnimated
+                    modelId={settings.modelId}
+                    onChange={(modelId) => onSettingsChange({ modelId })}
+                    disabled={isLoading}
+                    className="h-7 px-2 text-[11px]"
+                  />
                 </div>
 
                 {/* 创作模式切换 */}
