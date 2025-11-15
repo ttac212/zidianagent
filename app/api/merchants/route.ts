@@ -6,13 +6,16 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import type { MerchantFilters, MerchantListResponse } from '@/types/merchant'
 import { createErrorResponse, generateRequestId } from '@/lib/api/error-handler'
 import * as dt from '@/lib/utils/date-toolkit'
 import {
   validationError,
-  unauthorized
+  unauthorized,
+  forbidden
 } from '@/lib/api/http-response'
 
 
@@ -142,16 +145,18 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/merchants - 创建新商家（预留管理功能）
+// POST /api/merchants - 创建新商家（管理员功能）
 export async function POST(request: NextRequest) {
   const token = await getToken({ req: request as any })
   if (!token?.sub) return unauthorized('未认证')
+
   try {
-    // 这里可以添加身份验证和权限检查
-    // const session = await getServerSession(authOptions)
-    // if (!session || session.user.role !== 'ADMIN') {
-    //   return forbidden('权限不足')
-    // }
+    // 权限检查：仅管理员可创建商家
+    const session = await getServerSession(authOptions)
+    if (!session || session.user.role !== 'ADMIN') {
+      console.log(`[Merchants] 非管理员尝试创建商家: ${session?.user?.email || 'unknown'}`)
+      return forbidden('仅管理员可创建商家')
+    }
 
     const body = await request.json()
     const { name, description, categoryId, location, address, businessType, contactInfo } = body
@@ -177,6 +182,7 @@ export async function POST(request: NextRequest) {
       }
     })
 
+    console.log(`[Merchants] 管理员 ${session.user.email} 创建商家: ${merchant.name} (${merchant.id})`)
     return NextResponse.json(merchant, { status: 201 })
     
   } catch (error) {
