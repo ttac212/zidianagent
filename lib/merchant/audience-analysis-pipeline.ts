@@ -272,48 +272,65 @@ ${allComments.slice(0, 50).map((c, i) => {
 - 不要输出具体的产品定价、转化话术、渠道运营细节、KPI指标监控等执行层面内容
 - 保持分析的深度和专业性，数据和结论要有理有据`
 
-  const response = await fetch(`${apiBase}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: modelId,
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      max_tokens: 6000,
-      temperature: 0.7,
-      stream: true
-    }),
-    signal
-  })
+  // 创建带超时的AbortController（180秒）
+  const fetchController = new AbortController()
+  const timeoutId = setTimeout(() => {
+    console.warn('[Audience Analysis] LLM fetch timeout (180s), aborting...')
+    fetchController.abort()
+  }, 180000) // 180秒超时
 
-  if (!response.ok) {
-    let errorDetail = ''
-
-    try {
-      const errorText = await response.text()
-      try {
-        const errorJson = JSON.parse(errorText)
-        errorDetail = errorJson.error?.message || errorJson.message || errorText
-      } catch {
-        errorDetail = errorText
-      }
-    } catch {
-      errorDetail = '无法读取错误详情'
-    }
-
-    const errorMessage = errorDetail
-      ? `LLM API错误: ${response.status} - ${errorDetail}`
-      : `LLM API错误: HTTP ${response.status} ${response.statusText}`
-
-    throw new Error(errorMessage)
+  // 如果传入了外部signal，也监听它
+  const abortHandler = () => {
+    clearTimeout(timeoutId)
+    fetchController.abort()
   }
+  if (signal) {
+    signal.addEventListener('abort', abortHandler)
+  }
+
+  try {
+    const response = await fetch(`${apiBase}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: modelId,
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        max_tokens: 6000,
+        temperature: 0.7,
+        stream: true
+      }),
+      signal: fetchController.signal
+    })
+
+    if (!response.ok) {
+      let errorDetail = ''
+
+      try {
+        const errorText = await response.text()
+        try {
+          const errorJson = JSON.parse(errorText)
+          errorDetail = errorJson.error?.message || errorJson.message || errorText
+        } catch {
+          errorDetail = errorText
+        }
+      } catch {
+        errorDetail = '无法读取错误详情'
+      }
+
+      const errorMessage = errorDetail
+        ? `LLM API错误: ${response.status} - ${errorDetail}`
+        : `LLM API错误: HTTP ${response.status} ${response.statusText}`
+
+      throw new Error(errorMessage)
+    }
 
   // 处理流式响应
   const reader = response.body?.getReader()
@@ -372,6 +389,13 @@ ${allComments.slice(0, 50).map((c, i) => {
   }
 
   return fullText
+  } finally {
+    // 清理timeout和signal监听器
+    clearTimeout(timeoutId)
+    if (signal) {
+      signal.removeEventListener('abort', abortHandler)
+    }
+  }
 }
 
 /**

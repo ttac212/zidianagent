@@ -17,6 +17,9 @@ import { runAudienceAnalysisPipeline } from '@/lib/merchant/audience-analysis-pi
 import { unauthorized, validationError, notFound, success } from '@/lib/api/http-response'
 import { prisma } from '@/lib/prisma'
 
+// 客群分析可能耗时较长（LLM分析大量评论数据），设置5分钟超时
+export const maxDuration = 300
+
 /**
  * 查询客群分析结果
  * GET /api/merchants/[id]/analyze-audience
