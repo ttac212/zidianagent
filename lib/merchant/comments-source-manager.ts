@@ -76,7 +76,7 @@ async function fetchAndStoreCommentsFromTikHub(
   contentId: string,
   maxComments: number
 ): Promise<CleanedComment[]> {
-  console.log(`[CommentsSource] 评论数据不足，开始从TikHub采集 (contentId=${contentId})`)
+  console.info(`[CommentsSource] 评论数据不足，开始从TikHub采集 (contentId=${contentId})`)
 
   // 1. 获取视频的externalId (aweme_id)
   const content = await prisma.merchantContent.findUnique({
@@ -92,7 +92,7 @@ async function fetchAndStoreCommentsFromTikHub(
     throw new Error(`无法找到内容或缺少externalId: ${contentId}`)
   }
 
-  console.log(`[CommentsSource] 视频: ${content.title} (awemeId=${content.externalId})`)
+  console.info(`[CommentsSource] 视频: ${content.title} (awemeId=${content.externalId})`)
 
   // 2. 从TikHub采集评论
   const client = getTikHubClient()
@@ -115,7 +115,7 @@ async function fetchAndStoreCommentsFromTikHub(
       cursor = response.cursor
       pageCount++
 
-      console.log(`[CommentsSource] 已采集 ${allComments.length} 条评论 (第${pageCount}页)`)
+      console.info(`[CommentsSource] 已采集 ${allComments.length} 条评论 (第${pageCount}页)`)
 
       if (allComments.length >= maxComments) {
         break
@@ -134,12 +134,12 @@ async function fetchAndStoreCommentsFromTikHub(
   const commentsToStore = allComments.slice(0, maxComments)
 
   if (commentsToStore.length === 0) {
-    console.log(`[CommentsSource] 未采集到任何评论`)
+    console.info(`[CommentsSource] 未采集到任何评论`)
     return []
   }
 
   // 3. 存储到数据库
-  console.log(`[CommentsSource] 存储 ${commentsToStore.length} 条评论到数据库`)
+  console.info(`[CommentsSource] 存储 ${commentsToStore.length} 条评论到数据库`)
 
   const upsertPromises = commentsToStore.map((comment) =>
     prisma.merchantContentComment.upsert({
@@ -164,7 +164,7 @@ async function fetchAndStoreCommentsFromTikHub(
 
   await prisma.$transaction(upsertPromises)
 
-  console.log(`[CommentsSource] ✅ 评论采集完成`)
+  console.info(`[CommentsSource] ✅ 评论采集完成`)
 
   // 4. 转换为清洁格式返回
   return commentsToStore
@@ -208,7 +208,7 @@ export async function fetchCommentsForAnalysis(
 
   // 2. 检查评论数量
   if (dbComments.length < 20) {
-    console.log(`[CommentsSource] 数据库评论不足 (${dbComments.length} < 20)，触发TikHub采集`)
+    console.info(`[CommentsSource] 数据库评论不足 (${dbComments.length} < 20)，触发TikHub采集`)
 
     try {
       // 自动从TikHub采集评论
@@ -217,7 +217,7 @@ export async function fetchCommentsForAnalysis(
       if (freshComments.length > 0) {
         // 采集成功，使用新采集的评论
         dbComments = freshComments
-        console.log(`[CommentsSource] ✅ 采集成功，现有评论数: ${dbComments.length}`)
+        console.info(`[CommentsSource] ✅ 采集成功，现有评论数: ${dbComments.length}`)
       }
     } catch (error: any) {
       console.error(`[CommentsSource] TikHub采集失败:`, error.message)

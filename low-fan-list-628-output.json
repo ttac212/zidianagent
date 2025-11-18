@@ -1,0 +1,111 @@
+{
+  "queryParams": {
+    "dateWindow": 24,
+    "pageSize": 5,
+    "category": "美食",
+    "tagId": 628
+  },
+  "total": 1000,
+  "count": 4,
+  "hasMore": true,
+  "data": {
+    "code": 0,
+    "data": {
+      "page": {
+        "page": 1,
+        "page_size": 5,
+        "total": 1000
+      },
+      "objs": [
+        {
+          "item_id": "7572561491002800741",
+          "item_title": "美中不足漏掉了一个，下次继续",
+          "item_cover_url": "https://p26-sign.douyinpic.com/tos-cn-p-0015c000-ce/ocgNRXSEyLEZFxIpAfAI9JzFGfI5I8AnEDIBwP~tplv-dy-resize-walign-adapt-aq:540:q75.jpeg?lk3s=138a59ce&x-expires=1764558000&x-signature=fK6PiJQfLvEZp3tdXZT2JCAglGw%3D&from=327834062&s=PackSourceEnum_PUBLISH&se=false&sc=cover&biz_tag=aweme_video&l=2025111711123277FA4070CE2BACE5969E",
+          "item_duration": 6467,
+          "nick_name": "宁阳广场最辛苦的男人",
+          "avatar_url": "https://p3.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-i-0813c000-ce_oAAPoifTA80eQBz6I3HEx1AlBFiAO0yewAE1Eq.jpeg?from=2956013662",
+          "fans_cnt": 33565,
+          "play_cnt": 6703398,
+          "publish_time": 1763124368,
+          "score": 458001,
+          "item_url": "https://v5-wha.douyinvod.com/a11120d7a836e4f50ca1666363b68d3d/691aa0b6/video/tos/cn/tos-cn-ve-15c000-ce/o4ZfmDSIIIFyEoLfAwgXznpsP09PFA3KEENBOO/?a=1128&ch=10&cr=3&dr=0&lr=all&cd=0%7C0%7C0%7C3&cv=1&br=1119&bt=1119&cs=0&ds=6&ft=vwbdHCJrBBkq8ZmoYs9fU_vjVQWw&mime_type=video_mp4&qs=0&rc=NzY8OTo2ZGllZzQ1PDpmZkBpM3Nudmo5cjVsNzMzbGkzNUA2YWAzLzM1XzAxL2NgXmMyYSMxcm1jMmRzNl9hLS1kLTRzcw%3D%3D&btag=c0010e0008d600&cquery=103S_100b_105O_103Q_103R&dy_q=1763349152&feature_id=f0150a16a324336cda5d6dd0b69ed299&l=2025111711123277FA4070CE2BACE5969E",
+          "like_cnt": 66035,
+          "follow_cnt": 691,
+          "follow_rate": 0.000101,
+          "like_rate": 0.009851,
+          "media_type": 4,
+          "favorite_id": 0,
+          "is_favorite": false,
+          "image_cnt": 0
+        },
+        {
+          "item_id": "7571803424967952330",
+          "item_title": "@",
+          "item_cover_url": "https://p3-sign.douyinpic.com/tos-cn-p-0015/oEDAUxfABeKHpFHAmRtBAUDcEFIAcEqg9qo5wc~tplv-dy-resize-walign-adapt-aq:540:q75.jpeg?lk3s=138a59ce&x-expires=1764558000&x-signature=DDdB36kkslp5Ln0GXyUiimE1%2FI0%3D&from=327834062&s=PackSourceEnum_PUBLISH&se=false&sc=cover&biz_tag=aweme_video&l=2025111711123277FA4070CE2BACE5969E",
+          "item_duration": 34534,
+          "nick_name": "小怡的雷呀～",
+          "avatar_url": "https://p3.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_4d10f09b145df196e4e53981d29e93ad.jpeg?from=2956013662",
+          "fans_cnt": 20156,
+          "play_cnt": 11086528,
+          "publish_time": 1762947869,
+          "score": 410213,
+          "item_url": "https://v5-coldy.douyinvod.com/9ae60260ec371fa86fcd612759d9da1e/691aa0d2/video/tos/cn/tos-cn-ve-15/oQHpBp1EEU3FUIcAxgeQF4A09Aq9DAgtAfCIUD/?a=1128&ch=10&cr=3&dr=0&lr=all&cd=0%7C0%7C0%7C3&cv=1&br=571&bt=571&cs=0&ds=6&ft=r5QvG77JWH6BM.w2Qvr0PD1IN&mime_type=video_mp4&qs=0&rc=Ojc7OTlnaTM7Njk5OWc1Z0BpM2R0OHA5cjg6NzMzNGkzM0BjYy9jNC9jNTAxMi8uYTY0YSNiaF9kMmQ0LV5hLS1kLTBzcw%3D%3D&btag=c0010e0009d000&cquery=103S_100b_105O_103Q_103R&dy_q=1763349152&feature_id=f0150a16a324336cda5d6dd0b69ed299&l=2025111711123277FA4070CE2BACE5969E",
+          "like_cnt": 484576,
+          "follow_cnt": 8373,
+          "follow_rate": 0.000701,
+          "like_rate": 0.043709,
+          "media_type": 4,
+          "favorite_id": 0,
+          "is_favorite": false,
+          "image_cnt": 0
+        },
+        {
+          "item_id": "7572567118279077097",
+          "item_title": "她一定比我成熟",
+          "item_cover_url": "https://p3-sign.douyinpic.com/tos-cn-i-0813c001/oc8gLIRyvAkAAAiKigmEgXbcIPAaBgppZOLOA~tplv-dy-resize-walign-adapt-aq:540:q75.jpeg?lk3s=138a59ce&x-expires=1764558000&x-signature=%2FXG25mKp5%2FQ0e2Mp%2FhnxPvBw%2FWs%3D&from=327834062&s=PackSourceEnum_PUBLISH&se=false&sc=cover&biz_tag=aweme_images&l=2025111711123277FA4070CE2BACE5969E",
+          "item_duration": 0,
+          "nick_name": "奶奶8776548",
+          "avatar_url": "https://p3.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-i-0813c001_oEIBzwA49mecACEJohBAimAAiCDPD0AE0gPieg.jpeg?from=2956013662",
+          "fans_cnt": 1760,
+          "play_cnt": 4683363,
+          "publish_time": 1763125679,
+          "score": 369230,
+          "item_url": "https://sf5-hl-cdn-tos.douyinstatic.com/obj/ies-music/7560709320493599527.mp3",
+          "like_cnt": 305904,
+          "follow_cnt": 476,
+          "follow_rate": 0.000091,
+          "like_rate": 0.065317,
+          "media_type": 2,
+          "favorite_id": 0,
+          "is_favorite": false,
+          "image_cnt": 1
+        },
+        {
+          "item_id": "7572526831371551586",
+          "item_title": "烤肠拼盘",
+          "item_cover_url": "https://p26-sign.douyinpic.com/tos-cn-p-0015/oUC4QZg6WiPwm3E0ApBIIBEXfKAQIBACdB5eii~tplv-dy-resize-walign-adapt-aq:540:q75.jpeg?lk3s=138a59ce&x-expires=1764558000&x-signature=%2Feh7oL26ozFaA0LqTib0nbHwpEw%3D&from=327834062&s=PackSourceEnum_PUBLISH&se=false&sc=cover&biz_tag=aweme_video&l=2025111711123277FA4070CE2BACE5969E",
+          "item_duration": 15200,
+          "nick_name": "咸于于",
+          "avatar_url": "https://p3.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_bc65ea8f10bc26e89deda3af93345bcc.jpeg?from=2956013662",
+          "fans_cnt": 6142,
+          "play_cnt": 5081705,
+          "publish_time": 1763116301,
+          "score": 328070,
+          "item_url": "https://v3-cold3.douyinvod.com/676739834a267204a47d1230d3f0719d/691aa0bf/video/tos/cn/tos-cn-ve-15/o8BserBMiU4fKDaWXmhECgCiQp5iIA0ZAEgAZd/?a=1128&ch=10&cr=3&dr=0&lr=all&cd=0%7C0%7C0%7C3&cv=1&br=1981&bt=1981&cs=0&ds=6&ft=r5QvG77JWH6BM.w2Qvr0PD1IN&mime_type=video_mp4&qs=0&rc=Zjw4aGk4ZThoNTMzNTplOUBpandzNHM5cjRqNzMzNGkzM0BeMjFfMTBfXy4xYjQtYzUyYSNoZi9nMmRjXl9hLS1kLS9zcw%3D%3D&btag=c0010e00090000&cquery=105O_103Q_103R_103S_100b&dy_q=1763349152&feature_id=f0150a16a324336cda5d6dd0b69ed299&l=2025111711123277FA4070CE2BACE5969E",
+          "like_cnt": 82536,
+          "follow_cnt": 414,
+          "follow_rate": 0.000097,
+          "like_rate": 0.016242,
+          "media_type": 4,
+          "favorite_id": 0,
+          "is_favorite": false,
+          "image_cnt": 0
+        }
+      ]
+    },
+    "extra": {
+      "now": 1763349153000
+    },
+    "message": ""
+  }
+}

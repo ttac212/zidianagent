@@ -43,7 +43,7 @@ function sendSSE(
 async function transcribeContent(
   contentId: string,
   merchantId: string,
-  apiKey: string
+  _apiKey: string
 ): Promise<{
   contentId: string
   status: 'success' | 'failed' | 'skipped'
@@ -53,7 +53,7 @@ async function transcribeContent(
   error?: string
 }> {
   const startTime = Date.now()
-  console.log(`[批量转录] 开始处理视频: ${contentId}`)
+  console.info(`[批量转录] 开始处理视频: ${contentId}`)
 
   try {
     // 1. 获取内容详情（只需要 shareUrl）
@@ -92,7 +92,7 @@ async function transcribeContent(
     }
 
     // 2. 调用对话模块的转录API
-    console.log(`[批量转录] 调用转录API, shareUrl: ${content.shareUrl.substring(0, 60)}...`)
+    console.info(`[批量转录] 调用转录API, shareUrl: ${content.shareUrl.substring(0, 60)}...`)
 
     // 修复：构建完整URL，避免localhost硬编码
     // 优先使用环境变量，回退到请求的origin（在route handler中不可用），最后使用localhost开发
@@ -143,7 +143,7 @@ async function transcribeContent(
       throw new Error('转录API未返回文本')
     }
 
-    console.log(`[批量转录] 转录完成，文本长度: ${finalText.length}`)
+    console.info(`[批量转录] 转录完成，文本长度: ${finalText.length}`)
 
     // 4. 更新数据库
     await prisma.merchantContent.update({
@@ -154,7 +154,7 @@ async function transcribeContent(
       },
     })
 
-    console.log(`[批量转录] 视频处理成功，总耗时: ${Date.now() - startTime}ms`)
+    console.info(`[批量转录] 视频处理成功，总耗时: ${Date.now() - startTime}ms`)
 
     return {
       contentId,

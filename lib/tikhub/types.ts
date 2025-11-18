@@ -364,3 +364,332 @@ export interface DouyinCommentWordCloudResponse {
 export interface GetCommentWordCloudParams {
   aweme_id: string // 视频ID
 }
+
+/**
+ * 城市信息
+ */
+export interface CityInfo {
+  value: number // 城市代码 (如: 110000 代表北京)
+  label: string // 城市名称 (如: "北京")
+}
+
+/**
+ * 中国城市列表响应
+ */
+export interface DouyinCityListResponse {
+  code: number // 响应码
+  data: CityInfo[] // 城市列表数组
+  extra?: {
+    now: number // 时间戳
+  }
+  message: string // 响应消息
+}
+
+/**
+ * 垂类内容标签
+ */
+export interface ContentTag {
+  value: number // 标签ID (如: 628 代表美食)
+  label: string // 标签名称 (如: "美食")
+  children?: ContentTag[] // 子标签列表
+}
+
+/**
+ * 垂类内容标签响应
+ */
+export interface DouyinContentTagResponse {
+  code: number // 响应码
+  data: ContentTag[] // 垂类标签列表
+  extra?: {
+    now: number // 时间戳
+  }
+  message: string // 响应消息
+}
+
+/**
+ * 热门账号查询标签参数
+ */
+export interface HotAccountQueryTag {
+  value: number // 顶级垂类标签id
+  children?: Array<{ value: number }> // 子级垂类标签id列表
+}
+
+/**
+ * 获取热门账号请求参数
+ */
+export interface GetHotAccountListParams {
+  date_window?: number // 时间窗口（小时），默认24小时
+  page_num?: number // 页码，默认1
+  page_size?: number // 每页数量，默认10
+  query_tag?: HotAccountQueryTag | Record<string, never> // 垂类标签筛选，空对象表示全部
+}
+
+/**
+ * 热门账号信息
+ */
+export interface HotAccountInfo {
+  user_id: string // 账号安全ID (sec_uid)
+  nick_name: string // 昵称
+  avatar_url?: string // 头像URL
+  fans_cnt: number // 粉丝数
+  like_cnt: number // 获赞总数
+  publish_cnt: number // 作品数
+  new_like_cnt?: number // 新增获赞数
+  new_fans_cnt?: number // 新增粉丝数
+  second_tag_name?: string // 二级标签名称
+  fans_trends?: Array<{
+    DateTime: string // 日期
+    Value: number // 粉丝增长数
+  }> // 粉丝趋势
+  fans_incr_rate?: number // 粉丝增长率
+  [key: string]: any // 其他字段
+}
+
+/**
+ * 热门账号列表响应
+ */
+export interface DouyinHotAccountListResponse {
+  code: number // 响应码
+  data: {
+    user_list: HotAccountInfo[] // 热门账号列表
+    has_more?: boolean // 是否有更多数据
+  }
+  extra?: {
+    now: number // 时间戳
+  }
+  message: string // 响应消息
+}
+
+/**
+ * 粉丝感兴趣的话题信息
+ */
+export interface FansInterestTopic {
+  topic_id?: string // 话题ID
+  topic_name: string // 话题名称
+  interest_score?: number // 兴趣度分数
+  rank?: number // 排名
+  [key: string]: any // 其他字段
+}
+
+/**
+ * 粉丝感兴趣话题列表响应
+ */
+export interface DouyinFansInterestTopicListResponse {
+  code: number // 响应码
+  data: FansInterestTopic[] // 话题列表
+  extra?: {
+    now: number // 时间戳
+  }
+  message: string // 响应消息
+}
+
+/**
+ * 请求参数 - 获取粉丝感兴趣的话题
+ */
+export interface GetFansInterestTopicListParams {
+  sec_uid: string // 用户sec_uid
+}
+
+/**
+ * 视频热榜标签查询参数
+ */
+export interface HotVideoListTag {
+  value: number // 顶级垂类标签id
+  children?: Array<{ value: number }> // 子级垂类标签id列表
+}
+
+/**
+ * 请求参数 - 获取视频热榜
+ */
+export interface GetHotVideoListParams {
+  page?: number // 页码，默认1
+  page_size?: number // 每页数量，默认10
+  date_window?: number // 时间窗口，1按小时 2按天，默认24
+  tags?: HotVideoListTag[] // 子级垂类标签，空则为全部
+}
+
+/**
+ * 热榜视频信息
+ */
+export interface HotVideoInfo {
+  item_id: string // 视频ID
+  item_title: string // 视频标题
+  item_cover_url: string // 封面URL
+  item_duration: number // 视频时长(毫秒)
+  nick_name: string // 作者昵称
+  avatar_url: string // 作者头像URL
+  fans_cnt: number // 粉丝数
+  play_cnt: number // 播放数
+  publish_time: number // 发布时间戳
+  score: number // 分数/热度值
+  item_url: string // 视频URL
+  like_cnt: number // 点赞数
+  follow_cnt: number // 关注数
+  follow_rate: number // 关注率
+  like_rate: number // 点赞率
+  media_type: number // 媒体类型
+  favorite_id: number // 收藏ID
+  is_favorite: boolean // 是否收藏
+  image_cnt: number // 图片数量
+  rank?: number // 排名
+  [key: string]: any // 其他字段
+}
+
+/**
+ * 视频热榜列表响应
+ */
+export interface DouyinHotVideoListResponse {
+  code: number // 响应码
+  data: {
+    page: {
+      page: number // 当前页码
+      page_size: number // 每页数量
+      total: number // 总数
+    }
+    objs: HotVideoInfo[] // 视频列表
+  }
+  extra?: {
+    now: number // 时间戳
+  }
+  message: string // 响应消息
+}
+
+/**
+ * 请求参数 - 获取低粉爆款榜
+ * 参数结构与视频热榜相同，复用 GetHotVideoListParams
+ */
+export type GetLowFanListParams = GetHotVideoListParams
+
+/**
+ * 低粉爆款视频信息
+ * 数据结构与热榜视频相同，复用 HotVideoInfo
+ */
+export type LowFanVideoInfo = HotVideoInfo
+
+/**
+ * 低粉爆款榜列表响应
+ */
+export interface DouyinLowFanListResponse {
+  code: number // 响应码
+  data: {
+    page: {
+      page: number // 当前页码
+      page_size: number // 每页数量
+      total: number // 总数
+    }
+    objs: LowFanVideoInfo[] // 低粉爆款视频列表
+  }
+  extra?: {
+    now: number // 时间戳
+  }
+  message: string // 响应消息
+}
+
+/**
+ * 请求参数 - 获取热门内容词列表
+ */
+export interface GetHotWordListParams {
+  page_num?: number // 页码，默认1
+  page_size?: number // 每页数量，默认10
+  date_window?: number // 时间窗口，1按小时 2按天，默认24
+  keyword?: string // 搜索关键字
+}
+
+/**
+ * 热门内容词趋势数据点
+ */
+export interface HotWordTrend {
+  date: string // 日期（格式：YYYYMMDD）
+  value: number // 该日期的热度值
+}
+
+/**
+ * 热门内容词信息
+ */
+export interface HotWordInfo {
+  title: string // 内容词/关键词
+  score: number // 热度值
+  rising_ratio: number // 上升比例
+  rising_speed: string // 上升速度
+  id: string // 唯一标识
+  query_day: string // 查询日期
+  is_favorite: boolean // 是否收藏
+  favorite_id: number // 收藏ID
+  trends: HotWordTrend[] // 趋势数据
+  [key: string]: any // 其他字段
+}
+
+/**
+ * 热门内容词列表响应
+ */
+export interface DouyinHotWordListResponse {
+  code: number // 响应码
+  data: {
+    word_list: HotWordInfo[] // 内容词列表
+    total_count: number // 总数
+  }
+  extra?: {
+    now: number // 时间戳
+  }
+  message: string // 响应消息
+}
+
+/**
+ * 请求参数 - 获取同城热点榜
+ */
+export interface GetCityHotListParams {
+  page?: number // 页码，默认1
+  page_size?: number // 每页数量，默认10
+  order?: 'rank' | 'rank_diff' // 排序方式：rank-按热度，rank_diff-按排名变化
+  city_code?: string // 城市编码，空为全部
+  sentence_tag?: string // 热点分类标签，多个用逗号分隔，空为全部
+  keyword?: string // 热点搜索词
+}
+
+/**
+ * 同城热点信息
+ */
+export interface CityHotInfo {
+  rank: number // 排名
+  rank_diff: number // 排名变化
+  sentence: string // 热点标题
+  sentence_id: number // 热点ID
+  create_at: number // 创建时间戳
+  hot_score: number // 热度值
+  video_count: number // 相关视频数
+  sentence_tag: number // 分类标签ID
+  city_code: number // 城市编码
+  city_name?: string // 城市名称
+  sentence_tag_name?: string // 分类标签名称
+  trends?: Array<{
+    datetime: string // 时间（格式：YYYYMMDDHHmmss）
+    hot_score: number // 该时间的热度值
+  }> // 趋势数据
+  index?: number // 索引
+  SnapshotSubType?: string // 快照子类型
+  SnapshotType?: number // 快照类型
+  SnapshotID?: number // 快照ID
+  first_item_cover_url?: string // 首个视频封面URL
+  is_favorite?: boolean // 是否收藏
+  [key: string]: any // 其他字段
+}
+
+/**
+ * 同城热点榜列表响应
+ */
+export interface DouyinCityHotListResponse {
+  code: number // 响应码
+  data: {
+    page: {
+      page: number // 当前页码
+      page_size: number // 每页数量
+      total: number // 总数
+    }
+    objs: CityHotInfo[] // 热点列表（实际API字段为objs）
+    last_update_time?: string // 最后更新时间
+  }
+  extra?: {
+    now: number // 时间戳
+  }
+  message: string // 响应消息
+}

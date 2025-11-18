@@ -3,13 +3,19 @@
  * 统一管理商家数据的查询和缓存
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { unwrapApiResponse } from '@/lib/api/http-response'
 import type {
   MerchantListItem,
   MerchantCategory,
   MerchantStats,
   MerchantFilters,
-  CreateMerchantData
+  CreateMerchantData,
+  MerchantWithDetails,
+  MerchantDetailResponse,
+  MerchantContent,
+  ContentListResponse,
+  ContentFilters
 } from '@/types/merchant'
 
 // ==================== Query Keys ====================
@@ -38,9 +44,6 @@ async function fetchMerchants(filters: MerchantFilters): Promise<MerchantsRespon
       params.append(key, String(value))
     }
   })
-
-  // 添加时间戳防止浏览器缓存
-  params.append('_t', Date.now().toString())
 
   const response = await fetch(`/api/merchants?${params.toString()}`, {
     cache: 'no-store',
@@ -81,6 +84,63 @@ async function fetchMerchantStats(): Promise<MerchantStats> {
 
   const data: StatsResponse = await response.json()
   return data.stats
+}
+
+async function fetchMerchantDetail(id: string, signal?: AbortSignal): Promise<MerchantWithDetails> {
+  const response = await fetch(`/api/merchants/${id}?includeContents=false`, {
+    cache: 'no-store',
+    signal,
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`��ȡ�̼���Ϣʧ��: ${errorText}`)
+  }
+
+  const result = await response.json()
+  const data = unwrapApiResponse<MerchantDetailResponse>(result)
+  return data.merchant
+}
+
+export type MerchantContentQueryFilters = Omit<ContentFilters, 'merchantId'>
+
+function buildContentParams(filters: MerchantContentQueryFilters): URLSearchParams {
+  const params = new URLSearchParams()
+  if (filters.search) params.append('search', filters.search)
+  if (filters.contentType) params.append('contentType', filters.contentType)
+  if (filters.dateFrom) params.append('dateFrom', filters.dateFrom.toString())
+  if (filters.dateTo) params.append('dateTo', filters.dateTo.toString())
+  if (typeof filters.hasTranscript === 'boolean') {
+    params.append('hasTranscript', String(filters.hasTranscript))
+  }
+  if (typeof filters.minEngagement === 'number') {
+    params.append('minEngagement', String(filters.minEngagement))
+  }
+  if (filters.sortBy) params.append('sortBy', filters.sortBy as string)
+  if (filters.sortOrder) params.append('sortOrder', filters.sortOrder as string)
+  if (filters.page) params.append('page', String(filters.page))
+  if (filters.limit) params.append('limit', String(filters.limit))
+  return params
+}
+
+async function fetchMerchantContents(
+  merchantId: string,
+  filters: MerchantContentQueryFilters,
+  signal?: AbortSignal
+): Promise<ContentListResponse> {
+  const params = buildContentParams(filters)
+  const response = await fetch(`/api/merchants/${merchantId}/contents?${params.toString()}`, {
+    cache: 'no-store',
+    signal,
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`��ȡ�����б�ʧ��: ${errorText}`)
+  }
+
+  const result = await response.json()
+  return unwrapApiResponse<ContentListResponse>(result)
 }
 
 async function createMerchant(data: CreateMerchantData): Promise<MerchantListItem> {
@@ -135,6 +195,32 @@ export function useMerchantStatsQuery() {
     queryFn: fetchMerchantStats,
     staleTime: 5 * 60 * 1000,  // 5分钟
     gcTime: 10 * 60 * 1000,    // 10分钟
+  })
+}
+
+export function useMerchantDetailQuery(merchantId?: string) {
+  const enabled = Boolean(merchantId)
+  return useQuery({
+    queryKey: ['merchant-detail', merchantId ?? 'unknown'],
+    queryFn: ({ signal }) => fetchMerchantDetail(merchantId!, signal),
+    enabled,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+  })
+}
+
+export function useMerchantContentsQuery(
+  merchantId: string | undefined,
+  filters: MerchantContentQueryFilters
+) {
+  const enabled = Boolean(merchantId)
+  return useQuery({
+    queryKey: ['merchant-contents', merchantId ?? 'unknown', filters],
+    queryFn: ({ signal }) => fetchMerchantContents(merchantId!, filters, signal),
+    enabled,
+    placeholderData: keepPreviousData,
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   })
 }
 

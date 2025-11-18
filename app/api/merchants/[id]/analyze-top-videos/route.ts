@@ -14,12 +14,6 @@ import { runMerchantCommentAnalysis } from '@/lib/merchant/merchant-comments-ana
 import { unauthorized, notFound } from '@/lib/api/http-response'
 import { prisma } from '@/lib/prisma'
 
-interface VideoToAnalyze {
-  id: string
-  title: string
-  totalEngagement: number
-}
-
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

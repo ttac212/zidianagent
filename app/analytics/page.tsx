@@ -17,7 +17,7 @@ export default async function AnalyticsPage() {
   const session = await getServerSession(authOptions)
 
   if (!session?.user) {
-    redirect('/login')
+    redirect(`/login?callbackUrl=${encodeURIComponent('/analytics')}`)
   }
 
   return (

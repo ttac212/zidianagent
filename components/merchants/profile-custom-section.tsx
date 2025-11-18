@@ -14,6 +14,7 @@ interface ProfileCustomSectionProps {
 
 export function ProfileCustomSection({ profile }: ProfileCustomSectionProps) {
   const hasCustomContent = profile && (
+    profile.manualNotes ||
     profile.customBackground ||
     profile.customOfflineInfo ||
     profile.customProductDetails ||
@@ -47,6 +48,13 @@ export function ProfileCustomSection({ profile }: ProfileCustomSectionProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {profile.manualNotes && (
+          <InfoRow
+            label="人工补充信息（高频问题/真实沟通）"
+            value={profile.manualNotes}
+          />
+        )}
+
         {profile.customBackground && (
           <InfoRow
             label="商家背景故事"

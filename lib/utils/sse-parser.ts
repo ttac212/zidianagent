@@ -335,8 +335,15 @@ export async function processSSEStream(
       throw error
     }
 
-    // 其他错误走回调处理
-    callbacks.onError?.(error instanceof Error ? error.message : 'Stream processing error')
+    // 区分连接错误和真正的错误
+    const errorCode = (error as any)?.code
+    if (errorCode === 'ECONNRESET' || errorCode === 'EPIPE') {
+      // 客户端断开连接，正常情况（不需要回调处理）
+      console.info('[SSE Parser] Client disconnected during stream processing')
+    } else {
+      // 其他错误走回调处理
+      callbacks.onError?.(error instanceof Error ? error.message : 'Stream processing error')
+    }
   }
 
   return fullContent

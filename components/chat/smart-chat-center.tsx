@@ -49,6 +49,8 @@ interface Props {
   onCreateConversation?: (model?: string) => Promise<Conversation | null>
   onSelectConversation?: (id: string) => void
   onDeleteConversation?: (conversation: Conversation) => void
+  prefillMessage?: string
+  prefillTitle?: string
 }
 
 export function SmartChatCenter({
@@ -56,7 +58,9 @@ export function SmartChatCenter({
   onUpdateConversation,
   onCreateConversation,
   onSelectConversation: _onSelectConversation,
-  onDeleteConversation
+  onDeleteConversation,
+  prefillMessage,
+  prefillTitle
 }: Props) {
   return (
     <ErrorBoundary fallback={
@@ -80,6 +84,8 @@ export function SmartChatCenter({
           onCreateConversation={onCreateConversation}
           onSelectConversation={_onSelectConversation}
           onDeleteConversation={onDeleteConversation}
+          prefillMessage={prefillMessage}
+          prefillTitle={prefillTitle}
         />
       </PipelineStateProvider>
     </ErrorBoundary>
@@ -91,13 +97,16 @@ function SmartChatCenterInternal({
   onUpdateConversation,
   onCreateConversation,
   onSelectConversation,
-  onDeleteConversation
+  onDeleteConversation,
+  prefillMessage,
+  prefillTitle
 }: Props) {
   const queryClient = useQueryClient()
   const { state, dispatch } = useChatState()
   const streamedResultMessageIds = useRef<Set<string>>(new Set())
   const resetReasoningHistoryRef = useRef<Set<string>>(new Set())
   const isFirstMountRef = useRef(true) // 跟踪首次挂载
+  const prefillHandledRef = useRef(false)
   const { selectedModel: currentModel, setSelectedModel } = useModelState()
   const detailParams = React.useMemo(() => ({ take: CHAT_HISTORY_CONFIG.initialWindow }), [])
 
@@ -201,7 +210,10 @@ function SmartChatCenterInternal({
       return
     }
 
-    const nextMessages = Array.isArray(conversation.messages) ? conversation.messages : []
+    // 若服务端暂未返回消息且本地已有流式/占位消息，避免覆盖导致“空白等待”
+    const nextMessages = Array.isArray(conversation.messages) && conversation.messages.length > 0
+      ? conversation.messages
+      : messages
     dispatch({ type: 'SET_MESSAGES', payload: nextMessages })
 
     const hasMore = conversation.messagesWindow?.hasMoreBefore ?? false
@@ -235,7 +247,8 @@ function SmartChatCenterInternal({
     syncStatus,
     syncedConversationId,
     dispatch,
-    setSelectedModel
+    setSelectedModel,
+    messages
   ])
 
   useEffect(() => {
@@ -680,6 +693,75 @@ function SmartChatCenterInternal({
     model: composerSettings.modelId || currentModel,
     settings: composerSettings
   })
+
+  // 自动发送对齐预填消息
+  useEffect(() => {
+    if (!prefillMessage || prefillHandledRef.current) return
+
+    if (!composerSettings.modelId) {
+      toast.warning('请先选择模型', { description: '选择好模型后，系统才会自动发送对齐提示' })
+      return
+    }
+
+    // dev 下 StrictMode 会二次 mount，增加 sessionStorage 标记，确保同一会话只执行一次
+    const prefillMarker = typeof window !== 'undefined' ? `prefill-sent-${prefillMessage.slice(0, 32)}` : null
+    if (prefillMarker) {
+      const alreadySent = window.sessionStorage.getItem(prefillMarker)
+      if (alreadySent) {
+        prefillHandledRef.current = true
+        return
+      }
+      window.sessionStorage.setItem(prefillMarker, 'sent')
+    }
+
+    // 防止消息流触发的状态更新导致重复执行预填
+    prefillHandledRef.current = true
+
+    const run = async () => {
+      let targetConversationId = conversation?.id ?? activeConversation
+      try {
+        if (!targetConversationId && onCreateConversation) {
+          const newConversation = await onCreateConversation(composerSettings.modelId || currentModel)
+          targetConversationId = newConversation?.id ?? null
+          if (newConversation?.id && onSelectConversation) {
+            onSelectConversation(newConversation.id)
+          }
+        }
+        if (!targetConversationId) {
+          toast.error('无法自动对齐：对话未就绪')
+          // ✅ 失败也标记，避免刷新页面后无限重试
+          return
+        }
+        await sendMessage(prefillMessage, targetConversationId)
+        if (prefillTitle && onUpdateConversation) {
+          onUpdateConversation(targetConversationId, { title: prefillTitle }).catch(() => {})
+        }
+        // ✅ 成功后标记并提示
+        toast.success('已自动发送对齐信息', {
+          description: '系统已根据商家档案生成对齐提示'
+        })
+      } catch (e) {
+        console.error('prefill failed', e)
+        // ✅ 失败时标记，避免无限重试（但用户可以手动刷新页面重试）
+        toast.error('自动发送失败', {
+          description: '请手动粘贴对齐信息或刷新页面重试'
+        })
+      }
+    }
+
+    run()
+  }, [
+    prefillMessage,
+    prefillTitle,
+    conversation?.id,
+    activeConversation,
+    onCreateConversation,
+    onSelectConversation,
+    onUpdateConversation,
+    sendMessage,
+    composerSettings.modelId,
+    currentModel
+  ])
 
   // 停止生成的处理 - 确保重置全局状态
   const handleStopGeneration = useCallback(() => {

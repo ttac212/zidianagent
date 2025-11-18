@@ -2,7 +2,7 @@
  * TikHub Integration
  *
  * TikHub API集成模块
- * 提供抖音数据获取、同步、映射等功能
+ * 提供账户、数据获取、同步与映射等能力
  */
 
 // 配置
@@ -19,3 +19,6 @@ export * from './mapper'
 
 // 同步服务
 export * from './sync-service'
+
+// 分析辅助
+export * from './industry-density'

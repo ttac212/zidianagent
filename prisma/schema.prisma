@@ -56,9 +56,9 @@ model User {
   avatar            String?
   role              UserRole       @default(USER)
   status            UserStatus     @default(ACTIVE)
-  monthlyTokenLimit Int            @default(100000)
-  currentMonthUsage Int            @default(0)
-  totalTokenUsed    Int            @default(0)
+  monthlyTokenLimit BigInt         @default(100000)
+  currentMonthUsage BigInt         @default(0)
+  totalTokenUsed    BigInt         @default(0)
   lastResetAt       DateTime?      // 上次配额重置时间
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
@@ -204,6 +204,8 @@ model Merchant {
   benchmarks        MerchantBenchmark[] @relation("MerchantBenchmarks")
   benchmarkedBy     MerchantBenchmark[] @relation("BenchmarkFor")
   audienceAnalysis  MerchantAudienceAnalysis?
+  profileVersions   MerchantProfileVersion[]
+  audienceAnalysisVersions MerchantAudienceAnalysisVersion[]
 
   @@index([categoryId])
   @@index([location])
@@ -334,6 +336,9 @@ model MerchantAudienceAnalysis {
 
   // 完整报告（包含基本信息、TOP视频列表、地域分布和LLM分析）
   rawMarkdown String? // 完整的Markdown分析报告
+  // 人工修订后的报告及结构化补充
+  manualMarkdown String?
+  manualInsights Json?
 
   // 元数据
   analyzedAt DateTime @default(now())
@@ -346,6 +351,22 @@ model MerchantAudienceAnalysis {
   @@index([merchantId])
   @@index([analyzedAt])
   @@map("merchant_audience_analyses")
+}
+
+// 商家客群分析版本历史
+model MerchantAudienceAnalysisVersion {
+  id         String   @id @default(cuid())
+  merchantId String
+  analysisId String?
+  snapshot   Json
+  source     String   // ai / manual / system
+  createdAt  DateTime @default(now())
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([createdAt])
+  @@map("merchant_audience_analysis_versions")
 }
 
 enum UserRole {
@@ -400,6 +421,8 @@ model MerchantProfile {
   briefUsageScenarios  String? // 使用场景和痛点(JSON数组)
   briefAudienceProfile String? // 目标用户画像(年龄、性别、兴趣、消费习惯)
   briefBrandTone       String? // 品牌调性(正经/搞笑/温情/专业 + 具体描述)
+  // 人工校对版 Brief（完整结构化JSON，优先展示）
+  manualBrief          Json?
 
   // === 元数据 ===
   aiGeneratedAt DateTime? // AI生成时间
@@ -411,12 +434,30 @@ model MerchantProfile {
   customOfflineInfo    String? // 线下信息(实体店、地理优势等)
   customProductDetails String? // 产品详细信息(AI不知道的细节)
   customDosAndDonts    String? // 禁忌清单和必强调点(禁忌词、必须提及的点)
+  // 实地沟通高频问题/关键信息
+  manualNotes          String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([merchantId])
   @@map("merchant_profiles")
+}
+
+// 商家档案版本历史
+model MerchantProfileVersion {
+  id         String   @id @default(cuid())
+  merchantId String
+  profileId  String?
+  snapshot   Json
+  source     String   // ai / manual / system
+  createdAt  DateTime @default(now())
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([createdAt])
+  @@map("merchant_profile_versions")
 }
 
 // 商家成员表 - 用于商家权限管理

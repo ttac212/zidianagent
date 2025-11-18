@@ -66,6 +66,7 @@ export default function WorkspacePage() {
   // 编辑状态管理
   const [editingConvId, setEditingConvId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
+  const [prefillPayload, setPrefillPayload] = useState<{ message: string; title?: string } | null>(null)
 
   // 删除确认对话框状态
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
@@ -86,6 +87,23 @@ export default function WorkspacePage() {
       toast.success('已自动选中对话', { description: '链接分享成功' })
     }
   }, [searchParams, currentConversationId, setCurrentConversationId])
+
+  // 处理对齐预填
+  useEffect(() => {
+    const prefillKey = searchParams.get('prefill')
+    if (!prefillKey) return
+    try {
+      const raw = typeof window !== 'undefined' ? window.sessionStorage.getItem(prefillKey) : null
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        setPrefillPayload(parsed)
+        window.sessionStorage.removeItem(prefillKey)
+      }
+      window.history.replaceState({}, '', window.location.pathname)
+    } catch (_e) {
+      // 忽略
+    }
+  }, [searchParams])
 
   // 原有对话管理hooks - 传入当前对话ID
   const {
@@ -582,6 +600,8 @@ export default function WorkspacePage() {
                 onCreateConversation={handleCreateConversation}
                 onSelectConversation={handleSelectConversation}
                 onDeleteConversation={handleOpenDeleteConfirm}
+                prefillMessage={prefillPayload?.message}
+                prefillTitle={prefillPayload?.title}
               />
             </div>
           </div>

@@ -14,6 +14,7 @@ import { AudienceAnalysisSection } from './audience-analysis-section'
 interface ProfileAISectionProps {
   merchantId: string
   brief: ProfileBrief | null
+  briefSource: 'manual' | 'ai' | 'none'
   aiGeneratedAt?: Date | string | null
   aiModelUsed?: string | null
   aiTokenUsed?: number
@@ -23,6 +24,7 @@ interface ProfileAISectionProps {
 export function ProfileAISection({
   merchantId,
   brief,
+  briefSource,
   aiGeneratedAt,
   aiModelUsed,
   aiTokenUsed,
@@ -40,7 +42,7 @@ export function ProfileAISection({
 
   return (
     <div className="space-y-6">
-      {hasBrief && brief && <BriefCard brief={brief} />}
+      {hasBrief && brief && <BriefCard brief={brief} source={briefSource} />}
 
       {/* 客群分析 */}
       <AudienceAnalysisSection merchantId={merchantId} isAdmin={isAdmin} />
@@ -56,13 +58,14 @@ export function ProfileAISection({
   )
 }
 
-function BriefCard({ brief }: { brief: ProfileBrief }) {
+function BriefCard({ brief, source }: { brief: ProfileBrief; source: 'manual' | 'ai' | 'none' }) {
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-lg flex items-center gap-2">
           <Target className="h-5 w-5" />
           商家Brief(创作简报)
+          {source === 'manual' && <Badge variant="secondary">人工校对</Badge>}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">

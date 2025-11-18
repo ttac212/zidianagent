@@ -7,7 +7,8 @@ import type {
   MerchantProfileResponse,
   GenerateProfileResponse,
   UpdateProfileData,
-  MerchantProfile
+  MerchantProfile,
+  MerchantProfileVersion
 } from '@/types/merchant'
 
 // Query Keys
@@ -112,5 +113,26 @@ export function useUpdateProfile(merchantId: string) {
         }
       )
     }
+  })
+}
+
+/**
+ * 获取档案版本历史
+ */
+export function useProfileVersions(merchantId?: string) {
+  return useQuery({
+    queryKey: ['merchant-profile-versions', merchantId],
+    queryFn: async () => {
+      if (!merchantId) throw new Error('merchantId is required')
+      const res = await fetch(`/api/merchants/${merchantId}/profile/versions`)
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || '获取版本历史失败')
+      }
+      const data = await res.json()
+      return data.data.versions as MerchantProfileVersion[]
+    },
+    enabled: Boolean(merchantId),
+    staleTime: 60 * 1000
   })
 }

@@ -135,8 +135,20 @@ function createEmptyResult(): ParseResult {
  */
 export function parseStoredProfile(profile: any): {
   brief: ProfileBrief | null
+  source: 'manual' | 'ai' | 'none'
 } {
   try {
+    // ✅ 显式校验 manualBrief 是对象类型（防止空字符串等无效值）
+    const manualBrief: ProfileBrief | null =
+      profile.manualBrief && typeof profile.manualBrief === 'object'
+        ? profile.manualBrief as ProfileBrief
+        : null
+
+    if (manualBrief) {
+      return { brief: manualBrief, source: 'manual' }
+    }
+
+    // Fallback 到 AI 生成的 brief
     const brief: ProfileBrief | null = profile.briefIntro ? {
       intro: profile.briefIntro,
       sellingPoints: JSON.parse(profile.briefSellingPoints || '[]'),
@@ -145,9 +157,9 @@ export function parseStoredProfile(profile: any): {
       brandTone: profile.briefBrandTone || ''
     } : null
 
-    return { brief }
+    return { brief, source: brief ? 'ai' : 'none' }
   } catch (error) {
     console.error('[Profile Parser] 前端解析失败:', error)
-    return { brief: null }
+    return { brief: null, source: 'none' }
   }
 }

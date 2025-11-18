@@ -71,6 +71,8 @@ export async function GET(
       painPoints: analysis.painPoints ? JSON.parse(analysis.painPoints) : null,
       suggestions: analysis.suggestions ? JSON.parse(analysis.suggestions) : null,
       rawMarkdown: analysis.rawMarkdown,
+      manualMarkdown: analysis.manualMarkdown,
+      manualInsights: analysis.manualInsights as any,
       analyzedAt: analysis.analyzedAt.toISOString(),
       modelUsed: analysis.modelUsed,
       tokenUsed: analysis.tokenUsed

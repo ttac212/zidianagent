@@ -46,9 +46,31 @@ export class GlobalLifecycle {
         process.once('SIGINT', cleanup)
         process.once('SIGTERM', cleanup)
         process.once('uncaughtException', (error) => {
-          console.error('[Lifecycle] Uncaught exception:', error)
+          // 区分正常的连接断开和真正的异常
+          const errorCode = (error as any)?.code
+          const errorMessage = error?.message || ''
+
+          const isConnectionError =
+            errorCode === 'ECONNRESET' ||
+            errorCode === 'EPIPE' ||
+            errorCode === 'ABORT_ERR' ||
+            errorMessage.includes('aborted') ||
+            errorMessage.includes('connection')
+
+          if (isConnectionError) {
+            // 客户端断开连接，静默清理
+            console.info('[Lifecycle] Client disconnected, cleaning up resources...')
+          } else {
+            // 真正的异常
+            console.error('[Lifecycle] Uncaught exception:', error)
+          }
+
           cleanup()
-          process.exit(1)
+
+          // 只在真正的异常时退出
+          if (!isConnectionError) {
+            process.exit(1)
+          }
         })
       }
     }

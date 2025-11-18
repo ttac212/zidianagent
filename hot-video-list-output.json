@@ -1,0 +1,131 @@
+{
+  "queryParams": {
+    "dateWindow": 24,
+    "pageSize": 5,
+    "category": "全部"
+  },
+  "total": 1000,
+  "count": 5,
+  "hasMore": true,
+  "data": {
+    "code": 0,
+    "data": {
+      "page": {
+        "page": 1,
+        "page_size": 5,
+        "total": 1000
+      },
+      "objs": [
+        {
+          "item_id": "7572586014012717994",
+          "item_title": "他家👟真靠谱👉@潮鞋聚友（🉐档口） 过个纪念日男朋友的头发被火烧了。",
+          "item_cover_url": "https://p3-sign.douyinpic.com/tos-cn-i-0813/oE1TuAJfnaA76EQSALFfBEApodXAUKIs7ADsBf~tplv-dy-resize-walign-adapt-aq:540:q75.jpeg?lk3s=138a59ce&x-expires=1764554400&x-signature=geiLg9bTzAQ5SffOGIYKp2%2FnlLw%3D&from=327834062&s=PackSourceEnum_PUBLISH&se=false&sc=cover&biz_tag=aweme_video&l=202511171055534C78929E26AC5DA67C43",
+          "item_duration": 12134,
+          "nick_name": "Yaooo.",
+          "avatar_url": "https://p3.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_d9977c67c2a0822fb2a77ae1cc3845c4.jpeg?from=2956013662",
+          "fans_cnt": 12824,
+          "play_cnt": 111227583,
+          "publish_time": 1763130079,
+          "score": 4155846,
+          "item_url": "https://v3-cold4.douyinvod.com/5b2de329220dfc81ea3df8b30fe12e1d/691a9cd5/video/tos/cn/tos-cn-ve-15/oUm16FnAEI4QgfFUzufnGDGA9dQMpDNoAgNGB0/?a=1128&ch=10&cr=3&dr=0&lr=all&cd=0%7C0%7C0%7C3&cv=1&br=1170&bt=1170&cs=0&ds=6&ft=r5QvG77JWH6BM8XeQvr0PD1IN&mime_type=video_mp4&qs=0&rc=aTZmaWY0OTNoNDtkZWdkNkBpandqdHQ5cmttNzMzNGkzM0AuMmBgMjAzXzIxYTA2LzBiYSMuaC9tMmRrZ19hLS1kLWFzcw%3D%3D&btag=c0010e00088000&cquery=103S_100b_105O_103Q_103R&dy_q=1763348153&feature_id=f0150a16a324336cda5d6dd0b69ed299&l=202511171055534C78929E26AC5DA67C43",
+          "like_cnt": 1841015,
+          "follow_cnt": 15158,
+          "follow_rate": 0.000141,
+          "like_rate": 0.016552,
+          "media_type": 4,
+          "favorite_id": 0,
+          "is_favorite": false,
+          "image_cnt": 0
+        },
+        {
+          "item_id": "7572579043111882030",
+          "item_title": "讷讷讷讷讷 @新月电竞（瓦瓦的店） #无畏契约",
+          "item_cover_url": "https://p26-sign.douyinpic.com/tos-cn-i-dy/aa6e8a6afbe047eb8425d1c5b40933dd~tplv-dy-resize-walign-adapt-aq:540:q75.jpeg?lk3s=138a59ce&x-expires=1764554400&x-signature=pBbJf7gZTpblZ7m%2FoCXcdlS2Fmc%3D&from=327834062&s=PackSourceEnum_PUBLISH&se=false&sc=cover&biz_tag=aweme_video&l=202511171055534C78929E26AC5DA67C43",
+          "item_duration": 140822,
+          "nick_name": "瓦瓦",
+          "avatar_url": "https://p3.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_21dac8e7c799a379741808007b4b642e.jpeg?from=2956013662",
+          "fans_cnt": 5755505,
+          "play_cnt": 26460811,
+          "publish_time": 1763128468,
+          "score": 1114900,
+          "item_url": "https://v5-coldo.douyinvod.com/f2097ea945d1372b8bbc99d91e6ba2b1/691a9d55/video/tos/cn/tos-cn-ve-15/o8TAE4DePAz5jgBkAMgisi1rIfOw0ciBjQl1XA/?a=1128&ch=10&cr=3&dr=0&lr=all&cd=0%7C0%7C0%7C3&cv=1&br=712&bt=712&cs=0&ds=6&ft=r5QvG77JWH6BM8XeQvr0PD1IN&mime_type=video_mp4&qs=0&rc=ZjVkaDY4MztmNGc5ZWZoOkBpM2Y1cm85cmhtNzMzNGkzM0AwNTMtYF4uXmIxMzAtMDQtYSNwNnJlMmRjMl9hLS1kLTBzcw%3D%3D&btag=c0010e000ad000&cquery=105O_103Q_103W_103Y_100b&dy_q=1763348153&feature_id=f0150a16a324336cda5d6dd0b69ed299&l=202511171055534C78929E26AC5DA67C43",
+          "like_cnt": 2547049,
+          "follow_cnt": 158187,
+          "follow_rate": 0.005877,
+          "like_rate": 0.096257,
+          "media_type": 4,
+          "favorite_id": 0,
+          "is_favorite": false,
+          "image_cnt": 0
+        },
+        {
+          "item_id": "7572608358021563813",
+          "item_title": "大家不要吵了 作者和那个“想你了”的室友是山西人 然后那个骂我的是四川人 我争取给大家出个后续🙏",
+          "item_cover_url": "https://p26-sign.douyinpic.com/tos-cn-p-0015c000-ce/oEXPIMARJNXhzPRiYTCaHXAJAz74Bdi9PyEOy~tplv-dy-resize-walign-adapt-aq:540:q75.jpeg?lk3s=138a59ce&x-expires=1764554400&x-signature=vU8kxcH16avAz%2BCWPJX8O4PR2Rw%3D&from=327834062&s=PackSourceEnum_PUBLISH&se=false&sc=cover&biz_tag=aweme_video&l=202511171055534C78929E26AC5DA67C43",
+          "item_duration": 9400,
+          "nick_name": "x.",
+          "avatar_url": "https://p3.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_6fbc4440b672278d1bb41a1142fe507f.jpeg?from=2956013662",
+          "fans_cnt": 2051,
+          "play_cnt": 7876458,
+          "publish_time": 1763135284,
+          "score": 1096031,
+          "item_url": "https://v11-coldf.douyinvod.com/d2f1bbc749a7538f58f77434fdacb460/691a9cd2/video/tos/cn/tos-cn-ve-15c000-ce/o42hRER9PQJBALiTiCJIzXYdMPAaBXPnzXrHb/?a=1128&ch=10&cr=3&dr=0&lr=all&cd=0%7C0%7C0%7C3&cv=1&br=600&bt=600&cs=0&ds=3&ft=r5QvG77JWH6BM8XeQvr0PD1IN&mime_type=video_mp4&qs=0&rc=ZTQ0aTw7OmY0aTM4OjdpPEBpamt2cHc5cjxuNzMzbGkzNEBiM18uYzA0NWIxXl5fNWA0YSMwMS9tMmQ0cl9hLS1kLWJzcw%3D%3D&btag=c0010e0008d000&cquery=105O_103Q_103R_103S_100b&dy_q=1763348153&feature_id=fea919893f650a8c49286568590446ef&l=202511171055534C78929E26AC5DA67C43",
+          "like_cnt": 353257,
+          "follow_cnt": 1265,
+          "follow_rate": 0.000158,
+          "like_rate": 0.04485,
+          "media_type": 4,
+          "favorite_id": 0,
+          "is_favorite": false,
+          "image_cnt": 0
+        },
+        {
+          "item_id": "7372379121629842700",
+          "item_title": "#续火花 #火花没了你就消失 赶紧给我续🤬",
+          "item_cover_url": "https://p3-sign.douyinpic.com/tos-cn-p-0015/oEeEsej8EfBZWCAUQc5025yMAQeDMsBLs2PRgY~tplv-dy-resize-walign-adapt-aq:540:q75.jpeg?lk3s=138a59ce&x-expires=1764554400&x-signature=D2f6GclCMBuGW6taYGJVHoxjHgo%3D&from=327834062&s=PackSourceEnum_PUBLISH&se=false&sc=cover&biz_tag=aweme_video&l=202511171055534C78929E26AC5DA67C43",
+          "item_duration": 4125,
+          "nick_name": "宇宙无敌爆龙大帅哥",
+          "avatar_url": "https://p3.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_2c7cb00bd5d03ce6de9294876ba79fe5.jpeg?from=2956013662",
+          "fans_cnt": 8836,
+          "play_cnt": 239542,
+          "publish_time": 1716515790,
+          "score": 1058683,
+          "item_url": "https://v11-colds.douyinvod.com/60d7583f90d4d923f389058a4b01da96/691a9ccd/video/tos/cn/tos-cn-ve-15c001-alinc2/ooQBtffg3A87DwaECelEARCGCBnFIpQCMsOLmF/?a=1128&ch=10&cr=3&dr=0&lr=all&cd=0%7C0%7C0%7C3&cv=1&br=299&bt=299&cs=0&ds=6&ft=NYGV5HJHH_Myq8Z0Lkx9e2NvjTQ&mime_type=video_mp4&qs=0&rc=PDM6NTU1Z2llZjQzNDxpaUBpamZ1cmw5cjd5czMzNGkzM0AvXzEuNjNfXjQxMGAwNl8zYSNqY19mMmRjNDRgLS1kLTBzcw%3D%3D&btag=c0010e00088000&cquery=100b_105O_103Q_103R_103S&dy_q=1763348153&feature_id=f0150a16a324336cda5d6dd0b69ed299&l=202511171055534C78929E26AC5DA67C43",
+          "like_cnt": 3059,
+          "follow_cnt": 1268,
+          "follow_rate": 0.003656,
+          "like_rate": 0.01277,
+          "media_type": 4,
+          "favorite_id": 0,
+          "is_favorite": false,
+          "image_cnt": 0
+        },
+        {
+          "item_id": "7570611300931715754",
+          "item_title": "依旧送外卖 #随时随地轻松去污 #清风柔护全家",
+          "item_cover_url": "https://p11-sign.douyinpic.com/tos-cn-i-0813c001/ooCDBAEAEAPAIuFgpO6AfNDf7br9CjAEQEAJxA~tplv-dy-resize-walign-adapt-aq:540:q75.jpeg?lk3s=138a59ce&x-expires=1764554400&x-signature=Ilt6hhcjFQSV14GmR9viKUixnXg%3D&from=327834062&s=PackSourceEnum_PUBLISH&se=false&sc=cover&biz_tag=aweme_video&l=202511171055534C78929E26AC5DA67C43",
+          "item_duration": 440267,
+          "nick_name": "破破",
+          "avatar_url": "https://p3.douyinpic.com/aweme/100x100/aweme-avatar/mosaic-legacy_671b0029930e8ff66ae9.jpeg?from=2956013662",
+          "fans_cnt": 2005104,
+          "play_cnt": 23954754,
+          "publish_time": 1762685640,
+          "score": 996624,
+          "item_url": "https://v5-coldy.douyinvod.com/558c6b34eb0432d6e34dc97cbc88f515/691a9e81/video/tos/cn/tos-cn-ve-15/oAf1gBIAAjBEtOgE8aDLCpImEQ1jf89WCFGAAM/?a=1128&ch=10&cr=3&dr=0&lr=all&cd=0%7C0%7C0%7C3&cv=1&br=2285&bt=2285&cs=0&ds=6&ft=r5QvG77JWH6BM8XeQvr0PD1IN&mime_type=video_mp4&qs=0&rc=PDdoZjpoMztmZWhmPGk3N0BpajhkNHg5cmw1NzMzNGkzM0AvYy9hXl40NWAxYmJgYzItYSNlYmcuMmQ0ZTVhLS1kLS9zcw%3D%3D&btag=c0010e000b5001&cquery=103Q_103R_103S_100b_105O&dy_q=1763348153&feature_id=f0150a16a324336cda5d6dd0b69ed299&l=202511171055534C78929E26AC5DA67C43",
+          "like_cnt": 991126,
+          "follow_cnt": 56991,
+          "follow_rate": 0.002171,
+          "like_rate": 0.041375,
+          "media_type": 4,
+          "favorite_id": 0,
+          "is_favorite": false,
+          "image_cnt": 0
+        }
+      ]
+    },
+    "extra": {
+      "now": 1763348153000
+    },
+    "message": ""
+  }
+}

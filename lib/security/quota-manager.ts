@@ -6,6 +6,16 @@
 import { prisma } from '@/lib/prisma'
 import * as dt from '@/lib/utils/date-toolkit'
 
+function toNumber(value: number | bigint | null | undefined, fallback = 0): number {
+  if (typeof value === 'number') {
+    return value
+  }
+  if (typeof value === 'bigint') {
+    return Number(value)
+  }
+  return fallback
+}
+
 // 明确的错误类型，避免字符串解析
 export class QuotaExceededError extends Error {
   constructor(
@@ -66,8 +76,8 @@ export class QuotaManager {
             throw new UserNotFoundError(userId)
           }
 
-          const limit = user.monthlyTokenLimit || QuotaManager.DEFAULT_LIMIT
-          const currentUsage = user.currentMonthUsage || 0
+          const limit = toNumber(user.monthlyTokenLimit, QuotaManager.DEFAULT_LIMIT)
+          const currentUsage = toNumber(user.currentMonthUsage, 0)
 
           if (currentUsage + estimatedTokens > limit) {
             throw new QuotaExceededError(
@@ -105,8 +115,8 @@ export class QuotaManager {
           return {
             success: false,
             message: '月度配额不足',
-            currentUsage: user?.currentMonthUsage || 0,
-            limit: user?.monthlyTokenLimit || QuotaManager.DEFAULT_LIMIT
+            currentUsage: toNumber(user?.currentMonthUsage, 0),
+            limit: toNumber(user?.monthlyTokenLimit, QuotaManager.DEFAULT_LIMIT)
           }
         }
 
@@ -211,8 +221,8 @@ export class QuotaManager {
 
               throw new QuotaExceededError(
                 `配额调整失败：实际使用(${totalActual})超出限额约束`,
-                user?.currentMonthUsage || 0,
-                user?.monthlyTokenLimit || QuotaManager.DEFAULT_LIMIT,
+                toNumber(user?.currentMonthUsage, 0),
+                toNumber(user?.monthlyTokenLimit, QuotaManager.DEFAULT_LIMIT),
                 Math.abs(adjustment)
               )
             }
@@ -270,14 +280,17 @@ export class QuotaManager {
             select: { currentMonthUsage: true }
           })
 
-          if (user && user.currentMonthUsage >= estimatedTokens) {
-            await tx.user.update({
-              where: { id: userId },
-              data: { currentMonthUsage: user.currentMonthUsage - estimatedTokens }
-            })
-          } else {
-            console.error(`[QuotaManager] Release failed - potential negative balance: userId=${userId}, tokens=${estimatedTokens}`)
-            console.error(`[QuotaManager] Current usage: ${user?.currentMonthUsage}`)
+          if (user) {
+            const currentUsage = toNumber(user.currentMonthUsage, 0)
+            if (currentUsage >= estimatedTokens) {
+              await tx.user.update({
+                where: { id: userId },
+                data: { currentMonthUsage: currentUsage - estimatedTokens }
+              })
+            } else {
+              console.error(`[QuotaManager] Release failed - potential negative balance: userId=${userId}, tokens=${estimatedTokens}`)
+              console.error(`[QuotaManager] Current usage: ${currentUsage}`)
+            }
           }
         })
       } else {
@@ -298,7 +311,7 @@ export class QuotaManager {
             where: { id: userId },
             select: { currentMonthUsage: true }
           })
-          console.error(`[QuotaManager] Current usage: ${user?.currentMonthUsage}`)
+          console.error(`[QuotaManager] Current usage: ${toNumber(user?.currentMonthUsage, 0)}`)
         }
       }
     } catch (error) {
@@ -412,8 +425,8 @@ export class QuotaManager {
         select: { currentMonthUsage: true, monthlyTokenLimit: true }
       })
 
-      const currentUsage = user?.currentMonthUsage || 0
-      const limit = user?.monthlyTokenLimit || QuotaManager.DEFAULT_LIMIT
+      const currentUsage = toNumber(user?.currentMonthUsage, 0)
+      const limit = toNumber(user?.monthlyTokenLimit, QuotaManager.DEFAULT_LIMIT)
       const remaining = Math.max(0, limit - currentUsage)
       const usageRate = limit > 0 ? (currentUsage / limit) * 100 : 0
 

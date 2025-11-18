@@ -8,9 +8,10 @@
  */
 
 import { useCallback, useRef, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { toast } from '@/lib/toast/toast'
 import { unwrapApiResponse } from '@/lib/api/http-response'
+import type { MerchantAudienceAnalysisVersion } from '@/types/merchant'
 
 export interface AudienceAnalysisProgress {
   step: string
@@ -301,4 +302,54 @@ export function useMerchantAudienceAnalysis() {
     isCompleted: status === 'completed',
     hasError: status === 'error'
   }
+}
+
+/**
+ * 人工修订客群分析
+ */
+export function useUpdateAudienceManual(merchantId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (data: { manualMarkdown?: string; manualInsights?: Record<string, any> | null }) => {
+      const res = await fetch(`/api/merchants/${merchantId}/audience/manual`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || '更新失败')
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: audienceAnalysisKeys.detail(merchantId) })
+      toast.success('客群分析已保存')
+    },
+    onError: (err) => {
+      toast.error('保存失败', { description: err instanceof Error ? err.message : '未知错误' })
+    }
+  })
+}
+
+/**
+ * 客群分析版本历史
+ */
+export function useAudienceVersions(merchantId?: string) {
+  return useQuery({
+    queryKey: ['merchant-audience-versions', merchantId],
+    queryFn: async () => {
+      if (!merchantId) throw new Error('merchantId is required')
+      const res = await fetch(`/api/merchants/${merchantId}/audience/versions`)
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || '获取版本历史失败')
+      }
+      const data = await res.json()
+      return data.data.versions as MerchantAudienceAnalysisVersion[]
+    },
+    enabled: Boolean(merchantId),
+    staleTime: 60 * 1000
+  })
 }

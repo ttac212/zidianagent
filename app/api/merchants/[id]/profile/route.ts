@@ -15,6 +15,68 @@ import {
 } from '@/lib/api/http-response'
 import { withMerchantAuth, withMerchantAdminAuth } from '@/lib/api/merchant-auth'
 
+// 长度限制（防止性能问题）
+const MAX_NOTES_LENGTH = 10000       // 10k 字符
+const MAX_CUSTOM_FIELD_LENGTH = 5000  // 5k 字符
+const MAX_BRIEF_JSON_LENGTH = 20000   // 20k 字符（JSON 序列化后）
+
+function buildProfileUpdateData(body: UpdateProfileData) {
+  const data: any = {}
+
+  // ✅ 长度校验：customBackground
+  if (body.customBackground !== undefined) {
+    if (body.customBackground && body.customBackground.length > MAX_CUSTOM_FIELD_LENGTH) {
+      throw new Error(`创业背景过长（${body.customBackground.length} 字符），超过限制（${MAX_CUSTOM_FIELD_LENGTH} 字符）`)
+    }
+    data.customBackground = body.customBackground || null
+  }
+
+  // ✅ 长度校验：customOfflineInfo
+  if (body.customOfflineInfo !== undefined) {
+    if (body.customOfflineInfo && body.customOfflineInfo.length > MAX_CUSTOM_FIELD_LENGTH) {
+      throw new Error(`线下信息过长（${body.customOfflineInfo.length} 字符），超过限制（${MAX_CUSTOM_FIELD_LENGTH} 字符）`)
+    }
+    data.customOfflineInfo = body.customOfflineInfo || null
+  }
+
+  // ✅ 长度校验：customProductDetails
+  if (body.customProductDetails !== undefined) {
+    if (body.customProductDetails && body.customProductDetails.length > MAX_CUSTOM_FIELD_LENGTH) {
+      throw new Error(`产品详情过长（${body.customProductDetails.length} 字符），超过限制（${MAX_CUSTOM_FIELD_LENGTH} 字符）`)
+    }
+    data.customProductDetails = body.customProductDetails || null
+  }
+
+  // ✅ 长度校验：customDosAndDonts
+  if (body.customDosAndDonts !== undefined) {
+    if (body.customDosAndDonts && body.customDosAndDonts.length > MAX_CUSTOM_FIELD_LENGTH) {
+      throw new Error(`禁忌清单过长（${body.customDosAndDonts.length} 字符），超过限制（${MAX_CUSTOM_FIELD_LENGTH} 字符）`)
+    }
+    data.customDosAndDonts = body.customDosAndDonts || null
+  }
+
+  // ✅ 长度校验：manualNotes
+  if (body.manualNotes !== undefined) {
+    if (body.manualNotes && body.manualNotes.length > MAX_NOTES_LENGTH) {
+      throw new Error(`人工补充信息过长（${body.manualNotes.length} 字符），超过限制（${MAX_NOTES_LENGTH} 字符）`)
+    }
+    data.manualNotes = body.manualNotes || null
+  }
+
+  // ✅ 长度校验：manualBrief（JSON）
+  if (body.manualBrief !== undefined) {
+    if (body.manualBrief) {
+      const briefStr = JSON.stringify(body.manualBrief)
+      if (briefStr.length > MAX_BRIEF_JSON_LENGTH) {
+        throw new Error(`Brief 数据过大（${briefStr.length} 字符），超过限制（${MAX_BRIEF_JSON_LENGTH} 字符）`)
+      }
+    }
+    data.manualBrief = body.manualBrief || null
+  }
+
+  return data
+}
+
 // GET /api/merchants/[id]/profile - 获取商家档案
 export async function GET(
   request: NextRequest,
@@ -91,17 +153,21 @@ export async function PATCH(
         where: { merchantId: id },
         create: {
           merchantId: id,
-          customBackground: body.customBackground || null,
-          customOfflineInfo: body.customOfflineInfo || null,
-          customProductDetails: body.customProductDetails || null,
-          customDosAndDonts: body.customDosAndDonts || null
+          ...buildProfileUpdateData(body)
         },
         update: {
-          customBackground: body.customBackground || null,
-          customOfflineInfo: body.customOfflineInfo || null,
-          customProductDetails: body.customProductDetails || null,
-          customDosAndDonts: body.customDosAndDonts || null
-          // 注意: 不更新 ai* 字段(13个字段保持不变)
+          ...buildProfileUpdateData(body)
+          // 注意: 不更新 ai* 字段(保持不变)
+        }
+      })
+
+      // 写入版本历史
+      await prisma.merchantProfileVersion.create({
+        data: {
+          merchantId: id,
+          profileId: profile.id,
+          snapshot: profile,
+          source: 'manual'
         }
       })
 

@@ -469,13 +469,13 @@ export async function runDouyinCommentsPipeline(
 
     // 首先尝试使用专门的统计 API
     try {
-      console.log(`[COMMENTS_STATS] 正在获取视频统计数据，videoId: ${shareResult.videoId}`)
+      console.info(`[COMMENTS_STATS] 正在获取视频统计数据，videoId: ${shareResult.videoId}`)
 
       const statsResponse = await tikhubClient.getVideoStatistics({
         aweme_ids: shareResult.videoId
       })
 
-      console.log('[COMMENTS_STATS] API响应:', JSON.stringify({
+      console.info('[COMMENTS_STATS] API响应:', JSON.stringify({
         hasStatisticsList: !!(statsResponse as any).statistics_list,
         hasStatistics: !!statsResponse.statistics,
         response: statsResponse
@@ -496,7 +496,7 @@ export async function runDouyinCommentsPipeline(
 
       if (normalizedStats) {
         statistics = normalizedStats
-        console.log('[COMMENTS_STATS] 统计数据处理成功:', statistics)
+        console.info('[COMMENTS_STATS] 统计数据处理成功:', statistics)
       } else {
         console.warn('[COMMENTS_STATS] 统计数据字段不完整，将使用降级方案')
       }
@@ -521,7 +521,7 @@ export async function runDouyinCommentsPipeline(
       if (fallbackStatistics) {
         statistics = fallbackStatistics
         usedFallback = true
-        console.log('[COMMENTS_STATS] 成功使用降级数据源:', statistics)
+        console.info('[COMMENTS_STATS] 成功使用降级数据源:', statistics)
       } else {
         // 如果降级方案也失败,抛出错误
         throw new DouyinCommentsPipelineStepError(

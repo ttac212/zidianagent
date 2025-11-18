@@ -57,9 +57,9 @@ export default function MerchantsPage() {
   })
 
   // 使用 React Query 获取数据
-  const { data: merchantsData, isLoading: merchantsLoading, isFetching: merchantsFetching } = useMerchantsQuery(filters)
-  const { data: categories = [], isFetching: categoriesFetching } = useMerchantCategoriesQuery()
-  const { data: stats, isFetching: statsFetching } = useMerchantStatsQuery()
+  const { data: merchantsData, isLoading: merchantsLoading } = useMerchantsQuery(filters)
+  const { data: categories = [] } = useMerchantCategoriesQuery()
+  const { data: stats } = useMerchantStatsQuery()
   const { invalidateAll } = useInvalidateMerchants()
 
   // 使用 SSE 流式同步
@@ -69,13 +69,6 @@ export default function MerchantsPage() {
   const merchants = merchantsData?.merchants || []
   const total = merchantsData?.total || 0
   const loading = merchantsLoading
-
-  // 修复 hydration 错误：使用 state + useEffect 延迟更新 fetching 状态
-  const [refreshing, setRefreshing] = useState(false)
-  useEffect(() => {
-    setRefreshing(merchantsFetching || categoriesFetching || statsFetching)
-  }, [merchantsFetching, categoriesFetching, statsFetching])
-
   // 控制同步进度对话框的显示
   const [syncDialogOpen, setSyncDialogOpen] = useState(false)
 

@@ -223,6 +223,9 @@ export interface MerchantProfile {
   briefUsageScenarios?: string | null    // JSON字符串
   briefAudienceProfile?: string | null   // JSON字符串
   briefBrandTone?: string | null
+  // 人工校对版 Brief（完整结构化JSON，优先展示）
+  // 注意：从 Prisma 返回时可能是 JsonValue，需要类型断言
+  manualBrief?: ProfileBrief | null | any
 
   // 元数据
   aiGeneratedAt?: Date | string | null
@@ -234,6 +237,8 @@ export interface MerchantProfile {
   customOfflineInfo?: string | null
   customProductDetails?: string | null
   customDosAndDonts?: string | null
+  // 人工补充信息（实地沟通高频问题）
+  manualNotes?: string | null
 
   createdAt: Date | string
   updatedAt: Date | string
@@ -270,11 +275,22 @@ export interface UpdateProfileData {
   customOfflineInfo?: string
   customProductDetails?: string
   customDosAndDonts?: string
+  manualNotes?: string
+  manualBrief?: ProfileBrief
 }
 
 // AI生成档案的原始响应结构
 export interface AIProfileResponse {
   brief: ProfileBrief
+}
+
+export interface MerchantProfileVersion {
+  id: string
+  merchantId: string
+  profileId?: string | null
+  snapshot: any
+  source: string
+  createdAt: string | Date
 }
 
 // ============= 商家对标账号相关类型 =============
@@ -302,4 +318,67 @@ export interface AddBenchmarkData {
 // 删除对标账号请求
 export interface RemoveBenchmarkData {
   benchmarkId: string
+}
+
+// ============= 商家客群分析 =============
+
+export interface AudienceAnalysisProgress {
+  step: string
+  status: string
+  percentage: number
+  label: string
+  detail?: string
+}
+
+export interface LocationStat {
+  location: string
+  count: number
+  percentage: number
+}
+
+type AudienceAnalysisStructuredFields = {
+  audienceProfile: Record<string, any> | null
+  demographics: Record<string, any> | null
+  behaviors: Record<string, any> | null
+  interests: Record<string, any> | null
+  painPoints: Record<string, any> | null
+  suggestions: Record<string, any> | null
+}
+
+export interface AudienceAnalysisResult extends AudienceAnalysisStructuredFields {
+  analysisId: string
+  markdown: string
+  rawMarkdown: string
+  manualMarkdown?: string | null
+  manualInsights?: Record<string, any> | null
+  videosAnalyzed: number
+  commentsAnalyzed: number
+  locationStats: LocationStat[]
+  modelUsed: string
+  tokenUsed: number
+  analyzedAt: string
+}
+
+export interface AudienceAnalysisData extends AudienceAnalysisStructuredFields {
+  id: string
+  merchantId: string
+  videosAnalyzed: number
+  commentsAnalyzed: number
+  videoIds: string[]
+  locationStats: LocationStat[] | null
+  rawMarkdown: string | null
+  manualMarkdown?: string | null
+  manualInsights?: Record<string, any> | null
+  analyzedAt: string
+  modelUsed: string
+  tokenUsed: number
+}
+
+export interface MerchantAudienceAnalysisVersion {
+  id: string
+  merchantId: string
+  analysisId?: string | null
+  snapshot: any
+  source: string
+  createdAt: string | Date
 }

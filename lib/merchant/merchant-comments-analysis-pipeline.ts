@@ -22,7 +22,6 @@ import {
   type MerchantCommentAnalysisProgress,
   type MerchantVideoInfo,
   type MerchantVideoStatistics,
-  type LocationStat,
   type MerchantCommentAnalysisData
 } from './merchant-comments-analysis-steps'
 

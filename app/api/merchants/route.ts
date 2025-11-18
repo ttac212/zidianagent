@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
     // 权限检查：仅管理员可创建商家
     const session = await getServerSession(authOptions)
     if (!session || session.user.role !== 'ADMIN') {
-      console.log(`[Merchants] 非管理员尝试创建商家: ${session?.user?.email || 'unknown'}`)
+      console.warn(`[Merchants] 非管理员尝试创建商家: ${session?.user?.email || 'unknown'}`)
       return forbidden('仅管理员可创建商家')
     }
 
@@ -182,7 +182,7 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    console.log(`[Merchants] 管理员 ${session.user.email} 创建商家: ${merchant.name} (${merchant.id})`)
+    console.info(`[Merchants] 管理员 ${session.user.email} 创建商家: ${merchant.name} (${merchant.id})`)
     return NextResponse.json(merchant, { status: 201 })
     
   } catch (error) {

@@ -73,6 +73,10 @@ export default function MerchantAnalyticsPage() {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
   const merchantId = Array.isArray(params.id) ? params.id[0] : params.id
+  const fallbackDetailPath = merchantId ? `/merchants/${merchantId}` : '/merchants'
+  const goBackToDetail = () => {
+    router.push(fallbackDetailPath)
+  }
 
   // 获取分析数据
   const fetchAnalytics = useCallback(async () => {
@@ -133,7 +137,7 @@ export default function MerchantAnalyticsPage() {
     return (
       <div className="container mx-auto p-6 text-center">
         <h1 className="text-2xl font-bold text-muted-foreground">数据分析加载失败</h1>
-        <Button className="mt-4" onClick={() => router.back()}>
+        <Button className="mt-4" onClick={goBackToDetail}>
           返回
         </Button>
       </div>
@@ -146,7 +150,7 @@ export default function MerchantAnalyticsPage() {
     <div className="container mx-auto p-6 space-y-6">
       {/* 页面头部 */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" onClick={() => router.back()}>
+        <Button variant="ghost" size="sm" onClick={goBackToDetail}>
           <ArrowLeft className="h-4 w-4" />
           返回
         </Button>

@@ -4,7 +4,7 @@
 
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
@@ -49,13 +49,7 @@ import {
   ArrowDown,
   RefreshCw
 } from 'lucide-react'
-import type {
-  MerchantWithDetails,
-  MerchantContent,
-  MerchantDetailResponse,
-  ContentListResponse,
-  MerchantCategory
-} from '@/types/merchant'
+import type { MerchantContent } from '@/types/merchant'
 import {
   BUSINESS_TYPE_LABELS,
   MERCHANT_STATUS_LABELS,
@@ -63,121 +57,56 @@ import {
 } from '@/types/merchant'
 import { TagAnalysisModal } from '@/components/merchants/tag-analysis-modal'
 import { MonitoringConfig } from '@/components/merchants/monitoring-config'
-import { unwrapApiResponse } from '@/lib/api/http-response'
+import {
+  useMerchantCategoriesQuery,
+  useMerchantContentsQuery,
+  useMerchantDetailQuery,
+  type MerchantContentQueryFilters
+} from '@/hooks/api/use-merchants-query'
 import * as dt from '@/lib/utils/date-toolkit'
+import { parseStoredProfile } from '@/lib/ai/profile-parser'
 
 export default function MerchantDetailPage() {
   const params = useParams()
   const router = useRouter()
   const { data: session } = useSession()
   const merchantId = Array.isArray(params.id) ? params.id[0] : params.id
-  const [merchant, setMerchant] = useState<MerchantWithDetails | null>(null)
-  const [contents, setContents] = useState<MerchantContent[]>([])
-  const [categories, setCategories] = useState<MerchantCategory[]>([])
-  const [loading, setLoading] = useState(true)
-  const [contentLoading, setContentLoading] = useState(false)
-  const [contentFilters, setContentFilters] = useState({
+  const goBackToMerchants = () => {
+    router.push('/merchants')
+  }
+  const [contentFilters, setContentFilters] = useState<MerchantContentQueryFilters>({
     search: '',
-    contentType: '',
-    sortBy: 'publishedAt' as 'publishedAt' | 'diggCount' | 'commentCount' | 'collectCount' | 'shareCount' | 'engagement',
-    sortOrder: 'desc' as 'asc' | 'desc',
+    contentType: undefined,
+    sortBy: 'publishedAt',
+    sortOrder: 'desc',
     page: 1,
     limit: 20
   })
+  const merchantQuery = useMerchantDetailQuery(merchantId)
+  const merchant = merchantQuery.data
+  const merchantLoading = merchantQuery.status === 'pending'
+  const loading = merchantLoading
+  const contentsQuery = useMerchantContentsQuery(merchantId, contentFilters)
+  const contents = contentsQuery.data?.contents ?? []
+  const contentsInitialLoading = contentsQuery.status === 'pending' && !contentsQuery.data
+  const contentsFetching = contentsQuery.isFetching
+  const contentLoading = contentsInitialLoading || contentsFetching
+  const { refetch: refetchMerchant } = merchantQuery
+  const { refetch: refetchContents } = contentsQuery
+  const categoriesQuery = useMerchantCategoriesQuery()
+  const categories = categoriesQuery.data ?? []
   const [tagAnalysisOpen, setTagAnalysisOpen] = useState(false)
   const [exportLoading, setExportLoading] = useState(false)
   const [syncingContentId, setSyncingContentId] = useState<string | null>(null)
   const [selectedContentIds, setSelectedContentIds] = useState<string[]>([])
   const [selectMode, setSelectMode] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [aligning, setAligning] = useState(false)
 
-  // 获取商家详情
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const fetchMerchant = useCallback(async () => {
-    if (!merchantId) return
-
-    try {
-      setLoading(true)
-      const response = await fetch(`/api/merchants/${merchantId}`)
-      if (!response.ok) {
-        console.error('加载商户详情失败', await response.text())
-        return
-      }
-
-      const result = await response.json()
-      const data = unwrapApiResponse<MerchantDetailResponse>(result)
-      setMerchant(data.merchant)
-      setContents(data.merchant.contents || [])
-    } catch (error) {
-      console.error('加载商户详情异常', error)
-    } finally {
-      setLoading(false)
-    }
-  }, [merchantId])
-
-  // 计算互动评分
   const getEngagementScore = useCallback((content: MerchantContent) => {
     return content.diggCount + content.commentCount * 2 + content.collectCount * 3 + content.shareCount * 4
   }, [])
 
-  // 获取商家内容
-  const fetchContents = useCallback(async () => {
-    const targetId = merchant?.id ?? merchantId
-    if (!targetId) return
-
-    try {
-      setContentLoading(true)
-      const params = new URLSearchParams()
-
-      // 直接使用 contentFilters 的 sortBy，API 现在支持所有排序字段
-      Object.entries(contentFilters).forEach(([key, value]) => {
-        if (value && value !== '') {
-          params.append(key, String(value))
-        }
-      })
-
-      const response = await fetch(`/api/merchants/${targetId}/contents?${params.toString()}`)
-      if (!response.ok) {
-        console.error('加载商户内容失败', await response.text())
-        return
-      }
-
-      const result = await response.json()
-      const data = unwrapApiResponse<ContentListResponse>(result)
-
-      // 直接使用API返回的数据，不再在客户端排序
-      setContents(data.contents || [])
-    } catch (error) {
-      console.error('加载商户内容异常', error)
-    } finally {
-      setContentLoading(false)
-    }
-  }, [contentFilters, merchant?.id, merchantId])
-
-  useEffect(() => {
-    fetchMerchant()
-    fetchCategories()
-  }, [fetchMerchant])
-
-  useEffect(() => {
-    if (merchant) {
-      fetchContents()
-    }
-  }, [fetchContents, merchant])
-
-  // 获取分类列表
-  const fetchCategories = async () => {
-    try {
-      const response = await fetch('/api/merchants/categories')
-      if (response.ok) {
-        const data = await response.json()
-        setCategories(data)
-      }
-    } catch (error) {
-      console.error('获取分类列表失败', error)
-    }
-  }
 
   // 格式化数字
   const formatNumber = (num: number) => {
@@ -191,6 +120,80 @@ export default function MerchantDetailPage() {
   const formatDuration = (duration: string | null) => {
     if (!duration) return '未知'
     return duration.replace(/^00:/, '')  // 移除开头的00:
+  }
+
+  const buildAlignmentPrompt = (payload: any) => {
+    const m = payload.merchant
+    const p = payload.profile
+    const audience = payload.audience
+    const briefParsed = p ? parseStoredProfile(p).brief : null
+    const manualNotes = p?.manualNotes || '无'
+
+    const briefLines = briefParsed ? [
+      `简介：${briefParsed.intro || '无'}`,
+      `核心卖点：${(briefParsed.sellingPoints || []).join('；') || '无'}`,
+      `使用场景：${(briefParsed.usageScenarios || []).join('；') || '无'}`,
+      `目标用户：年龄 ${briefParsed.audienceProfile?.age || '未知'} / 性别 ${briefParsed.audienceProfile?.gender || '未知'} / 兴趣 ${(briefParsed.audienceProfile?.interests || []).join('、') || '无'} / 行为 ${briefParsed.audienceProfile?.behaviors || '无'}`,
+      `品牌语调：${briefParsed.brandTone || '未指定'}`
+    ] : ['暂无Brief（请补充后再用AI对齐）']
+
+    const audienceText = audience
+      ? (audience.manualMarkdown || audience.rawMarkdown || '暂无客群分析')
+      : '暂无客群分析'
+    const trimmedAudience = audienceText.length > 1500
+      ? `${audienceText.slice(0, 1500)}...`
+      : audienceText
+
+    return [
+      '你是编导对齐助手。目标：基于下方数据快速理解商家，输出创作前对齐结论。',
+      '输出格式：1) 商家定位与卖点 2) 受众画像/场景 3) 禁忌与注意事项 4) 对接提问清单（给编导提问的具体问题，简短）。',
+      '【商家基本信息】',
+      `名称：${m?.name ?? ''} | 类目：${m?.category?.name ?? '未分类'} | 地区：${m?.location ?? '未指定'} | 状态：${m?.status ?? ''}`,
+      `描述：${m?.description || '无'}`,
+      '【Brief（优先人工校对）】',
+      ...briefLines,
+      '【人工补充信息（真实沟通高频问题）】',
+      manualNotes,
+      '【客群分析（如为空请提示补充）】',
+      trimmedAudience
+    ].join('\n')
+  }
+
+  const handleAlignToWorkspace = async () => {
+    if (!merchant) return
+
+    // ✅ 权限检查：确保用户已登录
+    if (!session?.user) {
+      toast.error('请先登录', {
+        description: '需要登录后才能使用对齐功能'
+      })
+      router.push('/login')
+      return
+    }
+
+    try {
+      setAligning(true)
+      const res = await fetch(`/api/merchants/${merchant.id}/briefing`)
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || '获取对齐数据失败')
+      }
+      const payload = await res.json()
+      const briefing = payload.data || payload
+      const message = buildAlignmentPrompt(briefing)
+      const key = `prefill-${merchant.id}-${Date.now()}`
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(key, JSON.stringify({
+          message,
+          title: `商家对齐-${merchant.name}`
+        }))
+      }
+      router.push(`/workspace?prefill=${encodeURIComponent(key)}`)
+    } catch (error: any) {
+      toast.error(error?.message || '推送失败')
+    } finally {
+      setAligning(false)
+    }
   }
 
   // 导出数据
@@ -244,7 +247,7 @@ export default function MerchantDetailPage() {
     if (selectedContentIds.length === contents.length) {
       setSelectedContentIds([])
     } else {
-      setSelectedContentIds(contents.map((c) => c.id))
+      setSelectedContentIds(contents.map((c: MerchantContent) => c.id))
     }
   }
 
@@ -285,7 +288,7 @@ export default function MerchantDetailPage() {
           description: `新增 ${result.newVideos} 个视频，更新 ${result.updatedVideos} 个视频`
         })
         // 刷新商家和内容数据
-        await Promise.all([fetchMerchant(), fetchContents()])
+        await Promise.all([refetchMerchant(), refetchContents()])
       } else {
         const errorMsg = result?.errors?.[0] || '同步失败'
         toast.error('同步失败', {
@@ -316,7 +319,7 @@ export default function MerchantDetailPage() {
       if (response.ok) {
         const _result = await response.json()
         // 刷新内容列表
-        await fetchContents()
+        await refetchContents()
         toast.success('视频数据已更新', {
           description: '标题、互动数据已同步为最新版本'
         })
@@ -359,7 +362,7 @@ export default function MerchantDetailPage() {
     return (
       <div className="container mx-auto p-6 text-center">
         <h1 className="text-2xl font-bold text-muted-foreground">商家不存在</h1>
-        <Button className="mt-4" onClick={() => router.back()}>
+        <Button className="mt-4" onClick={goBackToMerchants}>
           返回
         </Button>
       </div>
@@ -371,7 +374,7 @@ export default function MerchantDetailPage() {
       {/* 页面头部 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => router.back()}>
+          <Button variant="ghost" size="sm" onClick={goBackToMerchants}>
             <ArrowLeft className="h-4 w-4" />
             返回
           </Button>
@@ -395,6 +398,25 @@ export default function MerchantDetailPage() {
           </Button>
         )}
       </div>
+
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle>AI对齐助手</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            聚合商家基本信息、创作档案（优先人工校对）、人工补充、高频客群分析，一键推送到工作台并自动触发AI回复，帮助编导创作前对齐。
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={handleAlignToWorkspace}
+              disabled={aligning || loading}
+            >
+              {aligning ? '准备对齐中...' : '一键推送到工作台并对齐'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* 商家创作档案 */}
       <MerchantProfileCard
@@ -428,7 +450,7 @@ export default function MerchantDetailPage() {
                   }}
                   categories={categories}
                   onSuccess={() => {
-                    fetchMerchant()
+                    refetchMerchant()
                   }}
                 />
               </div>
@@ -591,7 +613,7 @@ export default function MerchantDetailPage() {
                         contentIds={selectedContentIds}
                         onSuccess={() => {
                           clearSelection()
-                          fetchContents()
+                          refetchContents()
                         }}
                       />
                     )}
@@ -612,7 +634,7 @@ export default function MerchantDetailPage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {contents.map((content) => {
+                  {contents.map((content: MerchantContent) => {
                     const isSelected = selectedContentIds.includes(content.id)
                     return (
                       <div
@@ -670,7 +692,7 @@ export default function MerchantDetailPage() {
                               </span>
                               <span className="flex items-center gap-1">
                                 <Eye className="h-3 w-3" />
-                                {CONTENT_TYPE_LABELS[content.contentType]}
+                                {CONTENT_TYPE_LABELS[content.contentType as keyof typeof CONTENT_TYPE_LABELS]}
                               </span>
                               {content.duration && (
                                 <span className="flex items-center gap-1">

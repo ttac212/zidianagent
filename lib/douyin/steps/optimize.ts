@@ -7,7 +7,6 @@
  * - 支持降级策略
  */
 
-import { DouyinPipelineStepError } from '@/lib/douyin/pipeline'
 import type { DouyinPipelineEmitter } from '@/lib/douyin/pipeline'
 import type { DouyinVideoInfo } from '@/lib/douyin/pipeline-steps'
 
@@ -38,16 +37,16 @@ function optimizeTranscript(text: string): string {
  * 这里简化版，完整实现需要从原文件提取
  */
 async function optimizeTranscriptWithLLM(
-  transcript: string,
-  apiKey: string,
-  modelId: string,
-  videoInfo: {
+  _transcript: string,
+  _apiKey: string,
+  _modelId: string,
+  _videoInfo: {
     title: string
     author: string
     hashtags: string[]
     videoTags: string[]
   },
-  options: {
+  _options: {
     signal?: AbortSignal
     timeoutMs: number
     maxRetries: number
@@ -162,7 +161,7 @@ export async function optimizeTranscriptStep(
       } finally {
         clearInterval(heartbeatInterval)
       }
-    } catch (optimizeError) {
+    } catch (_optimizeError) {
       await emit({
         type: 'partial',
         key: 'warn',

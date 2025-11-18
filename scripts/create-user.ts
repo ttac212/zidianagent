@@ -40,10 +40,20 @@ async function createUser(
     }
 
     // 创建新用户
-    const username = email.split('@')[0]
+    let username = email.split('@')[0]
     const displayName = options.displayName || username
     const role = options.role || 'USER'
     const monthlyTokenLimit = options.monthlyTokenLimit || 100000 // 默认100k tokens/月
+
+    // 检查用户名是否已存在，如果存在则添加数字后缀
+    let usernameExists = await prisma.user.findUnique({ where: { username } })
+    let suffix = 2
+    const baseUsername = username
+    while (usernameExists) {
+      username = `${baseUsername}${suffix}`
+      usernameExists = await prisma.user.findUnique({ where: { username } })
+      suffix++
+    }
 
     const newUser = await prisma.user.create({
       data: {

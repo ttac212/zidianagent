@@ -145,7 +145,13 @@ export async function handleDouyinPipeline(
           const chunk = `event: ${type}\n` + `data: ${JSON.stringify(payload)}\n\n`
           controller.enqueue(encoder.encode(chunk))
         } catch (enqueueError) {
-          console.error(`[${featureName}] Failed to enqueue event:`, enqueueError)
+          // 连接已关闭时静默失败（ECONNRESET/客户端断开）
+          const errorCode = (enqueueError as any)?.code
+          if (errorCode === 'ECONNRESET' || errorCode === 'ERR_INVALID_STATE') {
+            isClosed = true // 标记为已关闭，防止后续尝试
+          } else {
+            console.error(`[${featureName}] Failed to enqueue event:`, enqueueError)
+          }
         }
       }
 
@@ -155,9 +161,21 @@ export async function handleDouyinPipeline(
         try {
           controller.enqueue(encoder.encode('data: [DONE]\n\n'))
         } catch (doneError) {
-          console.error(`[${featureName}] Failed to enqueue DONE marker:`, doneError)
+          // 连接已关闭时静默失败（ECONNRESET/客户端断开）
+          const errorCode = (doneError as any)?.code
+          if (errorCode !== 'ECONNRESET' && errorCode !== 'ERR_INVALID_STATE') {
+            console.error(`[${featureName}] Failed to enqueue DONE marker:`, doneError)
+          }
         } finally {
-          controller.close()
+          try {
+            controller.close()
+          } catch (closeError) {
+            // 连接已关闭时静默失败
+            const errorCode = (closeError as any)?.code
+            if (errorCode !== 'ECONNRESET' && errorCode !== 'ERR_INVALID_STATE') {
+              console.error(`[${featureName}] Failed to close stream:`, closeError)
+            }
+          }
         }
       }
 
@@ -226,9 +244,18 @@ export async function handleDouyinPipeline(
         // Pipeline失败，释放所有预留配额
         await QuotaManager.releaseTokens(userId, estimatedTokens)
 
-        if (err instanceof Error && err.name === 'AbortError') {
-          console.warn(`[${featureName}] Pipeline aborted by client`)
+        // 区分不同类型的错误以避免噪音日志
+        const errorCode = (err as any)?.code
+        const errorName = (err as Error)?.name
+
+        if (errorName === 'AbortError' || errorCode === 'ABORT_ERR') {
+          // 用户主动取消，正常情况
+          console.info(`[${featureName}] Pipeline aborted by user`)
+        } else if (errorCode === 'ECONNRESET' || errorCode === 'EPIPE') {
+          // 客户端断开连接，正常情况（用户关闭页面/刷新）
+          console.info(`[${featureName}] Client disconnected (${errorCode})`)
         } else {
+          // 真正的错误
           console.error(`[${featureName}] Pipeline failed:`, err)
         }
       } finally {

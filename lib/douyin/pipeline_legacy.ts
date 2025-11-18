@@ -464,7 +464,7 @@ ${text}
       cleanup()
 
       if (!response.ok) {
-        const errorText = await response.text()
+        const _errorText = await response.text()
         const statusCode = response.status
 
         // 5xx错误可以重试，4xx不重试
@@ -1029,7 +1029,7 @@ export async function runDouyinPipeline(
         } finally {
           clearInterval(heartbeatInterval)
         }
-      } catch (optimizeError) {
+      } catch (_optimizeError) {
         // 优化步骤失败不应中断整个流程，降级到基础版本
         await emit({
           type: 'partial',

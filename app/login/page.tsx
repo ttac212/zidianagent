@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { signIn } from "next-auth/react"
 import { Button } from "@/components/ui/button"
@@ -15,6 +15,32 @@ export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+
+  const getSafeCallbackUrl = useCallback((raw: string | null) => {
+    if (!raw) {
+      return "/workspace"
+    }
+
+    if (raw.startsWith("/") && !raw.startsWith("//")) {
+      return raw
+    }
+
+    if (typeof window === "undefined") {
+      return "/workspace"
+    }
+
+    try {
+      const parsed = new URL(raw, window.location.origin)
+      if (parsed.origin === window.location.origin) {
+        const path = parsed.pathname + parsed.search + parsed.hash
+        return path || "/workspace"
+      }
+    } catch (_error) {
+      // �޷������URLʱ�Զ�Ӧ����
+    }
+
+    return "/workspace"
+  }, [])
 
   useEffect(() => {
     // 预取工作区路由，加速首次进入
@@ -53,7 +79,7 @@ export default function LoginPage() {
         toast.success('登录成功')
 
         // 获取回调URL或默认跳转到工作区
-        const callbackUrl = searchParams.get('callbackUrl') || '/workspace'
+        const callbackUrl = getSafeCallbackUrl(searchParams.get('callbackUrl'))
         router.push(callbackUrl)
       }
     } catch (_error) {

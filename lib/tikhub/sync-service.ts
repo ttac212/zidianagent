@@ -22,6 +22,8 @@ import type {
 } from './types'
 import * as dt from '@/lib/utils/date-toolkit'
 
+const CONTENT_SYNC_FLUSH_SIZE = 50
+
 /**
  * 同步单个商家的数据
  */
@@ -32,6 +34,7 @@ export async function syncMerchantData(
     businessType?: 'B2B' | 'B2C' | 'B2B2C'
     maxVideos?: number
     client?: TikHubClient
+    profile?: DouyinUserProfile
   } = {}
 ): Promise<{
   success: boolean
@@ -46,7 +49,7 @@ export async function syncMerchantData(
   const maxVideos = options.maxVideos ?? 100
 
   try {
-    const profile = await fetchMerchantProfile(client, secUid)
+    const profile = options.profile ?? await fetchMerchantProfile(client, secUid)
     const merchantData = mapUserProfileToMerchant(profile, {
       categoryId: options.categoryId,
       businessType: options.businessType,
@@ -59,23 +62,85 @@ export async function syncMerchantData(
 
     const merchant = await upsertMerchant(merchantData)
 
-    const videos = await collectMerchantVideos(client, secUid, maxVideos)
-    const { contents, errors: contentErrors } = prepareContentPayloads(merchant.id, videos)
-    if (contentErrors.length) {
-      errors.push(...contentErrors)
+    const seenVideoIds = new Set<string>()
+    let totalVideos = 0
+    let newVideos = 0
+    let updatedVideos = 0
+    let remaining = maxVideos
+    const rowsBuffer: PreparedContentRow[] = []
+
+    const flushRows = async () => {
+      if (!rowsBuffer.length) return
+      const batch = rowsBuffer.splice(0, rowsBuffer.length)
+      await persistMerchantSync(merchant.id, batch)
     }
 
-    const { rows, newVideos, updatedVideos } = await prepareContentSyncRows(
-      merchant.id,
-      contents
-    )
+    for await (const batch of client.getAllUserVideos({ sec_uid: secUid, count: 20 })) {
+      if (!batch.aweme_list?.length) {
+        if (!batch.has_more) {
+          break
+        }
+        continue
+      }
 
-    await persistMerchantSync(merchant.id, rows)
+      const uniqueVideos = batch.aweme_list.filter((video) => {
+        if (seenVideoIds.has(video.aweme_id)) {
+          return false
+        }
+        seenVideoIds.add(video.aweme_id)
+        return true
+      })
+
+      if (!uniqueVideos.length) {
+        if (!batch.has_more) {
+          break
+        }
+        continue
+      }
+
+      const limitedVideos = uniqueVideos.slice(0, remaining)
+      const { contents, errors: contentErrors } = prepareContentPayloads(
+        merchant.id,
+        limitedVideos
+      )
+      if (contentErrors.length) {
+        errors.push(...contentErrors)
+      }
+
+      if (contents.length) {
+        const {
+          rows,
+          newVideos: chunkNewVideos,
+          updatedVideos: chunkUpdatedVideos,
+        } = await prepareContentSyncRows(merchant.id, contents)
+
+        newVideos += chunkNewVideos
+        updatedVideos += chunkUpdatedVideos
+        rowsBuffer.push(...rows)
+
+        if (rowsBuffer.length >= CONTENT_SYNC_FLUSH_SIZE) {
+          await flushRows()
+        }
+      }
+
+      totalVideos += limitedVideos.length
+      remaining -= limitedVideos.length
+
+      if (remaining <= 0) {
+        break
+      }
+
+      if (!batch.has_more) {
+        break
+      }
+    }
+
+    await flushRows()
 
     return {
       success: true,
       merchantId: merchant.id,
-      totalVideos: videos.length,
+      totalVideos,
       newVideos,
       updatedVideos,
       errors,
@@ -131,6 +196,7 @@ export async function batchSyncMerchants(
         const result = await syncMerchantData(task.merchantUid, {
           maxVideos: 100,
           client,
+          profile,
         })
 
         task.status = result.success ? 'completed' : 'failed'
@@ -381,30 +447,6 @@ async function upsertMerchant(
   })
 }
 
-async function collectMerchantVideos(
-  client: TikHubClient,
-  secUid: string,
-  maxVideos: number
-): Promise<DouyinVideo[]> {
-  const videos: DouyinVideo[] = []
-  let processed = 0
-
-  for await (const batch of client.getAllUserVideos({ sec_uid: secUid, count: 20 })) {
-    videos.push(...batch.aweme_list)
-    processed += batch.aweme_list.length
-
-    if (processed >= maxVideos) {
-      return videos.slice(0, maxVideos)
-    }
-
-    if (!batch.has_more) {
-      break
-    }
-  }
-
-  return videos.slice(0, maxVideos)
-}
-
 function prepareContentPayloads(
   merchantId: string,
   videos: DouyinVideo[],
@@ -427,6 +469,48 @@ function prepareContentPayloads(
 
   return { contents, errors }
 }
+
+interface PreparedContentRow
+  extends ReturnType<typeof mapVideoToMerchantContent> {
+  id: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+const MERCHANT_CONTENT_COLUMNS = [
+  'id',
+  'merchantId',
+  'externalId',
+  'title',
+  'content',
+  'transcript',
+  'contentType',
+  'duration',
+  'shareUrl',
+  'hasTranscript',
+  'diggCount',
+  'commentCount',
+  'collectCount',
+  'shareCount',
+  'playCount',
+  'forwardCount',
+  'totalEngagement',
+  'likeRate',
+  'commentRate',
+  'completionRate',
+  'avgWatchDuration',
+  'isSuspicious',
+  'suspiciousReason',
+  'tags',
+  'textExtra',
+  'publishedAt',
+  'collectedAt',
+  'externalCreatedAt',
+  'createdAt',
+  'updatedAt',
+] as const
+
+const MERCHANT_CONTENT_COLUMN_COUNT = MERCHANT_CONTENT_COLUMNS.length
 
 async function prepareContentSyncRows(
   merchantId: string,
@@ -495,72 +579,59 @@ async function bulkUpsertMerchantContents(
     return
   }
 
-  const values = rows.map((row) =>
-    Prisma.sql`(${row.id}, ${row.merchantId}, ${row.externalId}, ${row.title}, ${row.content ?? null}, ${row.transcript ?? null}, ${row.contentType}, ${row.duration ?? null}, ${row.shareUrl ?? null}, ${row.hasTranscript}, ${row.diggCount}, ${row.commentCount}, ${row.collectCount}, ${row.shareCount}, ${row.playCount}, ${row.forwardCount}, ${row.totalEngagement}, ${row.likeRate ?? null}, ${row.commentRate ?? null}, ${row.completionRate ?? null}, ${row.avgWatchDuration ?? null}, ${row.isSuspicious}, ${row.suspiciousReason ?? null}, ${row.tags}, ${row.textExtra}, ${row.publishedAt ?? null}, ${row.collectedAt}, ${row.externalCreatedAt ?? null}, ${row.createdAt}, ${row.updatedAt})`
+  // SQLite 单条语句最多 999 个参数，这里按批切分避免触顶
+  const SQLITE_PARAM_LIMIT = 999
+  const MAX_ROWS_PER_BATCH = Math.max(
+    1,
+    Math.floor(SQLITE_PARAM_LIMIT / MERCHANT_CONTENT_COLUMN_COUNT) - 1
+  )
+  const columnListSql = Prisma.join(
+    MERCHANT_CONTENT_COLUMNS.map((column) => Prisma.raw(`"${column}"`)),
+    ', '
   )
 
-  const query = Prisma.sql`
-    INSERT INTO "merchant_contents" (
-      "id",
-      "merchantId",
-      "externalId",
-      "title",
-      "content",
-      "transcript",
-      "contentType",
-      "duration",
-      "shareUrl",
-      "hasTranscript",
-      "diggCount",
-      "commentCount",
-      "collectCount",
-      "shareCount",
-      "playCount",
-      "forwardCount",
-      "totalEngagement",
-      "likeRate",
-      "commentRate",
-      "completionRate",
-      "avgWatchDuration",
-      "isSuspicious",
-      "suspiciousReason",
-      "tags",
-      "textExtra",
-      "publishedAt",
-      "collectedAt",
-      "externalCreatedAt",
-      "createdAt",
-      "updatedAt"
-    )
-    VALUES ${Prisma.join(values, ', ')}
-    ON CONFLICT("externalId", "merchantId") DO UPDATE SET
-      "title" = excluded."title",
-      "content" = excluded."content",
-      "contentType" = excluded."contentType",
-      "duration" = excluded."duration",
-      "shareUrl" = excluded."shareUrl",
-      "diggCount" = excluded."diggCount",
-      "commentCount" = excluded."commentCount",
-      "collectCount" = excluded."collectCount",
-      "shareCount" = excluded."shareCount",
-      "playCount" = excluded."playCount",
-      "forwardCount" = excluded."forwardCount",
-      "totalEngagement" = excluded."totalEngagement",
-      "likeRate" = excluded."likeRate",
-      "commentRate" = excluded."commentRate",
-      "completionRate" = excluded."completionRate",
-      "avgWatchDuration" = excluded."avgWatchDuration",
-      "isSuspicious" = excluded."isSuspicious",
-      "suspiciousReason" = excluded."suspiciousReason",
-      "tags" = excluded."tags",
-      "textExtra" = excluded."textExtra",
-      "publishedAt" = excluded."publishedAt",
-      "collectedAt" = excluded."collectedAt",
-      "externalCreatedAt" = excluded."externalCreatedAt",
-      "updatedAt" = excluded."updatedAt"
-  `
+  for (let i = 0; i < rows.length; i += MAX_ROWS_PER_BATCH) {
+    const chunk = rows.slice(i, i + MAX_ROWS_PER_BATCH)
+    if (!chunk.length) continue
 
-  await tx.$executeRaw(query)
+    const values = chunk.map((row) =>
+      Prisma.sql`(${row.id}, ${row.merchantId}, ${row.externalId}, ${row.title}, ${row.content ?? null}, ${row.transcript ?? null}, ${row.contentType}, ${row.duration ?? null}, ${row.shareUrl ?? null}, ${row.hasTranscript}, ${row.diggCount}, ${row.commentCount}, ${row.collectCount}, ${row.shareCount}, ${row.playCount}, ${row.forwardCount}, ${row.totalEngagement}, ${row.likeRate ?? null}, ${row.commentRate ?? null}, ${row.completionRate ?? null}, ${row.avgWatchDuration ?? null}, ${row.isSuspicious}, ${row.suspiciousReason ?? null}, ${row.tags}, ${row.textExtra}, ${row.publishedAt ?? null}, ${row.collectedAt}, ${row.externalCreatedAt ?? null}, ${row.createdAt}, ${row.updatedAt})`
+    )
+
+    const query = Prisma.sql`
+      INSERT INTO "merchant_contents" (
+        ${columnListSql}
+      )
+      VALUES ${Prisma.join(values, ', ')}
+      ON CONFLICT("externalId", "merchantId") DO UPDATE SET
+        "title" = excluded."title",
+        "content" = excluded."content",
+        "contentType" = excluded."contentType",
+        "duration" = excluded."duration",
+        "shareUrl" = excluded."shareUrl",
+        "diggCount" = excluded."diggCount",
+        "commentCount" = excluded."commentCount",
+        "collectCount" = excluded."collectCount",
+        "shareCount" = excluded."shareCount",
+        "playCount" = excluded."playCount",
+        "forwardCount" = excluded."forwardCount",
+        "totalEngagement" = excluded."totalEngagement",
+        "likeRate" = excluded."likeRate",
+        "commentRate" = excluded."commentRate",
+        "completionRate" = excluded."completionRate",
+        "avgWatchDuration" = excluded."avgWatchDuration",
+        "isSuspicious" = excluded."isSuspicious",
+        "suspiciousReason" = excluded."suspiciousReason",
+        "tags" = excluded."tags",
+        "textExtra" = excluded."textExtra",
+        "publishedAt" = excluded."publishedAt",
+        "collectedAt" = excluded."collectedAt",
+        "externalCreatedAt" = excluded."externalCreatedAt",
+        "updatedAt" = excluded."updatedAt"
+    `
+
+    await tx.$executeRaw(query)
+  }
 }
 
 async function updateMerchantAggregates(
@@ -687,41 +758,57 @@ export async function updateSingleVideo(
       throw new Error('商家不存在')
     }
 
-    // 2. 获取 sec_uid
-    let secUid: string | undefined
+    // 2. 优先尝试通过详情接口获取目标视频
+    let targetVideo: DouyinVideo | undefined
+    let detailError: any
     try {
-      const contactInfo = typeof merchant.contactInfo === 'string'
-        ? JSON.parse(merchant.contactInfo)
-        : (merchant.contactInfo as any)
-      secUid = contactInfo?.sec_uid
-    } catch (_e) {
-      // ignore parse errors
+      const videoDetail = await client.getVideoDetail({ aweme_id: externalId })
+      targetVideo = videoDetail.aweme_detail
+    } catch (error) {
+      detailError = error
     }
-
-    if (!secUid) {
-      secUid = merchant.uid
-    }
-
-    if (!secUid) {
-      throw new Error('商家缺少 sec_uid/uid 信息，无法同步视频')
-    }
-
-    // 3. 获取该商家的最新视频列表（获取足够多的视频以找到目标视频）
-    const videosResponse = await client.getUserVideos({
-      sec_uid: secUid,
-      count: 100, // 获取更多视频以确保能找到目标视频
-    })
-
-    // 4. 查找目标视频
-    const targetVideo = videosResponse.aweme_list.find(
-      (video) => video.aweme_id === externalId
-    )
 
     if (!targetVideo) {
-      throw new Error(`未找到视频 ${externalId}，可能已被删除或不在最新100个视频中`)
+      // detail 接口失败时回退到列表查询
+      let secUid: string | undefined
+      try {
+        const contactInfo = typeof merchant.contactInfo === 'string'
+          ? JSON.parse(merchant.contactInfo)
+          : (merchant.contactInfo as any)
+        secUid = contactInfo?.sec_uid
+      } catch (_e) {
+        // ignore parse errors
+      }
+
+      if (!secUid) {
+        secUid = merchant.uid
+      }
+
+      if (!secUid) {
+        if (detailError) {
+          throw detailError
+        }
+        throw new Error('商家缺少 sec_uid/uid 信息，无法同步视频')
+      }
+
+      const fallbackVideos = await client.getUserVideos({
+        sec_uid: secUid,
+        count: 100,
+      })
+
+      targetVideo = fallbackVideos.aweme_list.find(
+        (video) => video.aweme_id === externalId
+      )
+
+      if (!targetVideo) {
+        if (detailError) {
+          throw detailError
+        }
+        throw new Error(`未找到视频 ${externalId}`)
+      }
     }
 
-    // 5. 映射视频数据
+    // 3. 映射视频数据
     const { contents, errors: contentErrors } = prepareContentPayloads(
       merchantId,
       [targetVideo] // 只处理这一个视频
@@ -735,10 +822,10 @@ export async function updateSingleVideo(
       throw new Error('视频数据验证失败')
     }
 
-    // 6. 准备更新数据
+    // 4. 准备更新数据
     const { rows } = await prepareContentSyncRows(merchantId, contents)
 
-    // 7. 执行更新
+    // 5. 执行更新
     await persistMerchantSync(merchantId, rows)
 
     return {
@@ -756,9 +843,3 @@ export async function updateSingleVideo(
   }
 }
 
-interface PreparedContentRow
-  extends ReturnType<typeof mapVideoToMerchantContent> {
-  id: string
-  createdAt: Date
-  updatedAt: Date
-}

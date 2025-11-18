@@ -28,6 +28,20 @@ import type {
   GetVideoStatisticsParams,
   DouyinCommentWordCloudResponse,
   GetCommentWordCloudParams,
+  DouyinCityListResponse,
+  DouyinContentTagResponse,
+  DouyinHotAccountListResponse,
+  GetHotAccountListParams,
+  DouyinFansInterestTopicListResponse,
+  GetFansInterestTopicListParams,
+  DouyinHotVideoListResponse,
+  GetHotVideoListParams,
+  DouyinLowFanListResponse,
+  GetLowFanListParams,
+  DouyinHotWordListResponse,
+  GetHotWordListParams,
+  DouyinCityHotListResponse,
+  GetCityHotListParams,
 } from './types'
 
 /**
@@ -433,6 +447,283 @@ export class TikHubClient {
     const response = await this.request<DouyinCommentWordCloudResponse>({
       endpoint: '/api/v1/douyin/billboard/fetch_hot_comment_word_list',
       params,
+    })
+    return response.data
+  }
+
+  /**
+   * 获取中国城市列表
+   */
+  async getCityList(): Promise<DouyinCityListResponse> {
+    const response = await this.request<DouyinCityListResponse>({
+      endpoint: '/api/v1/douyin/billboard/fetch_city_list',
+    })
+    return response.data
+  }
+
+  /**
+   * 获取垂类内容标签
+   * 用于构建 query_tag 参数
+   *
+   * @example
+   * // 顶级垂类：美食 (628)
+   * // 子垂类：品酒教学 (62802)
+   * // 查询参数：{"value": 628, "children": [{"value": 62802}]}
+   */
+  async getContentTags(): Promise<DouyinContentTagResponse> {
+    const response = await this.request<DouyinContentTagResponse>({
+      endpoint: '/api/v1/douyin/billboard/fetch_content_tag',
+    })
+    return response.data
+  }
+
+  /**
+   * 获取热门账号列表
+   *
+   * @param params 查询参数
+   * @param params.date_window 时间窗口（小时），默认24小时
+   * @param params.page_num 页码，默认1
+   * @param params.page_size 每页数量，默认10
+   * @param params.query_tag 垂类标签筛选，空对象表示全部
+   *
+   * @example
+   * // 获取所有垂类的热门账号
+   * await client.getHotAccountList({ page_num: 1, page_size: 20 })
+   *
+   * // 获取美食垂类的热门账号
+   * await client.getHotAccountList({
+   *   query_tag: { value: 628 }
+   * })
+   *
+   * // 获取美食垂类中美食教程和美食测评的热门账号
+   * await client.getHotAccountList({
+   *   query_tag: {
+   *     value: 628,
+   *     children: [{ value: 62804 }, { value: 62803 }]
+   *   }
+   * })
+   */
+  async getHotAccountList(params?: GetHotAccountListParams): Promise<DouyinHotAccountListResponse> {
+    const response = await this.request<DouyinHotAccountListResponse>({
+      endpoint: '/api/v1/douyin/billboard/fetch_hot_account_list',
+      method: 'POST',
+      body: {
+        date_window: params?.date_window ?? 24,
+        page_num: params?.page_num ?? 1,
+        page_size: params?.page_size ?? 10,
+        query_tag: params?.query_tag ?? {},
+      },
+    })
+    return response.data
+  }
+
+  /**
+   * 获取粉丝画像（省份/城市等）
+   * option: 1-价格 2-性别 3-年龄 4-省份 5-城市 6-城市级别 7-手机品牌 8-兴趣标签
+   */
+  async getHotAccountFansPortrait(params: { sec_uid: string; option?: number }): Promise<any> {
+    const response = await this.request<any>({
+      endpoint: '/api/v1/douyin/billboard/fetch_hot_account_fans_portrait_list',
+      method: 'GET',
+      params: {
+        sec_uid: params.sec_uid,
+        option: params.option ?? 4,
+      },
+    })
+    return response.data
+  }
+
+  /**
+   * 获取粉丝近3天感兴趣的话题（10个话题）
+   *
+   * @param params 查询参数
+   * @param params.sec_uid 用户sec_uid
+   *
+   * @example
+   * // 获取人民日报粉丝感兴趣的话题
+   * const topics = await client.getFansInterestTopicList({
+   *   sec_uid: 'MS4wLjABAAAA8U_l6rBzmy7bcy6xOJel4v0RzoR_wfAubGPeJimN__4'
+   * })
+   */
+  async getFansInterestTopicList(params: GetFansInterestTopicListParams): Promise<DouyinFansInterestTopicListResponse> {
+    if (!params.sec_uid) {
+      throw new Error('sec_uid is required to fetch fans interest topic list.')
+    }
+
+    const response = await this.request<DouyinFansInterestTopicListResponse>({
+      endpoint: '/api/v1/douyin/billboard/fetch_hot_account_fans_interest_topic_list',
+      params: {
+        sec_uid: params.sec_uid,
+      },
+    })
+    return response.data
+  }
+
+  /**
+   * 获取视频热榜
+   *
+   * @param params 查询参数
+   * @param params.page 页码，默认1
+   * @param params.page_size 每页数量，默认10
+   * @param params.date_window 时间窗口，1按小时 2按天，默认24
+   * @param params.tags 子级垂类标签，空则为全部
+   *
+   * @example
+   * // 获取全部垂类的视频热榜
+   * const videos = await client.getHotVideoList({ page: 1, page_size: 20 })
+   *
+   * // 获取美食垂类的视频热榜
+   * const foodVideos = await client.getHotVideoList({
+   *   tags: [{ value: 628 }]
+   * })
+   *
+   * // 获取美食垂类中美食教程和美食测评的视频热榜
+   * const specificVideos = await client.getHotVideoList({
+   *   tags: [{
+   *     value: 628,
+   *     children: [{ value: 62804 }, { value: 62803 }]
+   *   }]
+   * })
+   */
+  async getHotVideoList(params?: GetHotVideoListParams): Promise<DouyinHotVideoListResponse> {
+    const response = await this.request<DouyinHotVideoListResponse>({
+      endpoint: '/api/v1/douyin/billboard/fetch_hot_total_video_list',
+      method: 'POST',
+      body: {
+        page: params?.page ?? 1,
+        page_size: params?.page_size ?? 10,
+        date_window: params?.date_window ?? 24,
+        tags: params?.tags ?? [],
+      },
+    })
+    return response.data
+  }
+
+  /**
+   * 获取低粉爆款榜
+   *
+   * @param params 查询参数
+   * @param params.page 页码，默认1
+   * @param params.page_size 每页数量，默认10
+   * @param params.date_window 时间窗口，1按小时 2按天，默认24
+   * @param params.tags 子级垂类标签，空则为全部
+   *
+   * @example
+   * // 获取全部垂类的低粉爆款榜
+   * const videos = await client.getLowFanList({ page: 1, page_size: 20 })
+   *
+   * // 获取美食垂类的低粉爆款榜
+   * const foodVideos = await client.getLowFanList({
+   *   tags: [{ value: 628 }]
+   * })
+   *
+   * // 获取美食垂类中美食教程的低粉爆款榜
+   * const specificVideos = await client.getLowFanList({
+   *   tags: [{
+   *     value: 628,
+   *     children: [{ value: 62804 }]
+   *   }]
+   * })
+   */
+  async getLowFanList(params?: GetLowFanListParams): Promise<DouyinLowFanListResponse> {
+    const response = await this.request<DouyinLowFanListResponse>({
+      endpoint: '/api/v1/douyin/billboard/fetch_hot_total_low_fan_list',
+      method: 'POST',
+      body: {
+        page: params?.page ?? 1,
+        page_size: params?.page_size ?? 10,
+        date_window: params?.date_window ?? 24,
+        tags: params?.tags ?? [],
+      },
+    })
+    return response.data
+  }
+
+  /**
+   * 获取热门内容词列表
+   *
+   * @param params 查询参数
+   * @param params.page_num 页码，默认1
+   * @param params.page_size 每页数量，默认10
+   * @param params.date_window 时间窗口，1按小时 2按天，默认24
+   * @param params.keyword 搜索关键字
+   *
+   * @example
+   * // 获取全部热门内容词
+   * const words = await client.getHotWordList({ page_num: 1, page_size: 20 })
+   *
+   * // 搜索包含"美食"的热门内容词
+   * const foodWords = await client.getHotWordList({
+   *   keyword: '美食',
+   *   page_num: 1,
+   *   page_size: 10
+   * })
+   *
+   * // 获取按小时统计的热门内容词
+   * const hourlyWords = await client.getHotWordList({
+   *   date_window: 1,
+   *   page_size: 50
+   * })
+   */
+  async getHotWordList(params?: GetHotWordListParams): Promise<DouyinHotWordListResponse> {
+    const response = await this.request<DouyinHotWordListResponse>({
+      endpoint: '/api/v1/douyin/billboard/fetch_hot_total_hot_word_list',
+      method: 'POST',
+      body: {
+        page_num: params?.page_num ?? 1,
+        page_size: params?.page_size ?? 10,
+        date_window: params?.date_window ?? 24,
+        keyword: params?.keyword ?? '',
+      },
+    })
+    return response.data
+  }
+
+  /**
+   * 获取同城热点榜
+   *
+   * @param params 查询参数
+   * @param params.page 页码，默认1
+   * @param params.page_size 每页数量，默认10
+   * @param params.order 排序方式，rank-按热度，rank_diff-按排名变化，默认rank
+   * @param params.city_code 城市编码，空为全部
+   * @param params.sentence_tag 热点分类标签，多个用逗号分隔，空为全部
+   * @param params.keyword 热点搜索词
+   *
+   * @example
+   * // 获取全部城市的热点榜
+   * const allCityHots = await client.getCityHotList({ page: 1, page_size: 20 })
+   *
+   * // 获取北京市（城市编码110000）的热点榜
+   * const beijingHots = await client.getCityHotList({
+   *   city_code: '110000',
+   *   order: 'rank'
+   * })
+   *
+   * // 搜索包含"美食"的热点
+   * const foodHots = await client.getCityHotList({
+   *   keyword: '美食',
+   *   page_size: 10
+   * })
+   *
+   * // 获取特定分类的热点（分类标签从热点榜分类接口获取）
+   * const categoryHots = await client.getCityHotList({
+   *   sentence_tag: '美食,旅游',
+   *   city_code: '110000'
+   * })
+   */
+  async getCityHotList(params?: GetCityHotListParams): Promise<DouyinCityHotListResponse> {
+    const response = await this.request<DouyinCityHotListResponse>({
+      endpoint: '/api/v1/douyin/billboard/fetch_hot_city_list',
+      method: 'GET',
+      params: {
+        page: params?.page ?? 1,
+        page_size: params?.page_size ?? 10,
+        order: params?.order ?? 'rank',
+        city_code: params?.city_code ?? '',
+        sentence_tag: params?.sentence_tag ?? '',
+        keyword: params?.keyword ?? '',
+      },
     })
     return response.data
   }
