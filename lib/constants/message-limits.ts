@@ -25,70 +25,67 @@ export const MESSAGE_LIMITS = {
       'anthropic/claude-sonnet-4.5': {
         contextWindow: 200000,
         reserveTokens: 8000,
-        maxTokens: 16000,
-        creativeMode: { contextWindow: 200000, reserveTokens: 20000, maxTokens: 24000 }
+        maxTokens: 16000
       },
       'claude-opus-4-1-20250805': {
         contextWindow: 200000,
         reserveTokens: 8000,
-        maxTokens: 8000,
-        // 创作模式：使用90%容量，预留更多输出空间
-        creativeMode: { contextWindow: 200000, reserveTokens: 20000, maxTokens: 16000 }
+        maxTokens: 8000
       },
       'claude-sonnet-4-5-20250929-thinking': {
         contextWindow: 200000,
         reserveTokens: 8000,
-        maxTokens: 16000,
-        creativeMode: { contextWindow: 200000, reserveTokens: 20000, maxTokens: 24000 }
+        maxTokens: 16000
       },
       'claude-sonnet-4-5-20250929': {
         contextWindow: 200000,
         reserveTokens: 8000,
-        maxTokens: 8000,
-        creativeMode: { contextWindow: 200000, reserveTokens: 20000, maxTokens: 16000 }
+        maxTokens: 8000
       },
       'claude-3-5-sonnet': {
         contextWindow: 200000,
         reserveTokens: 8000,
-        maxTokens: 8000,
-        creativeMode: { contextWindow: 200000, reserveTokens: 20000, maxTokens: 16000 }
+        maxTokens: 8000
       },
       'claude-3-5-haiku-20241022': {
         contextWindow: 200000,
         reserveTokens: 4000,
-        maxTokens: 8000,
-        creativeMode: { contextWindow: 200000, reserveTokens: 16000, maxTokens: 12000 }
+        maxTokens: 8000
       },
       'gemini-2.5-pro': {
         contextWindow: 1000000,
         reserveTokens: 8000,
-        maxTokens: 8000,
-        // Gemini支持超长上下文，创作模式使用90%容量
-        creativeMode: { contextWindow: 1000000, reserveTokens: 100000, maxTokens: 32000 }
+        maxTokens: 8000
+      },
+      'google/gemini-2.5-pro': {
+        contextWindow: 480000,
+        reserveTokens: 8000,
+        maxTokens: 8000
+      },
+      'google/gemini-3-pro-preview': {
+        contextWindow: 480000,
+        reserveTokens: 8000,
+        maxTokens: 16000
       },
       'gemini-1.5-pro': {
         contextWindow: 1000000,
         reserveTokens: 8000,
-        maxTokens: 8000,
-        creativeMode: { contextWindow: 1000000, reserveTokens: 100000, maxTokens: 32000 }
+        maxTokens: 8000
       },
       'gpt-4': {
         contextWindow: 8192,
         reserveTokens: 2000,
-        maxTokens: 4096,
-        creativeMode: { contextWindow: 8192, reserveTokens: 2000, maxTokens: 4096 } // GPT-4容量有限
+        maxTokens: 4096
       },
       'gpt-4-turbo': {
         contextWindow: 128000,
         reserveTokens: 8000,
-        maxTokens: 8000,
-        creativeMode: { contextWindow: 128000, reserveTokens: 16000, maxTokens: 16000 }
+        maxTokens: 8000
       },
       'gpt-3.5-turbo': {
         contextWindow: 16385,
         reserveTokens: 4000,
-        maxTokens: 4096,
-        creativeMode: { contextWindow: 16385, reserveTokens: 4000, maxTokens: 4096 }
+        maxTokens: 4096
       }
     },
 
@@ -111,20 +108,14 @@ export const MESSAGE_LIMITS = {
 /**
  * 根据模型ID获取上下文配置
  * @param modelId 模型ID
- * @param creativeMode 是否启用创作模式（长文本优化）
  */
-export function getModelContextConfig(modelId: string, creativeMode: boolean = false) {
+export function getModelContextConfig(modelId: string) {
   // 类型安全的模型配置查找
   const modelConfigs = MESSAGE_LIMITS.CONTEXT_LIMITS.MODEL_CONFIGS;
   const modelConfig = modelConfigs[modelId as keyof typeof modelConfigs];
 
   if (modelConfig) {
-    // 选择配置：创作模式或标准模式
-    const config = creativeMode && modelConfig.creativeMode
-      ? modelConfig.creativeMode
-      : modelConfig
-
-    const contextMaxTokens = Math.max(0, config.contextWindow - config.reserveTokens);
+    const contextMaxTokens = Math.max(0, modelConfig.contextWindow - modelConfig.reserveTokens);
 
     // SECURITY: 防止配置错误导致内存溢出
     const SAFE_MAX_TOKENS = 500000; // 50万token绝对上限
@@ -133,30 +124,26 @@ export function getModelContextConfig(modelId: string, creativeMode: boolean = f
       return {
         maxMessages: 120,
         maxTokens: contextMaxTokens,
-        reserveTokens: config.reserveTokens,
-        modelWindow: config.contextWindow,
-        outputMaxTokens: config.maxTokens || 8000,
-        limitApplied: true,
-        creativeMode
+        reserveTokens: modelConfig.reserveTokens,
+        modelWindow: modelConfig.contextWindow,
+        outputMaxTokens: modelConfig.maxTokens || 8000,
+        limitApplied: true
       };
     }
 
     return {
       maxMessages: 120, // 统一的消息数量限制
       maxTokens: contextMaxTokens, // 上下文窗口token数
-      reserveTokens: config.reserveTokens,
-      modelWindow: config.contextWindow,
-      outputMaxTokens: config.maxTokens || 8000, // API max_tokens参数
-      limitApplied: false,
-      creativeMode
+      reserveTokens: modelConfig.reserveTokens,
+      modelWindow: modelConfig.contextWindow,
+      outputMaxTokens: modelConfig.maxTokens || 8000 // API max_tokens参数
     };
   }
 
   // 使用默认配置
   return {
     ...MESSAGE_LIMITS.CONTEXT_LIMITS.DEFAULT,
-    outputMaxTokens: 8000, // 默认输出限制
-    creativeMode: false
+    outputMaxTokens: 8000 // 默认输出限制
   };
 }
 

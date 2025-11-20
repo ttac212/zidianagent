@@ -126,18 +126,16 @@ export function trimMessageHistory(
 }
 
 /**
- * 专门用于聊天API的裁剪 - 支持动态模型配置和创作模式
+ * 专门用于聊天API的裁剪 - 支持动态模型配置
  * @param messages 消息列表
  * @param modelId 模型ID
- * @param creativeMode 是否启用创作模式
  */
 export function trimForChatAPI(
   messages: ChatMessage[],
-  modelId?: string,
-  creativeMode: boolean = false
+  modelId?: string
 ): TrimResult {
   const config = modelId
-    ? getModelContextConfig(modelId, creativeMode)
+    ? getModelContextConfig(modelId)
     : MESSAGE_LIMITS.CONTEXT_LIMITS.DEFAULT
 
   return trimMessageHistory(messages, {

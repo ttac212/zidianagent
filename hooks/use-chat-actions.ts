@@ -19,6 +19,19 @@ import { usePipelineHandler, computeResultMessageId } from '@/hooks/use-pipeline
 // 全局递增计数器确保 ID 唯一性
 let messageIdCounter = 0
 
+type RequestMode = 'standard' | 'retry'
+
+interface ExecuteChatRequestParams {
+  userMessage: ChatMessage
+  contextMessages: ChatMessage[]
+  dynamicConversationId?: string
+  pendingAssistantId?: string
+  mode?: RequestMode
+  originUserMessageId?: string
+  retryOfMessageId?: string
+  retryCount?: number
+}
+
 export function useChatActions({
   conversationId,
   onEvent,
@@ -44,83 +57,85 @@ export function useChatActions({
     }
   }, [])
 
-  const sendMessage = useCallback(async (content: string, dynamicConversationId?: string) => {
-    if (!content.trim()) return
+  const executeChatRequest = useCallback(async ({
+    userMessage,
+    contextMessages,
+    dynamicConversationId,
+    pendingAssistantId: pendingOverride,
+    mode = 'standard',
+    originUserMessageId,
+    retryOfMessageId,
+    retryCount
+  }: ExecuteChatRequestParams) => {
+    if (!userMessage.content?.trim()) {
+      return
+    }
 
-    // 使用动态提供的conversationId，否则使用props中的
     const activeConversationId = dynamicConversationId ?? conversationId
-
-    // 生成唯一 ID (时间戳 + 递增计数器 + 随机数，确保全局唯一)
     const timestamp = dt.timestamp()
     const counter = ++messageIdCounter
     const randomSuffix = Math.random().toString(36).slice(2)
 
     const requestId = `req_${timestamp}_${counter}_${randomSuffix}`
-    const pendingAssistantId = `pending_${timestamp}_${counter}_${randomSuffix}`
+    const pendingAssistantId = pendingOverride ?? `pending_${timestamp}_${counter}_${randomSuffix}`
 
-    // 创建用户消息
-    const userMessage: ChatMessage = {
-      id: `msg_${timestamp}_${counter}_${randomSuffix}`,
-      role: 'user',
-      content,
-      timestamp,
-      status: 'completed' // 用户消息立即完成
-    }
-
-    // 原子化中止上一个请求并创建新的控制器 - 修复竞态条件
     const currentController = new AbortController()
     const previousController = abortRef.current
-    abortRef.current = currentController // 先设置新控制器再中止旧的
-    previousController?.abort() // 中止之前的请求
+    abortRef.current = currentController
+    previousController?.abort()
 
     resetPipelineSession()
 
+    const resolvedOriginUserMessageId = originUserMessageId ?? userMessage.id
+
     try {
-      // 发送 started 事件
       onEvent?.({
         type: 'started',
         requestId,
         conversationId: activeConversationId,
         userMessage,
-        pendingAssistantId
+        pendingAssistantId,
+        mode,
+        originUserMessageId: resolvedOriginUserMessageId,
+        retryOfMessageId,
+        retryCount
       })
 
-      // 使用统一裁剪器准备上下文消息（修复上下文无界问题）- 基于实际模型上限
-      const fullContext = [...messages, userMessage]
+      const contextSnapshot = contextMessages.length ? [...contextMessages] : []
+      const shouldAppendUser = mode !== 'retry'
+      let fullContext = shouldAppendUser ? [...contextSnapshot, userMessage] : contextSnapshot
+      if (!shouldAppendUser && fullContext[fullContext.length - 1]?.id !== userMessage.id) {
+        fullContext = [...fullContext, userMessage]
+      }
+
       const trimResult = trimForChatAPI(fullContext, model)
 
       if (trimResult.trimmed) {
         console.info(`[Chat] Context trimmed: ${trimResult.dropCount} messages dropped, estimated tokens: ${trimResult.estimatedTokens}`)
       }
 
-      // 检查最新用户消息是否被裁剪掉（修复回复错对象问题）
       const lastMessage = trimResult.messages[trimResult.messages.length - 1]
       if (!lastMessage || lastMessage.id !== userMessage.id) {
-        throw new Error('您的输入过长，超出了单次对话的token限制。请尝试缩短消息内容或分段发送。')
+        throw new Error('������������������˵��ζԻ���token���ơ��볢��������Ϣ���ݻ�ֶη��͡�')
       }
 
-      // 过滤掉历史中被创建为占位符的空消息，防止下游API报错
       const sanitizedMessages = trimResult.messages.filter(message => {
         const content = typeof message.content === 'string' ? message.content : ''
         return content.trim().length > 0
       })
 
-      // 构建API请求体
       const requestBody: Record<string, any> = {
         conversationId: activeConversationId,
         messages: sanitizedMessages,
         model
       }
 
-      // 添加推理参数（如果设置了）
       if (settings?.reasoning_effort) {
         requestBody.reasoning_effort = settings.reasoning_effort
       }
       if (settings?.reasoning) {
         requestBody.reasoning = settings.reasoning
       }
-
-      // 添加创作模式参数
       if (settings?.creativeMode) {
         requestBody.creativeMode = settings.creativeMode
       }
@@ -134,10 +149,9 @@ export function useChatActions({
 
       if (!response.ok) {
         const errorText = await response.text()
-        throw new Error(`API错误 ${response.status}: ${errorText}`)
+        throw new Error(`API���� ${response.status}: ${errorText}`)
       }
 
-      // 使用现成SSE解析工具，修复跨chunk数据丢失问题
       const reader = response.body!.getReader()
 
       let streamingContent = ''
@@ -149,7 +163,6 @@ export function useChatActions({
       let pipelineSource: PipelineSource | null = null
       let pipelineResultMessageId: string | null = null
 
-      // 使用批量节流器同时处理 content 和 reasoning 的更新
       const streamThrottle = createBatchStreamThrottle<'content' | 'reasoning'>((updates) => {
         onEvent?.({
           type: 'chunk',
@@ -243,10 +256,21 @@ export function useChatActions({
       const finalContent = pipelineFinalContent ?? fullContent
 
       if (hasPipeline && !finalContent) {
-        throw new Error('流水线处理未返回有效内容')
+        throw new Error('��ˮ�ߴ���δ������Ч����')
       }
 
-      const assistantMetadata: ChatMessage['metadata'] = { model }
+      const assistantMetadata: ChatMessage['metadata'] = {
+        model,
+        linkedUserMessageId: resolvedOriginUserMessageId,
+        requestId
+      }
+
+      if (typeof retryCount === 'number') {
+        assistantMetadata.retryCount = retryCount
+      }
+      if (retryOfMessageId) {
+        assistantMetadata.retryOfMessageId = retryOfMessageId
+      }
 
       if (pipelineStateId && pipelineSource) {
         assistantMetadata.pipelineStateId = pipelineStateId
@@ -269,7 +293,6 @@ export function useChatActions({
         status: 'completed'
       }
 
-      // 发送 done 事件
       onEvent?.({
         type: 'done',
         requestId,
@@ -278,7 +301,6 @@ export function useChatActions({
         finishedAt: dt.timestamp()
       })
 
-      // 清理 abort 控制器（仅在是当前请求时复位）
       if (abortRef.current === currentController) {
         abortRef.current = null
       }
@@ -295,18 +317,15 @@ export function useChatActions({
 
             const existingMessages = oldData.messages || []
 
-            // 【关键修复】同时添加用户消息和助手消息
             const userExists = existingMessages.some(msg => msg.id === userMessage.id)
             const assistantExists = existingMessages.some(msg => msg.id === assistantMessage.id)
 
             let mergedMessages = [...existingMessages]
 
-            // 添加用户消息(如果不存在)
             if (!userExists) {
               mergedMessages.push(userMessage)
             }
 
-            // 添加或更新助手消息
             if (assistantExists) {
               mergedMessages = mergedMessages.map(msg =>
                 msg.id === assistantMessage.id ? assistantMessage : msg
@@ -341,7 +360,6 @@ export function useChatActions({
               oldData.metadata?.messageCount ??
               adjustedMessages.length
 
-            // 【修复】正确计算新增消息数(用户消息+助手消息)
             let newMessagesAdded = 0
             if (!userExists) newMessagesAdded++
             if (!assistantExists) newMessagesAdded++
@@ -391,7 +409,6 @@ export function useChatActions({
                 conv.metadata?.messageCount ??
                 (conv.messages?.length ?? 0)
 
-              // 【修复】检查用户消息和助手消息是否已存在
               const existingMessages = conv.messages || []
               const userAlreadyExists = existingMessages.some((m: any) => m.id === userMessage.id)
               const assistantAlreadyExists = conv.lastMessage?.id === assistantMessage.id
@@ -428,31 +445,26 @@ export function useChatActions({
             })
           }
         )
-    }
-
+      }
     } catch (error) {
-      // 检查是否是当前请求被中止（避免清理新请求的控制器）
       if (abortRef.current === currentController) {
         abortRef.current = null
       }
 
-      // 类型安全的错误处理
       const isAbortError = error instanceof Error && error.name === 'AbortError'
-      const errorMessage = error instanceof Error ? error.message : '发送消息失败'
+      const errorMessage = error instanceof Error ? error.message : '������Ϣʧ��'
 
       if (isAbortError) {
-        // 中止时发送 error 事件进行清理
         onEvent?.({
           type: 'error',
           requestId,
           pendingAssistantId,
-          error: '生成已取消',
+          error: '������ȡ��',
           recoverable: false
         })
         return
       }
 
-      // 发送 error 事件，包含 pendingAssistantId 用于匹配占位消息
       onEvent?.({
         type: 'error',
         requestId,
@@ -463,7 +475,97 @@ export function useChatActions({
 
       toast.error(errorMessage)
     }
-  }, [conversationId, onEvent, messages, model, settings, queryClient, handlePipelineEvent, resetPipelineSession])
+  }, [conversationId, handlePipelineEvent, model, onEvent, queryClient, resetPipelineSession, settings])
+  const sendMessage = useCallback(async (content: string, dynamicConversationId?: string) => {
+    if (!content.trim()) return
+
+    const timestamp = dt.timestamp()
+    const counter = ++messageIdCounter
+    const randomSuffix = Math.random().toString(36).slice(2)
+
+    const userMessage: ChatMessage = {
+      id: `msg_${timestamp}_${counter}_${randomSuffix}`,
+      role: 'user',
+      content,
+      timestamp,
+      status: 'completed'
+    }
+
+    await executeChatRequest({
+      userMessage,
+      contextMessages: messages,
+      dynamicConversationId: dynamicConversationId ?? conversationId,
+      mode: 'standard',
+      originUserMessageId: userMessage.id
+    })
+  }, [conversationId, executeChatRequest, messages])
+
+  const retryMessage = useCallback(async (messageId: string) => {
+    if (!messageId) return
+
+    const targetIndex = messages.findIndex((msg) => msg.id === messageId)
+    if (targetIndex === -1) {
+      toast.error('未找到需要重试的消息')
+      return
+    }
+
+    const targetMessage = messages[targetIndex]
+    if (targetMessage.role !== 'assistant') {
+      toast.error('只能对助手回复进行重试')
+      return
+    }
+
+    if (targetMessage.status === 'streaming' || targetMessage.status === 'pending') {
+      toast.info('当前回复尚未结束，稍后再试')
+      return
+    }
+
+    const linkedUserId = (
+      targetMessage.metadata?.linkedUserMessageId ??
+      (() => {
+        for (let i = targetIndex - 1; i >= 0; i--) {
+          if (messages[i].role === 'user') {
+            return messages[i].id
+          }
+        }
+        return null
+      })()
+    )
+
+    if (!linkedUserId) {
+      toast.error('找不到对应的提问，无法重试')
+      return
+    }
+
+    const userMessage = messages.find((msg) => msg.id === linkedUserId)
+    if (!userMessage) {
+      toast.error('提问信息已缺失，无法重试')
+      return
+    }
+
+    const trailingMessages = messages
+      .slice(targetIndex + 1)
+      .filter((msg) => !msg.metadata?.pipelineRole && msg.content.trim().length > 0)
+
+    if (trailingMessages.length > 0) {
+      toast.warning('仅支持对最新回复进行重试')
+      return
+    }
+
+    const contextBeforeAssistant = messages.slice(0, targetIndex)
+    const retryCount = (targetMessage.metadata?.retryCount ?? 0) + 1
+
+    await executeChatRequest({
+      userMessage,
+      contextMessages: contextBeforeAssistant,
+      dynamicConversationId: conversationId,
+      pendingAssistantId: messageId,
+      mode: 'retry',
+      originUserMessageId: userMessage.id,
+      retryOfMessageId: messageId,
+      retryCount
+    })
+  }, [conversationId, executeChatRequest, messages])
 
   const stopGeneration = useCallback(() => {
     // 原子化停止生成 - 避免竞态条件
@@ -474,6 +576,7 @@ export function useChatActions({
 
   return {
     sendMessage,
-    stopGeneration
+    stopGeneration,
+    retryMessage
   }
 }

@@ -9,7 +9,9 @@ import {
   FileText,
   Loader2,
   Plus,
-  Trash2
+  Trash2,
+  List,
+  AlignLeft
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -33,6 +35,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Progress } from "@/components/ui/progress"
 import { SecureMarkdown } from "@/components/ui/secure-markdown"
+import { SegmentedMarkdownEditor } from "@/components/ui/segmented-markdown-editor"
 import { useMerchantAudienceData, useUpdateAudienceManual } from "@/hooks/api/use-merchant-audience-analysis"
 import { useMerchantProfile } from "@/hooks/api/use-merchant-profile"
 import { cn } from "@/lib/utils"
@@ -120,6 +123,7 @@ export function AudienceDocumentEditor({ merchantId }: Props) {
   const [newPlanTitle, setNewPlanTitle] = useState("")
   const [newPlanOwner, setNewPlanOwner] = useState("")
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
+  const [editMode, setEditMode] = useState<'segmented' | 'plain'>('segmented')
 
   const insightsRef = useRef<PlanInsightsPayload>({})
   const baselineRef = useRef<{ markdown: string; planJSON: string }>({
@@ -154,7 +158,7 @@ export function AudienceDocumentEditor({ merchantId }: Props) {
     setLastSavedAt(
       savedFromMeta ? dt.parse(savedFromMeta) : fallbackSaved ? dt.parse(fallbackSaved) : null
     )
-  }, [analysisData?.id, analysisData?.manualMarkdown, analysisData?.manualInsights, analysisData?.rawMarkdown])
+  }, [analysisData])
 
   const planHash = useMemo(() => JSON.stringify(planItems), [planItems])
   const isDirty =
@@ -541,13 +545,40 @@ export function AudienceDocumentEditor({ merchantId }: Props) {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Markdown 文档
-              </CardTitle>
-              <CardDescription>
-                左侧编辑、右侧实时预览。可加入二级标题/表格/任务清单，明确对齐要求。
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Markdown 文档
+                  </CardTitle>
+                  <CardDescription>
+                    {editMode === 'segmented'
+                      ? '段落模式：点击展开/折叠段落，快速定位编辑。'
+                      : '纯文本模式：传统的完整文档编辑，左侧编辑、右侧实时预览。'
+                    }
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-1 rounded-md border p-1">
+                  <Button
+                    variant={editMode === 'segmented' ? 'secondary' : 'ghost'}
+                    size="sm"
+                    onClick={() => setEditMode('segmented')}
+                    className="h-8 gap-1 text-xs"
+                  >
+                    <List className="h-4 w-4" />
+                    段落模式
+                  </Button>
+                  <Button
+                    variant={editMode === 'plain' ? 'secondary' : 'ghost'}
+                    size="sm"
+                    onClick={() => setEditMode('plain')}
+                    className="h-8 gap-1 text-xs"
+                  >
+                    <AlignLeft className="h-4 w-4" />
+                    纯文本
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
@@ -557,30 +588,40 @@ export function AudienceDocumentEditor({ merchantId }: Props) {
                   <span>分析时间：{dt.toLocal(dt.parse(analysisData.analyzedAt) ?? new Date(), "zh-CN")}</span>
                 )}
               </div>
-              <div className="grid gap-4 lg:grid-cols-2">
-                <Textarea
+              {editMode === 'segmented' ? (
+                <SegmentedMarkdownEditor
                   value={markdown}
-                  onChange={(e) => setMarkdown(e.target.value)}
-                  rows={28}
-                  className="min-h-[600px] font-mono text-sm"
+                  onChange={setMarkdown}
                   placeholder="使用 Markdown 撰写：\n## 当前客群画像\n- ...\n\n## 风险与机会\n- ...\n\n## 下一步计划\n- ..."
+                  defaultExpandAll={false}
+                  className="min-h-[600px]"
                 />
-                <div className="rounded-lg border bg-muted/30 p-4">
-                  <ScrollArea className="h-[600px] pr-4">
-                    {markdown ? (
-                      <SecureMarkdown
-                        content={markdown}
-                        variant="prose"
-                        className="prose-headings:text-foreground prose-p:text-sm prose-p:text-muted-foreground"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                        预览区会实时显示 Markdown 渲染效果
-                      </div>
-                    )}
-                  </ScrollArea>
+              ) : (
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <Textarea
+                    value={markdown}
+                    onChange={(e) => setMarkdown(e.target.value)}
+                    rows={28}
+                    className="min-h-[600px] font-mono text-sm"
+                    placeholder="使用 Markdown 撰写：\n## 当前客群画像\n- ...\n\n## 风险与机会\n- ...\n\n## 下一步计划\n- ..."
+                  />
+                  <div className="rounded-lg border bg-muted/30 p-4">
+                    <ScrollArea className="h-[600px] pr-4">
+                      {markdown ? (
+                        <SecureMarkdown
+                          content={markdown}
+                          variant="prose"
+                          className="prose-headings:text-foreground prose-p:text-sm prose-p:text-muted-foreground"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                          预览区会实时显示 Markdown 渲染效果
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </div>
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </main>

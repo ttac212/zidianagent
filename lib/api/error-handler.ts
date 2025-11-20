@@ -111,7 +111,33 @@ export function createErrorResponse(
 
   // 记录错误日志（仅服务器错误）
   if (apiError.statusCode >= 500) {
+    // 脱敏处理：移除可能包含敏感信息的字段
+    const sanitizedDetails = apiError.details
+      ? JSON.stringify(apiError.details).replace(
+          /(password|token|key|secret|auth)[^"]*"[^"]*"/gi,
+          '$1": "[REDACTED]"'
+        )
+      : undefined
+
+    // 输出结构化日志，便于平台采集和追踪
+    console.error(
+      '[API_ERROR]',
+      JSON.stringify({
+        requestId,
+        code: apiError.code,
+        statusCode: apiError.statusCode,
+        message: apiError.message,
+        details: sanitizedDetails,
+        timestamp: dt.toISO(),
+        stack: isProduction ? undefined : apiError.stack
+      })
+    )
+
+    // 可选：简单计数器（后续可接入监控系统）
+    if (typeof globalThis !== 'undefined') {
+      (globalThis as any).__api_error_count__ = ((globalThis as any).__api_error_count__ || 0) + 1
     }
+  }
 
   return NextResponse.json(response, { status: apiError.statusCode })
 }

@@ -25,7 +25,7 @@ async function main() {
       title: '欢迎对话',
       userId: user.id,
       modelId: 'claude-opus-4-1-20250805',
-      temperature: 0.7,
+      temperature: 1.0,
       maxTokens: 2000,
       contextAware: true,
       messageCount: 0,

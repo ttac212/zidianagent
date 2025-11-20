@@ -55,6 +55,13 @@ const MODEL_KEY_CONFIGS: ModelKeyConfig[] = [
   },
   // Gemini 模型
   {
+    pattern: 'google/gemini',
+    envKey: 'LLM_GEMINI_API_KEY',
+    fallbacks: ['LLM_API_KEY'],
+    provider: 'Google',
+    priority: 1
+  },
+  {
     pattern: 'gemini-',
     envKey: 'LLM_GEMINI_API_KEY',
     fallbacks: ['LLM_API_KEY'],

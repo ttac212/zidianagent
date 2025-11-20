@@ -9,7 +9,6 @@ const STORAGE_KEY = 'chatSettings'
 
 // 默认设置
 const DEFAULT_SETTINGS: Partial<ChatSettings> = {
-  creativeMode: false,
   reasoning_effort: undefined,
   reasoning: { enabled: false }
 }
@@ -50,7 +49,6 @@ export function saveChatSettings(settings: Partial<ChatSettings>): void {
   try {
     // 只保存需要持久化的字段
     const toSave = {
-      creativeMode: settings.creativeMode,
       reasoning_effort: settings.reasoning_effort,
       reasoning: settings.reasoning
     }

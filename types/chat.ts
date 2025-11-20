@@ -44,6 +44,11 @@ export interface MessageMetadata {
   processingTime?: number
   error?: string
   reasoningEffort?: 'low' | 'medium' | 'high'
+  requestId?: string
+  linkedUserMessageId?: string
+  retryCount?: number
+  retryOfMessageId?: string
+  previousContent?: string
   pipelineStateId?: string
   pipelineSource?: PipelineSource
   pipelineRole?: PipelineRole
@@ -96,7 +101,7 @@ export interface ChatSettings {
   contextAware: boolean
   maxTokens?: number
   systemPrompt?: string
-  creativeMode?: boolean  // 创作模式：启用长文本优化，使用90%的模型上下文容量
+  creativeMode?: boolean
   reasoning_effort?: 'low' | 'medium' | 'high'  // ZenMux 推理强度（仅推理模型支持）
   reasoning?: {
     enabled: boolean  // 是否启用推理模式
@@ -401,6 +406,10 @@ export type ChatEvent =
       conversationId?: string
       userMessage: ChatMessage
       pendingAssistantId: string
+      mode?: 'standard' | 'retry'
+      originUserMessageId?: string
+      retryOfMessageId?: string
+      retryCount?: number
     }
   | {
       type: 'chunk'

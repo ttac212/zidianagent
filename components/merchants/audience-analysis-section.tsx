@@ -4,7 +4,6 @@
 
 'use client'
 
-import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -20,7 +19,9 @@ import {
 } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Users, MapPin, FileText, Sparkles, Loader2, RefreshCw, Edit3, History } from 'lucide-react'
+import { Users, MapPin, FileText, Sparkles, Loader2, RefreshCw, Edit3, History, List, AlignLeft } from 'lucide-react'
+import { SegmentedMarkdownEditor } from '@/components/ui/segmented-markdown-editor'
+import { InlineEditableMarkdown } from '@/components/ui/inline-editable-markdown'
 import {
   useMerchantAudienceData,
   useMerchantAudienceAnalysis,
@@ -54,6 +55,7 @@ export function AudienceAnalysisSection({
   const updateManual = useUpdateAudienceManual(merchantId)
   const [manualDialogOpen, setManualDialogOpen] = useState(false)
   const [manualMarkdown, setManualMarkdown] = useState('')
+  const [editMode, setEditMode] = useState<'segmented' | 'plain'>('segmented')
   const versionsQuery = useAudienceVersions(manualDialogOpen ? merchantId : undefined)
 
   useEffect(() => {
@@ -87,13 +89,18 @@ export function AudienceAnalysisSection({
     })
   }
 
+  const showMarkdownLengthError = () => {
+    toast.error('报告超出长度', {
+      description: `不得超过 ${MAX_MARKDOWN_LENGTH.toLocaleString()} 字符`
+    })
+  }
+
+
   // ✅ 处理 Textarea 变更（带长度校验）
   const handleMarkdownChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value
     if (value.length > MAX_MARKDOWN_LENGTH) {
-      toast.error('报告正文过长', {
-        description: `不能超过 ${MAX_MARKDOWN_LENGTH.toLocaleString()} 字符`
-      })
+      showMarkdownLengthError()
       return
     }
     setManualMarkdown(value)
@@ -238,6 +245,11 @@ export function AudienceAnalysisSection({
     analysisData.rawMarkdown ||
     ''
   const markdownSource = (analysisData as any).manualMarkdown ? 'manual' : 'ai'
+  const hasInlineDraft = manualMarkdown !== displayedMarkdown
+  const handleResetInlineChanges = () => {
+    setManualMarkdown(displayedMarkdown)
+  }
+
 
   // 调试日志 - 检查数据结构
   console.info('[AudienceAnalysisSection] 分析数据:', {
@@ -269,26 +281,6 @@ export function AudienceAnalysisSection({
               <Badge variant="secondary">已生成</Badge>
               {markdownSource === 'manual' && (
                 <Badge variant="outline">人工校对</Badge>
-              )}
-              {isAdmin && (
-                <>
-                  <Button
-                    asChild
-                    variant="secondary"
-                    size="sm"
-                    className="hidden gap-2 md:inline-flex"
-                  >
-                    <Link href={`/merchants/${merchantId}/audience/document`}>
-                      <FileText className="h-4 w-4" />
-                      文档模式
-                    </Link>
-                  </Button>
-                  <Button asChild variant="outline" size="icon" className="md:hidden">
-                    <Link href={`/merchants/${merchantId}/audience/document`}>
-                      <FileText className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                </>
               )}
               {isAdmin && (
                 <Button
@@ -393,24 +385,65 @@ export function AudienceAnalysisSection({
             </div>
           )}
 
-          {/* 完整分析报告 */}
-          {displayedMarkdown && (
+          {/* 分析报告正文 */}
+          {(displayedMarkdown || isAdmin) && (
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <FileText className="h-4 w-4 text-muted-foreground" />
                 <h4 className="font-medium text-sm">
-                  完整分析报告
+                  分析报告正文
                   {markdownSource === 'manual' && (
                     <Badge variant="secondary" className="ml-2">人工校对</Badge>
                   )}
+                  {hasInlineDraft && (
+                    <Badge variant="destructive" className="ml-2">未保存</Badge>
+                  )}
                 </h4>
               </div>
-              <SecureMarkdown
-                content={displayedMarkdown}
-                enableGfm={true}
-                variant="prose"
-                className="prose-headings:text-foreground prose-p:text-muted-foreground prose-strong:text-foreground prose-li:text-muted-foreground prose-table:text-sm prose-th:text-foreground prose-td:text-muted-foreground"
-              />
+              {isAdmin ? (
+                <InlineEditableMarkdown
+                  value={manualMarkdown}
+                  onChange={setManualMarkdown}
+                  maxLength={MAX_MARKDOWN_LENGTH}
+                  onExceedLength={showMarkdownLengthError}
+                  disabled={updateManual.isPending}
+                />
+              ) : displayedMarkdown ? (
+                <SecureMarkdown
+                  content={displayedMarkdown}
+                  enableGfm={true}
+                  variant="prose"
+                  className="prose-headings:text-foreground prose-p:text-muted-foreground prose-strong:text-foreground prose-li:text-muted-foreground prose-table:text-sm prose-th:text-foreground prose-td:text-muted-foreground"
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">暂无分析内容</p>
+              )}
+              {isAdmin && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2">
+                  <div className="text-xs text-muted-foreground">
+                    {hasInlineDraft ? '存在未保存的修改' : '内容已与服务器同步'}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleResetInlineChanges}
+                      disabled={!hasInlineDraft || updateManual.isPending}
+                      className="h-7"
+                    >
+                      撤销修改
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveManual}
+                      disabled={!hasInlineDraft || updateManual.isPending}
+                      className="h-7"
+                    >
+                      {updateManual.isPending ? '保存中...' : '保存修改'}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -442,22 +475,53 @@ export function AudienceAnalysisSection({
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="manualMarkdown">报告正文（Markdown）</Label>
-                  <span className={`text-xs ${
-                    manualMarkdown.length > MAX_MARKDOWN_LENGTH * 0.9
-                      ? 'text-destructive font-medium'
-                      : 'text-muted-foreground'
-                  }`}>
-                    {manualMarkdown.length.toLocaleString()} / {MAX_MARKDOWN_LENGTH.toLocaleString()} 字符
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1 rounded-md border p-1">
+                      <Button
+                        variant={editMode === 'segmented' ? 'secondary' : 'ghost'}
+                        size="sm"
+                        onClick={() => setEditMode('segmented')}
+                        className="h-7 gap-1 text-xs"
+                      >
+                        <List className="h-3 w-3" />
+                        段落模式
+                      </Button>
+                      <Button
+                        variant={editMode === 'plain' ? 'secondary' : 'ghost'}
+                        size="sm"
+                        onClick={() => setEditMode('plain')}
+                        className="h-7 gap-1 text-xs"
+                      >
+                        <AlignLeft className="h-3 w-3" />
+                        纯文本
+                      </Button>
+                    </div>
+                    <span className={`text-xs ${
+                      manualMarkdown.length > MAX_MARKDOWN_LENGTH * 0.9
+                        ? 'text-destructive font-medium'
+                        : 'text-muted-foreground'
+                    }`}>
+                      {manualMarkdown.length.toLocaleString()} / {MAX_MARKDOWN_LENGTH.toLocaleString()} 字符
+                    </span>
+                  </div>
                 </div>
-                <Textarea
-                  id="manualMarkdown"
-                  value={manualMarkdown}
-                  onChange={handleMarkdownChange}
-                  rows={20}
-                  placeholder="在此输入或粘贴修订后的客群分析报告..."
-                  className="min-h-[420px] text-sm leading-relaxed font-mono"
-                />
+                {editMode === 'segmented' ? (
+                  <SegmentedMarkdownEditor
+                    value={manualMarkdown}
+                    onChange={setManualMarkdown}
+                    placeholder="在此输入或粘贴修订后的客群分析报告..."
+                    defaultExpandAll={false}
+                  />
+                ) : (
+                  <Textarea
+                    id="manualMarkdown"
+                    value={manualMarkdown}
+                    onChange={handleMarkdownChange}
+                    rows={20}
+                    placeholder="在此输入或粘贴修订后的客群分析报告..."
+                    className="min-h-[420px] text-sm leading-relaxed font-mono"
+                  />
+                )}
               </div>
               {versionsQuery.data && versionsQuery.data.length > 0 && (
                 <div className="space-y-2">

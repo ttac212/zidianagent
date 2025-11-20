@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
-import { Copy, Check } from 'lucide-react'
+import { Copy, Check, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from '@/lib/toast/toast'
 import type { MessageItemProps } from '@/types/chat'
@@ -262,6 +262,21 @@ export const MessageItem = React.memo<MessageItemProps>(({
           </div>
 
         </div>
+
+        {isAssistant && !isProgressCard && onRetry && (isCompleted || hasError) && (
+          <div className="flex flex-wrap gap-2 mt-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-xs gap-1.5"
+              onClick={_handleRetry}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              {hasError ? '重新发送' : '重新生成'}
+            </Button>
+          </div>
+        )}
 
         {/* 消息元信息 - 渐进式信息披露，减少认知负荷 */}
         <div className="flex items-center justify-between gap-2 mt-1 text-xs text-muted-foreground">

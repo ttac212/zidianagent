@@ -30,6 +30,9 @@ import {
 } from "@/lib/douyin/link-detector"
 import { handleDouyinPipeline } from "@/lib/douyin/sse-handler"
 import { selectDouyinStrategy } from "./douyin-strategy"
+import { fetchWithRetry, buildRateLimitError } from "@/lib/utils/fetch-with-retry"
+import { getModelCapabilities } from "@/lib/ai/models"
+import { getRequestTimeout } from "@/lib/ai/request-builder"
 
 // 设置最大执行时间为5分钟（抖音视频处理可能需要较长时间）
 export const maxDuration = 300
@@ -59,8 +62,7 @@ export async function POST(request: NextRequest) {
     conversationId,
     messages,
     model = DEFAULT_MODEL,
-    temperature = 0.7,
-    creativeMode = false,  // 创作模式：启用长文本优化
+    temperature = 1.0,
     reasoning_effort,      // ZenMux 推理强度：low/medium/high
     reasoning,             // ZenMux 推理参数对象
   } = body
@@ -112,7 +114,7 @@ export async function POST(request: NextRequest) {
   }
 
   // 服务端统一裁剪（防止客户端绕过限制）- 基于实际模型上限
-  const trimResult = trimForChatAPI(messages, model, creativeMode)
+  const trimResult = trimForChatAPI(messages, model)
   let finalMessages = trimResult.messages
 
   // 估算本次请求需要的token数量（保守估计）
@@ -243,15 +245,32 @@ export async function POST(request: NextRequest) {
 
   console.info(`[Chat] Using provider: ${provider.name}`)
 
-  // 6. 调用 AI - 添加max_tokens参数支持Extended Thinking模式和创作模式
-  const modelConfig = getModelContextConfig(model, creativeMode)
+  // 6. 调用 AI - 通过 max_completion_tokens 支持 Extended Thinking 模式
+  const modelConfig = getModelContextConfig(model)
   const maxTokens = modelConfig.outputMaxTokens || 8000
+
+  type ProviderChatMessage = {
+    role: string
+    content: string
+    cache_control?: {
+      type: string
+    }
+  }
+
+  const providerMessages: ProviderChatMessage[] = finalMessages.map((message) => ({
+    role: message.role,
+    content: message.content,
+  }))
 
   // 构建请求体（基础参数）
   const requestOptions: Record<string, any> = {
     temperature,
-    max_tokens: maxTokens,
-    stream: true
+    max_completion_tokens: maxTokens,
+    stream: true,
+    // ZenMux流式响应优化：在最后一个chunk包含usage信息
+    stream_options: {
+      include_usage: true
+    }
   }
 
   // ZenMux 推理参数支持（根据ZenMux官方文档）
@@ -291,18 +310,18 @@ export async function POST(request: NextRequest) {
   }
 
   // 启用Prompt Caching（Claude模型且上下文较长时）
-  if (isClaudeModel && finalMessages.length > 5) {
+  if (isClaudeModel && providerMessages.length > 5) {
     headers["anthropic-beta"] = "prompt-caching-2024-07-31"
   }
 
   // Prompt Caching：标记可缓存的消息
-  if (isClaudeModel && finalMessages.length > 10) {
+  if (isClaudeModel && providerMessages.length > 10) {
     // 对于长对话，缓存前面的消息历史
-    finalMessages.forEach((msg, index) => {
+    providerMessages.forEach((msg, index) => {
       // 缓存前N-5条消息（保留最近5条为动态内容）
-      const shouldCache = index < finalMessages.length - 5
+      const shouldCache = index < providerMessages.length - 5
       if (shouldCache) {
-        (msg as any).cache_control = { type: "ephemeral" }
+        msg.cache_control = { type: "ephemeral" }
       }
     })
   }
@@ -311,7 +330,7 @@ export async function POST(request: NextRequest) {
   const chatRequest = buildChatRequest(
     provider,
     model,
-    finalMessages,
+    providerMessages,
     requestOptions
   )
 
@@ -320,7 +339,7 @@ export async function POST(request: NextRequest) {
   console.info('[Chat] Model:', chatRequest.body.model)
   console.info('[Chat] Request options:', JSON.stringify({
     temperature: chatRequest.body.temperature,
-    max_tokens: chatRequest.body.max_tokens,
+    max_completion_tokens: chatRequest.body.max_completion_tokens,
     stream: chatRequest.body.stream,
     reasoning: chatRequest.body.reasoning,
   }, null, 2))
@@ -330,15 +349,15 @@ export async function POST(request: NextRequest) {
     console.info('[Chat] ✅ ZenMux Reasoning mode enabled. Full request body (excluding messages):', JSON.stringify({
       model: chatRequest.body.model,
       temperature: chatRequest.body.temperature,
-      max_tokens: chatRequest.body.max_tokens,
+      max_completion_tokens: chatRequest.body.max_completion_tokens,
       stream: chatRequest.body.stream,
       reasoning: chatRequest.body.reasoning,
-      messageCount: finalMessages.length
+      messageCount: providerMessages.length
     }, null, 2))
   }
 
-  // Reasoning模式需要更长的超时时间
-  const timeout = requestOptions.reasoning ? 120000 : 60000 // 推理模式120秒，普通60秒
+  // 根据推理强度动态调整超时时间（low:90s, medium:120s, high:180s）
+  const timeout = getRequestTimeout(requestOptions.reasoning)
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeout)
 
@@ -346,12 +365,27 @@ export async function POST(request: NextRequest) {
   let aiResponse: Response
 
   try {
-    aiResponse = await fetch(chatRequest.url, {
-      method: "POST",
-      headers: { ...chatRequest.headers, ...headers },
-      body: JSON.stringify(chatRequest.body),
-      signal: controller.signal
-    })
+    // 使用带重试的fetch（自动处理429等临时错误）
+    aiResponse = await fetchWithRetry(
+      chatRequest.url,
+      {
+        method: "POST",
+        headers: { ...chatRequest.headers, ...headers },
+        body: JSON.stringify(chatRequest.body),
+        signal: controller.signal
+      },
+      {
+        maxRetries: 3,
+        initialDelay: 1000,  // 1秒
+        backoffMultiplier: 2, // 指数退避：1s -> 2s -> 4s
+        retryableStatuses: [429, 502, 503, 504],
+        onRetry: (attempt, delay, error) => {
+          console.warn(
+            `[Chat] Retry attempt ${attempt}/3 after ${delay}ms. Error: ${error}`
+          )
+        }
+      }
+    )
     clearTimeout(timeoutId)
 
     if (!aiResponse.ok) {
@@ -359,6 +393,29 @@ export async function POST(request: NextRequest) {
       await QuotaManager.releaseTokens(userId, estimatedTokens)
       const errorText = await aiResponse.text()
       console.error('[Chat] AI API error:', aiResponse.status, errorText)
+
+      // 特殊处理429错误（速率限制）
+      if (aiResponse.status === 429) {
+        const modelCapabilities = getModelCapabilities(model)
+        const modelName = modelCapabilities.family === 'gemini'
+          ? 'Gemini 3 Pro Preview'
+          : modelCapabilities.family === 'claude'
+          ? 'Claude Sonnet 4.5'
+          : 'GPT-5.1'
+
+        // 尝试从响应头获取 Retry-After
+        const retryAfter = aiResponse.headers.get('Retry-After')
+        const retryAfterSeconds = retryAfter ? parseInt(retryAfter, 10) : undefined
+
+        const rateLimitError = buildRateLimitError(modelName, retryAfterSeconds)
+
+        return error(rateLimitError.message, {
+          status: 429,
+          details: rateLimitError.details
+        })
+      }
+
+      // 其他错误
       return Response.json({ error: `AI错误: ${aiResponse.status} - ${errorText}` }, { status: aiResponse.status })
     }
   } catch (fetchError) {
@@ -368,11 +425,12 @@ export async function POST(request: NextRequest) {
     await QuotaManager.releaseTokens(userId, estimatedTokens)
 
     if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+      const timeoutSeconds = Math.round(timeout / 1000)
       console.error('[Chat] Request timeout after', timeout, 'ms')
       return error(
         requestOptions.reasoning
-          ? 'AI推理超时（120秒），请尝试使用较低的推理强度或普通模式'
-          : 'AI请求超时（60秒），请稍后重试',
+          ? `AI推理超时（${timeoutSeconds}秒），推理强度：${requestOptions.reasoning.effort}。建议：使用较低的推理强度或普通模式`
+          : `AI请求超时（${timeoutSeconds}秒），请稍后重试`,
         { status: 504 }
       )
     }

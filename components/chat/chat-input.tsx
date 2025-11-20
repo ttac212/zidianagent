@@ -135,7 +135,9 @@ const ChatInputComponent = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
 
   const helperMessage = isAtLimit
     ? `已达到 ${MAX_LENGTH.toLocaleString()} 字符上限，请删减后再发送`
-    : 'Enter 发送 · Shift+Enter 换行 · Esc 停止'
+    : isLoading
+      ? 'AI 正在回复，可先输入内容，生成结束后再发送'
+      : 'Enter 发送 · Shift+Enter 换行 · Esc 停止'
 
   const cardClassName = cn(
     'group relative w-full rounded-2xl border transition-all duration-300 ease-out',
@@ -172,8 +174,7 @@ const ChatInputComponent = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                   onKeyDown={handleKeyDown}
                   onFocus={handleFocus}
                   onBlur={handleBlur}
-                  placeholder={isLoading ? '正在思考...' : '输入消息... (Enter 发送，Shift+Enter 换行)'}
-                  disabled={isLoading}
+                  placeholder={isLoading ? 'AI 正在回复，可继续输入，稍后再发送' : '输入消息... (Enter 发送，Shift+Enter 换行)'}
                   spellCheck={false}
                   autoComplete="off"
                   autoCorrect="off"
@@ -281,7 +282,7 @@ const ChatInputComponent = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                 >
                   <span className="hidden sm:inline">{helperMessage}</span>
                   <span className="sm:hidden">
-                    {isLoading ? '生成中...' : 'Enter 发送 · Esc 停止'}
+                    {isLoading ? 'AI 回复中，可继续输入' : 'Enter 发送 · Esc 停止'}
                   </span>
                 </div>
 

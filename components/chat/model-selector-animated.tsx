@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu"
-import { ChevronDown, Check, Sparkles, Brain, Zap, Gem } from "lucide-react"
+import { ChevronDown, Check } from "lucide-react"
 import { ALLOWED_MODELS } from "@/lib/ai/models"
 import { cn } from "@/lib/utils"
 import { AnimatePresence, motion } from "framer-motion"
@@ -27,9 +27,6 @@ interface ModelSelectorAnimatedProps {
 type ModelDisplay = {
   shortName: string
   fullName: string
-  description: string
-  icon: React.ComponentType<{ className?: string }>
-  iconClass: string
 }
 
 export function ModelSelectorAnimated({
@@ -47,40 +44,37 @@ export function ModelSelectorAnimated({
     const isThinking = model.id.includes(':thinking')
 
     switch (model.capabilities.family) {
-      case 'gpt':
+      case 'gpt': {
+        const gptName = model.name || 'GPT 系列'
         return {
-          shortName: 'GPT-5.1',
-          fullName: 'GPT-5.1',
-          description: 'OpenAI 最新推理模型，擅长复杂逻辑与代码生成',
-          icon: Zap,
-          iconClass: 'text-emerald-600'
+          shortName: gptName,
+          fullName: gptName
         }
-      case 'gemini':
+      }
+      case 'gemini': {
+        const geminiName = model.name || 'Gemini'
+        const geminiShort = geminiName.split(' ')[0] || 'Gemini'
         return {
-          shortName: 'Gemini',
-          fullName: 'Gemini 2.5 Pro',
-          description: 'Google 多模态模型，支持图像与长文本输入',
-          icon: Gem,
-          iconClass: 'text-sky-600'
+          shortName: geminiShort,
+          fullName: geminiName
         }
+      }
       case 'claude':
-      default:
+      default: {
+        const claudeName = model.name || 'Claude Sonnet 4.5'
+        // 从名称中提取 shortName：去掉 "Claude " 前缀
+        const shortName = claudeName.replace(/^Claude\s*/i, '') || claudeName
         if (isThinking) {
           return {
-            shortName: 'Sonnet 4.5',
-            fullName: 'Claude Sonnet 4.5 · 深度思考',
-            description: '启用深度推理，适合复杂问题与架构设计',
-            icon: Brain,
-            iconClass: 'text-purple-500'
+            shortName,
+            fullName: `${claudeName} · 深度思考`
           }
         }
         return {
-          shortName: 'Sonnet 4.5',
-          fullName: 'Claude Sonnet 4.5 · 标准',
-          description: '快速响应，适合日常对话与分析任务',
-          icon: Sparkles,
-          iconClass: 'text-primary'
+          shortName,
+          fullName: `${claudeName} · 标准`
         }
+      }
     }
   }
 
@@ -110,16 +104,6 @@ export function ModelSelectorAnimated({
           transition={{ duration: 0.15 }}
           className="flex items-center gap-1.5"
         >
-          {/* 模型图标 */}
-          {(() => {
-            if (!current) {
-              return <Sparkles className="w-3.5 h-3.5 text-primary" aria-hidden="true" />
-            }
-            const display = getModelDisplay(current)
-            const Icon = display.icon
-            return <Icon className={cn("w-3.5 h-3.5", display.iconClass)} aria-hidden="true" />
-          })()}
-
           <span className="text-secondary-foreground">
             {current ? getModelDisplay(current).shortName : modelId}
           </span>
@@ -165,30 +149,18 @@ export function ModelSelectorAnimated({
         ) : (
           ALLOWED_MODELS.map((m) => {
             const display = getModelDisplay(m)
-            const Icon = display.icon
             return (
               <DropdownMenuItem
                 key={m.id}
                 onSelect={() => onChange(m.id)}
-                className="flex items-start gap-3 py-2.5 cursor-pointer"
+                className="flex items-center justify-between gap-2 py-2 cursor-pointer"
               >
-                <div className="flex items-center justify-center w-8 h-8 rounded-md bg-muted/50 flex-shrink-0 mt-0.5">
-                  <Icon className={cn("w-4 h-4", display.iconClass)} aria-hidden="true" />
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="font-medium text-sm">
-                      {display.fullName}
-                    </span>
-                    {modelId === m.id && (
-                      <Check className="w-3.5 h-3.5 text-primary flex-shrink-0" aria-hidden="true" />
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground line-clamp-2">
-                    {display.description}
-                  </p>
-                </div>
+                <span className="font-medium text-sm">
+                  {display.fullName}
+                </span>
+                {modelId === m.id && (
+                  <Check className="w-3.5 h-3.5 text-primary flex-shrink-0" aria-hidden="true" />
+                )}
               </DropdownMenuItem>
             )
           })

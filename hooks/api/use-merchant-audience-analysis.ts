@@ -56,6 +56,8 @@ export interface AudienceAnalysisData extends AudienceAnalysisStructuredFields {
   videoIds: string[]
   locationStats: LocationStat[] | null
   rawMarkdown: string | null
+  manualMarkdown: string | null  // 人工修订后的 Markdown
+  manualInsights: Record<string, any> | null  // 人工修订的结构化补充数据
   analyzedAt: string
   modelUsed: string
   tokenUsed: number

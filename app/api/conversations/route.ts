@@ -130,10 +130,22 @@ export async function GET(request: NextRequest) {
         }
       })) : undefined
 
+      // 修复：把 lastMessage 同时放入 metadata 中，确保前端可以访问
+      const updatedMetadata = {
+        ...conv.metadata,
+        lastMessage: lastMessage ? {
+          id: lastMessage.id,
+          role: lastMessage.role,
+          content: lastMessage.content,
+          createdAt: lastMessage.createdAt
+        } : null
+      }
+
       return {
         ...conv,
         model: conv.modelId, // 映射 modelId 到 model 字段以匹配 TypeScript 类型
-        lastMessage,
+        lastMessage, // 根级别的 lastMessage（向后兼容）
+        metadata: updatedMetadata, // metadata 中也包含 lastMessage
         messages: mappedMessages,
       }
     })

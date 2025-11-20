@@ -106,15 +106,31 @@ export function extractLastSnippet(lastMessageContent: string | null, maxLength:
 
 /**
  * 安全的日期创建函数 - 消除特殊情况
- * @param timestamp 时间戳（可能是无效值）
+ * @param timestamp 时间戳（可能是数字、字符串或 Date 对象）
  * @returns 有效的Date对象
  */
-function safeDate(timestamp: number): Date {
-  // NaN检查
+function safeDate(timestamp: number | string | Date): Date {
+  // 如果已经是 Date 对象，直接返回
+  if (timestamp instanceof Date) {
+    return timestamp
+  }
+
+  // 如果是字符串，尝试解析
+  if (typeof timestamp === 'string') {
+    const date = new Date(timestamp)
+    if (!isNaN(date.getTime())) {
+      return date
+    }
+    console.warn('⚠️ 无效的日期字符串:', timestamp, '使用当前时间')
+    return new Date()
+  }
+
+  // 如果是数字，检查是否有效
   if (Number.isNaN(timestamp) || !Number.isFinite(timestamp)) {
     console.warn('⚠️ 无效的时间戳:', timestamp, '使用当前时间')
     return new Date()
   }
+
   return new Date(timestamp)
 }
 
@@ -125,7 +141,9 @@ function safeDate(timestamp: number): Date {
  */
 export function deriveConversationData(conversation: Conversation): DerivedConversation {
   const updatedAt = safeDate(conversation.updatedAt)
-  const lastMessage = conversation.metadata?.lastMessage
+
+  // 修复：优先读取根级别的 lastMessage，缺失时再回退到 metadata.lastMessage
+  const lastMessage = (conversation as any).lastMessage || conversation.metadata?.lastMessage
 
   return {
     ...conversation,
@@ -251,19 +269,14 @@ export function filterConversations(
 
   return conversations.filter(conv => {
     // 搜索标题
-    if (conv.title.toLowerCase().includes(query)) {
+    const title = conv.title.toLowerCase()
+    if (title.includes(query)) {
       return true
     }
 
-    // 搜索消息片段
-    if (conv.lastSnippet.toLowerCase().includes(query)) {
-      return true
-    }
-
-    // 搜索消息内容（深度搜索）
-    if (conv.messages && conv.messages.some(msg =>
-      msg.content.toLowerCase().includes(query)
-    )) {
+    // 搜索最后一条消息摘要（已经从 lastMessage 派生）
+    const snippet = (conv.lastSnippet || '').toLowerCase()
+    if (snippet.includes(query)) {
       return true
     }
 

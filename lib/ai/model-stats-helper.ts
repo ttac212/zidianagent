@@ -47,7 +47,10 @@ export function getModelDisplayName(modelId: string): string {
     'claude-3-5-sonnet': 'Claude 3.5 Sonnet',
     'claude-3-opus': 'Claude 3 Opus',
     'gemini-2.5-pro': 'Gemini 2.5 Pro',
+    'google/gemini-2.5-pro': 'Gemini 2.5 Pro',
+    'google/gemini-3-pro-preview': 'Gemini 3 Pro Preview',
     'gemini-1.5-pro': 'Gemini 1.5 Pro',
+    'google/gemini-1.5-pro': 'Gemini 1.5 Pro',
     'gpt-4': 'GPT-4',
     'gpt-4-turbo': 'GPT-4 Turbo',
     'gpt-3.5-turbo': 'GPT-3.5 Turbo'

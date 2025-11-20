@@ -5,7 +5,7 @@
 
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { DEFAULT_MODEL } from "@/lib/ai/models"
 import type { Conversation } from "@/types/chat"
 import { STORAGE_KEYS } from "@/lib/storage"
@@ -38,6 +38,7 @@ export function useConversations(currentConversationId?: string | null) {
 
   // 本地状态管理
   const [error, setError] = useState<string | null>(null)
+  const lastQueryErrorRef = useRef<string | null>(null)
 
   // Mutations
   const createConversationMutation = useCreateConversationMutation()
@@ -45,15 +46,19 @@ export function useConversations(currentConversationId?: string | null) {
   const deleteConversationMutation = useDeleteConversationMutation()
 
   // 错误处理
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (queryError) {
       const message = queryError instanceof Error ? queryError.message : "加载对话失败"
+      lastQueryErrorRef.current = message
       setError(message)
+      return
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    if (lastQueryErrorRef.current) {
+      const previousQueryError = lastQueryErrorRef.current
+      lastQueryErrorRef.current = null
+      setError((prev) => (prev === previousQueryError ? null : prev))
+    }
   }, [queryError])
 
   // 简化的操作函数
@@ -120,3 +125,4 @@ export function useConversations(currentConversationId?: string | null) {
     isUpdating: updateConversationMutation.isPending,
   }
 }
+

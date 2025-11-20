@@ -51,6 +51,7 @@ interface Props {
   onDeleteConversation?: (conversation: Conversation) => void
   prefillMessage?: string
   prefillTitle?: string
+  prefillId?: string
 }
 
 export function SmartChatCenter({
@@ -60,7 +61,8 @@ export function SmartChatCenter({
   onSelectConversation: _onSelectConversation,
   onDeleteConversation,
   prefillMessage,
-  prefillTitle
+  prefillTitle,
+  prefillId
 }: Props) {
   return (
     <ErrorBoundary fallback={
@@ -86,6 +88,7 @@ export function SmartChatCenter({
           onDeleteConversation={onDeleteConversation}
           prefillMessage={prefillMessage}
           prefillTitle={prefillTitle}
+          prefillId={prefillId}
         />
       </PipelineStateProvider>
     </ErrorBoundary>
@@ -99,7 +102,8 @@ function SmartChatCenterInternal({
   onSelectConversation,
   onDeleteConversation,
   prefillMessage,
-  prefillTitle
+  prefillTitle,
+  prefillId
 }: Props) {
   const queryClient = useQueryClient()
   const { state, dispatch } = useChatState()
@@ -281,27 +285,64 @@ function SmartChatCenterInternal({
   const handleChatEvent = useCallback((event: ChatEvent) => {
     switch (event.type) {
       case 'started': {
-        // 添加用户消息
-        dispatch({ type: 'ADD_MESSAGE', payload: event.userMessage })
-
-        // 清空输入框
-        dispatch({ type: 'SET_INPUT', payload: '' })
-
-        const pendingMessage: ChatMessage = {
-          id: event.pendingAssistantId,
-          role: 'assistant',
-          content: '',
-          timestamp: dt.timestamp(),
-          status: 'pending',
-          metadata: {
-            model: composerSettings.modelId || currentModel,
-            ...(composerSettings.reasoning_effort
-              ? { reasoningEffort: composerSettings.reasoning_effort }
-              : {})
-          }
+        const linkedUserId = event.originUserMessageId ?? event.userMessage.id
+        if (event.mode !== 'retry') {
+          dispatch({ type: 'ADD_MESSAGE', payload: event.userMessage })
+          dispatch({ type: 'SET_INPUT', payload: '' })
+        } else if (linkedUserId) {
+          const existingUser = messages.find(msg => msg.id === linkedUserId)
+          dispatch({
+            type: 'UPDATE_MESSAGE',
+            payload: {
+              id: linkedUserId,
+              updates: {
+                metadata: {
+                  ...(existingUser?.metadata ?? {}),
+                  retryCount: event.retryCount
+                }
+              }
+            }
+          })
         }
-        dispatch({ type: 'ADD_MESSAGE', payload: pendingMessage })
-        // 保持 requesting 阶段，等待首个chunk
+
+        const pendingMetadata: ChatMessage['metadata'] = {
+          model: composerSettings.modelId || currentModel,
+          linkedUserMessageId: linkedUserId,
+          requestId: event.requestId,
+          ...(typeof event.retryCount === 'number' ? { retryCount: event.retryCount } : {}),
+          ...(event.retryOfMessageId ? { retryOfMessageId: event.retryOfMessageId } : {}),
+          ...(composerSettings.reasoning_effort
+            ? { reasoningEffort: composerSettings.reasoning_effort }
+            : {})
+        }
+
+        if (event.mode === 'retry' && event.retryOfMessageId) {
+          const existingMessage = messages.find(msg => msg.id === event.retryOfMessageId)
+          dispatch({
+            type: 'UPDATE_MESSAGE_STREAM',
+            payload: {
+              messageId: event.retryOfMessageId,
+              content: '',
+              status: 'pending',
+              metadata: {
+                ...(existingMessage?.metadata ?? {}),
+                ...pendingMetadata,
+                previousContent: existingMessage?.content
+              },
+              reasoning: ''
+            }
+          })
+        } else {
+          const pendingMessage: ChatMessage = {
+            id: event.pendingAssistantId,
+            role: 'assistant',
+            content: '',
+            timestamp: dt.timestamp(),
+            status: 'pending',
+            metadata: pendingMetadata
+          }
+          dispatch({ type: 'ADD_MESSAGE', payload: pendingMessage })
+        }
         break
       }
 
@@ -332,7 +373,10 @@ function SmartChatCenterInternal({
               messageId: event.assistantMessage.id,
               content: event.assistantMessage.content,
               status: 'completed',
-              metadata: event.assistantMessage.metadata,
+              metadata: {
+                ...(event.assistantMessage.metadata ?? {}),
+                previousContent: undefined
+              },
               reasoning: event.assistantMessage.reasoning
             }
           })
@@ -351,6 +395,7 @@ function SmartChatCenterInternal({
       }
 
       case 'error': {
+        const targetMessage = messages.find(msg => msg.id === event.pendingAssistantId)
         if (event.fallbackMessage) {
           dispatch({
             type: 'UPDATE_MESSAGE_STREAM',
@@ -358,19 +403,30 @@ function SmartChatCenterInternal({
               messageId: event.pendingAssistantId,
               content: event.fallbackMessage.content,
               status: 'error',
-              metadata: { ...event.fallbackMessage.metadata, error: event.error }
+              metadata: {
+                ...(event.fallbackMessage.metadata ?? {}),
+                error: event.error
+              }
+            }
+          })
+        } else if (targetMessage) {
+          dispatch({
+            type: 'UPDATE_MESSAGE_STREAM',
+            payload: {
+              messageId: event.pendingAssistantId,
+              content: targetMessage.metadata?.previousContent ?? targetMessage.content,
+              status: 'error',
+              metadata: {
+                ...(targetMessage.metadata ?? {}),
+                error: event.error
+              }
             }
           })
         } else {
-          const targetMessage = messages.find(msg => msg.id === event.pendingAssistantId)
-          const hasPipelineState = Boolean(targetMessage?.metadata?.pipelineStateId)
-
-          if (!hasPipelineState) {
-            dispatch({
-              type: 'REMOVE_MESSAGE',
-              payload: { messageId: event.pendingAssistantId }
-            })
-          }
+          dispatch({
+            type: 'REMOVE_MESSAGE',
+            payload: { messageId: event.pendingAssistantId }
+          })
         }
 
         dispatch({ type: 'SESSION_SET_ERROR', payload: event.error })
@@ -686,7 +742,7 @@ function SmartChatCenterInternal({
 
   // 聊天操作 - 使用事件协议，优先使用用户选择的模型
   // 动态获取conversationId，避免新创建的对话消息丢失
-  const { sendMessage, stopGeneration } = useChatActions({
+  const { sendMessage, stopGeneration, retryMessage } = useChatActions({
     conversationId: conversation?.id,
     onEvent: handleChatEvent,
     messages,
@@ -695,23 +751,36 @@ function SmartChatCenterInternal({
   })
 
   // 自动发送对齐预填消息
+  // 当 prefillMessage 变化时重置处理标记，允许多次推送
+  useEffect(() => {
+    if (prefillMessage || prefillId) {
+      prefillHandledRef.current = false
+    }
+  }, [prefillMessage, prefillId])
+
   useEffect(() => {
     if (!prefillMessage || prefillHandledRef.current) return
 
-    if (!composerSettings.modelId) {
+    // 使用 currentModel 作为 fallback，确保总有可用模型
+    const effectiveModel = composerSettings.modelId || currentModel
+    if (!effectiveModel) {
       toast.warning('请先选择模型', { description: '选择好模型后，系统才会自动发送对齐提示' })
       return
     }
 
-    // dev 下 StrictMode 会二次 mount，增加 sessionStorage 标记，确保同一会话只执行一次
-    const prefillMarker = typeof window !== 'undefined' ? `prefill-sent-${prefillMessage.slice(0, 32)}` : null
+    // dev 下 StrictMode 会二次 mount，使用完整的 message + title 作为唯一标识
+    // 这样同一商家的不同次推送（不同时间戳）不会被阻止
+    const markerSource = prefillId ?? `${prefillMessage.slice(0, 32)}-${prefillTitle || ''}`
+    const prefillMarker = typeof window !== 'undefined'
+      ? `prefill-sent-${markerSource}`
+      : null
     if (prefillMarker) {
-      const alreadySent = window.sessionStorage.getItem(prefillMarker)
-      if (alreadySent) {
+      const status = window.sessionStorage.getItem(prefillMarker)
+      if (status === 'sent' || status === 'pending') {
         prefillHandledRef.current = true
         return
       }
-      window.sessionStorage.setItem(prefillMarker, 'sent')
+      window.sessionStorage.setItem(prefillMarker, 'pending')
     }
 
     // 防止消息流触发的状态更新导致重复执行预填
@@ -720,8 +789,9 @@ function SmartChatCenterInternal({
     const run = async () => {
       let targetConversationId = conversation?.id ?? activeConversation
       try {
-        if (!targetConversationId && onCreateConversation) {
-          const newConversation = await onCreateConversation(composerSettings.modelId || currentModel)
+        // 每次推送都创建新对话，这是用户期望的行为
+        if (onCreateConversation) {
+          const newConversation = await onCreateConversation(effectiveModel)
           targetConversationId = newConversation?.id ?? null
           if (newConversation?.id && onSelectConversation) {
             onSelectConversation(newConversation.id)
@@ -729,20 +799,28 @@ function SmartChatCenterInternal({
         }
         if (!targetConversationId) {
           toast.error('无法自动对齐：对话未就绪')
-          // ✅ 失败也标记，避免刷新页面后无限重试
+          if (prefillMarker) {
+            window.sessionStorage.removeItem(prefillMarker)
+          }
+          prefillHandledRef.current = false
           return
         }
         await sendMessage(prefillMessage, targetConversationId)
         if (prefillTitle && onUpdateConversation) {
           onUpdateConversation(targetConversationId, { title: prefillTitle }).catch(() => {})
         }
-        // ✅ 成功后标记并提示
+        if (prefillMarker) {
+          window.sessionStorage.setItem(prefillMarker, 'sent')
+        }
         toast.success('已自动发送对齐信息', {
           description: '系统已根据商家档案生成对齐提示'
         })
       } catch (e) {
         console.error('prefill failed', e)
-        // ✅ 失败时标记，避免无限重试（但用户可以手动刷新页面重试）
+        if (prefillMarker) {
+          window.sessionStorage.removeItem(prefillMarker)
+        }
+        prefillHandledRef.current = false
         toast.error('自动发送失败', {
           description: '请手动粘贴对齐信息或刷新页面重试'
         })
@@ -753,6 +831,7 @@ function SmartChatCenterInternal({
   }, [
     prefillMessage,
     prefillTitle,
+    prefillId,
     conversation?.id,
     activeConversation,
     onCreateConversation,
@@ -856,6 +935,13 @@ function SmartChatCenterInternal({
     sendMessage,
     dispatch
   ])
+
+  const handleRetryMessage = useCallback((messageId: string) => {
+    if (!messageId) return
+    retryMessage(messageId).catch((error) => {
+      console.error('retry message failed', error)
+    })
+  }, [retryMessage])
 
   // 标题编辑相关处理
   const handleEditTitle = useCallback(() => {
@@ -1039,6 +1125,7 @@ function SmartChatCenterInternal({
           messages={messages}
           isLoading={isSessionBusy && messages.length === 0}
           error={sessionError}
+          onRetryMessage={handleRetryMessage}
           onLoadMore={hasMoreBefore ? handleLoadOlderMessages : undefined}
           hasMoreBefore={hasMoreBefore}
           isLoadingMore={isHistoryLoading}

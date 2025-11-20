@@ -137,12 +137,71 @@ export default function MerchantDetailPage() {
       `品牌语调：${briefParsed.brandTone || '未指定'}`
     ] : ['暂无Brief（请补充后再用AI对齐）']
 
-    const audienceText = audience
-      ? (audience.manualMarkdown || audience.rawMarkdown || '暂无客群分析')
-      : '暂无客群分析'
-    const trimmedAudience = audienceText.length > 1500
-      ? `${audienceText.slice(0, 1500)}...`
-      : audienceText
+    // 提取结构化客群分析数据
+    let audienceSection = ''
+    if (audience) {
+      const sections = []
+
+      // 1. 聚合统计摘要
+      if (audience.videosAnalyzed || audience.commentsAnalyzed) {
+        sections.push(`数据来源：分析了${audience.videosAnalyzed || 0}个视频的${audience.commentsAnalyzed || 0}条评论`)
+      }
+
+      // 2. 地域分布（JSON解析）
+      if (audience.locationStats) {
+        try {
+          const locations = JSON.parse(audience.locationStats)
+          if (Array.isArray(locations) && locations.length > 0) {
+            const topLocations = locations.slice(0, 5).map((loc: any) =>
+              `${loc.location}(${loc.percentage || 0}%)`
+            ).join('、')
+            sections.push(`地域分布TOP5：${topLocations}`)
+          }
+        } catch (_e) {
+          // 解析失败则跳过
+        }
+      }
+
+      // 3. 用户痛点（JSON解析）
+      if (audience.painPoints) {
+        try {
+          const painPoints = JSON.parse(audience.painPoints)
+          if (Array.isArray(painPoints) && painPoints.length > 0) {
+            const points = painPoints.slice(0, 3).join('；')
+            sections.push(`核心痛点：${points}`)
+          }
+        } catch (_e) {
+          // 解析失败则跳过
+        }
+      }
+
+      // 4. 改进建议（JSON解析）
+      if (audience.suggestions) {
+        try {
+          const suggestions = JSON.parse(audience.suggestions)
+          if (Array.isArray(suggestions) && suggestions.length > 0) {
+            const items = suggestions.slice(0, 3).map((s: any) =>
+              s.suggestion || s
+            ).join('；')
+            sections.push(`优化建议：${items}`)
+          }
+        } catch (_e) {
+          // 解析失败则跳过
+        }
+      }
+
+      // 5. 完整Markdown报告（优先人工修订版）
+      const fullMarkdown = audience.manualMarkdown || audience.rawMarkdown
+      if (fullMarkdown) {
+        sections.push('')
+        sections.push('【完整分析报告】')
+        sections.push(fullMarkdown)
+      }
+
+      audienceSection = sections.length > 0 ? sections.join('\n') : '暂无客群分析'
+    } else {
+      audienceSection = '暂无客群分析（建议先在商家详情页进行客群分析）'
+    }
 
     return [
       '你是编导对齐助手。目标：基于下方数据快速理解商家，输出创作前对齐结论。',
@@ -154,8 +213,8 @@ export default function MerchantDetailPage() {
       ...briefLines,
       '【人工补充信息（真实沟通高频问题）】',
       manualNotes,
-      '【客群分析（如为空请提示补充）】',
-      trimmedAudience
+      '【客群分析】',
+      audienceSection
     ].join('\n')
   }
 

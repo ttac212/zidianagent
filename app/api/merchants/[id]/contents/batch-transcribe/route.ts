@@ -15,6 +15,7 @@ import {
   badRequest,
   serverError,
 } from '@/lib/api/http-response'
+import { buildLLMRequestAuto } from '@/lib/ai/request-builder'
 
 export const maxDuration = 300 // 5分钟超时
 
@@ -269,18 +270,13 @@ async function optimizeTextWithLLM(
 
     const contextInfo = contextParts.join('\n')
 
-    const response = await fetch(`${apiBase}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${zenmuxApiKey}`,
-      },
-      body: JSON.stringify({
-        model: optimizationModel,
-        messages: [
-          {
-            role: 'system',
-            content: `你是一个专业的抖音视频文案编辑。你的核心任务是利用视频的标题、标签等上下文信息，修正语音转录中的同音字错误和识别错误。
+    // 使用统一的请求构建函数，自动处理ZenMux参数规范
+    const requestBody = buildLLMRequestAuto({
+      model: optimizationModel,
+      messages: [
+        {
+          role: 'system',
+          content: `你是一个专业的抖音视频文案编辑。你的核心任务是利用视频的标题、标签等上下文信息，修正语音转录中的同音字错误和识别错误。
 
 **工作流程：**
 1. **仔细阅读视频上下文信息**（标题、作者、标签），理解视频主题
@@ -298,10 +294,10 @@ async function optimizeTextWithLLM(
 - ⚠️ **地名、人名必须严格核对**：这类错误最常见，必须仔细比对
 - ⚠️ **专业术语以标签为准**：标签中的写法通常是规范的
 - 直接输出优化后的文本，不要添加任何说明`,
-          },
-          {
-            role: 'user',
-            content: `${contextInfo}
+        },
+        {
+          role: 'user',
+          content: `${contextInfo}
 
 ---
 
@@ -315,11 +311,19 @@ ${text}
 2. 添加标点符号和分段
 3. 保持原文意思，只修正错误
 4. 直接输出优化后的文本`,
-          },
-        ],
-        max_tokens: 4000,
-        temperature: 0.3,
-      }),
+        },
+      ],
+      maxTokens: 4000,
+      temperature: 0.3,
+    });
+
+    const response = await fetch(`${apiBase}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${zenmuxApiKey}`,
+      },
+      body: JSON.stringify(requestBody),
     })
 
     if (!response.ok) {

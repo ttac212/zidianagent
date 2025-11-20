@@ -318,7 +318,7 @@ export const conversationApi = {
       body: JSON.stringify({
         title: request.title || '新对话',
         modelId: request.modelId,
-        temperature: request.temperature || 0.7,
+        temperature: request.temperature || 1.0,
         maxTokens: request.maxTokens || 2000,
         contextAware: request.contextAware ?? true
       })

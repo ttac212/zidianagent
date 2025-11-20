@@ -15,7 +15,8 @@ const allowlist = raw
 // 模型友好名称映射
 const MODEL_NAME_MAP: Record<string, string> = {
   'anthropic/claude-sonnet-4.5': 'Claude Sonnet 4.5',
-  'openai/gpt-5.1': 'GPT-5.1'
+  'openai/gpt-5.1': 'GPT-5.1',
+  'google/gemini-3-pro-preview': 'Gemini 3 Pro'
 }
 
 // 模型能力元数据
@@ -35,6 +36,11 @@ const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
     supportsReasoning: true,
     provider: 'ZenMux',
     family: 'gpt'
+  },
+  'google/gemini-3-pro-preview': {
+    supportsReasoning: true,
+    provider: 'ZenMux',
+    family: 'gemini'
   }
 }
 

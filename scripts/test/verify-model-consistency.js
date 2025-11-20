@@ -21,6 +21,12 @@ const TEST_SCENARIOS = [
     expectedKey: 'sk-MkU5p0ggC...'
   },
   {
+    name: '用户选择Gemini 3 Pro Preview',
+    selectedModel: 'google/gemini-3-pro-preview',
+    expectedProvider: 'Google',
+    expectedKey: 'sk-MkU5p0ggC...'
+  },
+  {
     name: '用户选择Gemini预览版',
     selectedModel: 'gemini-2.5-pro-preview-06-05',
     expectedProvider: 'Google',

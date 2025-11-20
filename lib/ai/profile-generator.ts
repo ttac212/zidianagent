@@ -14,6 +14,7 @@ import { parseProfileResponse } from '@/lib/ai/profile-parser'
 import { calculateContentMetrics, getQualityLevel } from '@/lib/utils/content-metrics'
 import { detectFraud } from '@/lib/utils/fraud-detection'
 import { analyzeContentQualityBatch } from '@/lib/ai/content-analyzer'
+import { buildLLMRequestAuto } from '@/lib/ai/request-builder'
 
 // 使用grok-4-fast模型(ZenMux API,速度快成本低)
 const MODEL_ID = 'anthropic/claude-sonnet-4.5'
@@ -340,70 +341,73 @@ async function callLLMAPI(userPrompt: string) {
     throw new Error('未配置ZENMUX_API_KEY')
   }
 
+  // 使用统一的请求构建函数，自动处理ZenMux参数规范
+  const requestBody = buildLLMRequestAuto({
+    model: MODEL_ID,
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: userPrompt }
+    ],
+    maxTokens: 30000,
+    temperature: 0.7,
+    // 使用结构化输出确保返回格式严格符合schema
+    responseFormat: {
+      type: 'json_schema',
+      json_schema: {
+        name: 'merchant_profile',
+        description: '商家创作档案数据结构',
+        schema: {
+          type: 'object',
+          properties: {
+            brief: {
+              type: 'object',
+              properties: {
+                intro: {
+                  type: 'string',
+                  description: '3句话商家介绍(合并为一个字符串)'
+                },
+                sellingPoints: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: '核心卖点列表'
+                },
+                usageScenarios: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: '使用场景列表'
+                },
+                audienceProfile: {
+                  type: 'object',
+                  properties: {
+                    age: { type: 'string' },
+                    gender: { type: 'string' },
+                    interests: {
+                      type: 'array',
+                      items: { type: 'string' }
+                    },
+                    behaviors: { type: 'string' }
+                  },
+                  required: ['age', 'gender', 'interests', 'behaviors']
+                },
+                brandTone: { type: 'string' }
+              },
+              required: ['intro', 'sellingPoints', 'usageScenarios', 'audienceProfile', 'brandTone']
+            }
+          },
+          required: ['brief'],
+          additionalProperties: false
+        }
+      }
+    }
+  });
+
   const response = await fetch(`${API_BASE}/chat/completions`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${API_KEY}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({
-      model: MODEL_ID,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt }
-      ],
-      max_tokens: 30000,
-      temperature: 0.7,
-      // 使用结构化输出确保返回格式严格符合schema
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: 'merchant_profile',
-          description: '商家创作档案数据结构',
-          schema: {
-            type: 'object',
-            properties: {
-              brief: {
-                type: 'object',
-                properties: {
-                  intro: {
-                    type: 'string',
-                    description: '3句话商家介绍(合并为一个字符串)'
-                  },
-                  sellingPoints: {
-                    type: 'array',
-                    items: { type: 'string' },
-                    description: '核心卖点列表'
-                  },
-                  usageScenarios: {
-                    type: 'array',
-                    items: { type: 'string' },
-                    description: '使用场景列表'
-                  },
-                  audienceProfile: {
-                    type: 'object',
-                    properties: {
-                      age: { type: 'string' },
-                      gender: { type: 'string' },
-                      interests: {
-                        type: 'array',
-                        items: { type: 'string' }
-                      },
-                      behaviors: { type: 'string' }
-                    },
-                    required: ['age', 'gender', 'interests', 'behaviors']
-                  },
-                  brandTone: { type: 'string' }
-                },
-                required: ['intro', 'sellingPoints', 'usageScenarios', 'audienceProfile', 'brandTone']
-              }
-            },
-            required: ['brief'],
-            additionalProperties: false
-          }
-        }
-      }
-    })
+    body: JSON.stringify(requestBody)
   })
 
   if (!response.ok) {

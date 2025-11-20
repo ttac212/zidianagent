@@ -29,7 +29,10 @@ export function getModelDisplayName(modelId?: string): string {
     'claude-3-sonnet': 'Claude 3 Sonnet',
     'claude-3-haiku': 'Claude 3 Haiku',
     'claude-opus-4-1-20250805': 'Claude Opus 4.1',
-    'gemini-2.5-pro': 'Gemini 2.5 Pro'
+    'gemini-2.5-pro': 'Gemini 2.5 Pro',
+    'google/gemini-2.5-pro': 'Gemini 2.5 Pro',
+    'google/gemini-3-pro-preview': 'Gemini 3 Pro Preview',
+    'google/gemini-1.5-pro': 'Gemini 1.5 Pro'
   }
   
   return fallbackMap[modelId] || modelId

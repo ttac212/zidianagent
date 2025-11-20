@@ -14,6 +14,7 @@ import { VideoProcessor } from '@/lib/video/video-processor';
 import { createVideoSourceFromShareLink } from '@/lib/douyin/video-source';
 import { mapStageProgress } from '@/lib/douyin/progress-mapper';
 import { DOUYIN_DEFAULT_HEADERS } from '@/lib/douyin/constants';
+import { buildLLMRequestAuto } from '@/lib/ai/request-builder';
 
 export async function POST(req: NextRequest) {
   try {
@@ -290,18 +291,13 @@ async function optimizeTextWithLLM(
 
     const contextInfo = contextParts.join('\n')
 
-    const response = await fetch(`${apiBase}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${zenmuxApiKey}`,
-      },
-      body: JSON.stringify({
-        model: optimizationModel,
-        messages: [
-          {
-            role: 'system',
-            content: `你是一个专业的抖音视频文案编辑。你的核心任务是利用视频的标题、标签等上下文信息，修正语音转录中的同音字错误和识别错误。
+    // 使用统一的请求构建函数，自动处理ZenMux参数规范
+    const requestBody = buildLLMRequestAuto({
+      model: optimizationModel,
+      messages: [
+        {
+          role: 'system',
+          content: `你是一个专业的抖音视频文案编辑。你的核心任务是利用视频的标题、标签等上下文信息，修正语音转录中的同音字错误和识别错误。
 
 **工作流程：**
 1. **仔细阅读视频上下文信息**（标题、作者、标签），理解视频主题
@@ -319,10 +315,10 @@ async function optimizeTextWithLLM(
 - ⚠️ **地名、人名必须严格核对**：这类错误最常见，必须仔细比对
 - ⚠️ **专业术语以标签为准**：标签中的写法通常是规范的
 - 直接输出优化后的文本，不要添加任何说明`,
-          },
-          {
-            role: 'user',
-            content: `【示例1：地名和人名纠错】
+        },
+        {
+          role: 'user',
+          content: `【示例1：地名和人名纠错】
 视频信息：
 标题：君姐在南宁做旧房改造
 作者：君姐改旧房
@@ -349,10 +345,10 @@ async function optimizeTextWithLLM(
 ---
 
 现在请你修正以下视频的转录文本：`,
-          },
-          {
-            role: 'user',
-            content: `${contextInfo}
+        },
+        {
+          role: 'user',
+          content: `${contextInfo}
 
 ---
 
@@ -366,11 +362,19 @@ ${text}
 2. 特别注意地名、人名、品牌名的正确性
 3. 添加标点符号，使文本更易读
 4. 直接返回修正后的文本，不要任何解释`,
-          },
-        ],
-        max_tokens: 4000,
-        temperature: 0.2,
-      }),
+        },
+      ],
+      maxTokens: 4000,
+      temperature: 0.2,
+    });
+
+    const response = await fetch(`${apiBase}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${zenmuxApiKey}`,
+      },
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
