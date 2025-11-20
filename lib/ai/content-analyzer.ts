@@ -1,9 +1,18 @@
 /**
- * AI内容质量分析服务
+ * AI内容质量分析服务（商家Brief生成的中间步骤）
  *
- * 使用Claude Sonnet 4.5分析短视频内容质量
- * 包括：开头吸引力、情绪点、痛点/需求提取
+ * 用途: 分析商家TOP内容的质量特征，用于优化商家Brief生成
+ * 注意: 分析结果不持久化，仅在生成档案时临时使用
+ *
+ * 使用Claude Sonnet 4.5分析短视频内容质量：
+ * - 开头吸引力（前3秒）
+ * - 情绪点（humor/pain/satisfaction等）
+ * - 痛点和需求提取
+ * - 内容节奏
+ * - 综合质量评分
  */
+
+import { buildLLMRequestAuto } from '@/lib/ai/request-builder'
 
 // 使用与档案生成相同的模型配置
 const MODEL_ID = 'anthropic/claude-sonnet-4.5'
@@ -219,25 +228,28 @@ async function callLLMAPI(userPrompt: string) {
     throw new Error('未配置ZENMUX_API_KEY')
   }
 
+  // 使用统一的请求构建函数，自动处理ZenMux参数规范
+  const requestBody = buildLLMRequestAuto({
+    model: MODEL_ID,
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: userPrompt }
+    ],
+    maxTokens: 2000,
+    temperature: 0.3,  // 较低温度，保证分析稳定性
+    // 使用简单的JSON模式，避免严格Schema导致字段命名问题
+    responseFormat: {
+      type: 'json_object'
+    }
+  });
+
   const response = await fetch(`${API_BASE}/chat/completions`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${API_KEY}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({
-      model: MODEL_ID,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt }
-      ],
-      max_tokens: 2000,
-      temperature: 0.3,  // 较低温度，保证分析稳定性
-      // 使用简单的JSON模式，避免严格Schema导致字段命名问题
-      response_format: {
-        type: 'json_object'
-      }
-    })
+    body: JSON.stringify(requestBody)
   })
 
   if (!response.ok) {
@@ -372,59 +384,4 @@ function normalizeFieldNames(obj: any): any {
   }
 
   return result
-}
-
-/**
- * 将分析结果转换为数据库存储格式
- */
-export function serializeAnalysisResult(analysis: ContentQualityAnalysis): {
-  aiOpeningQuality: string    // JSON字符串
-  aiEmotionalTrigger: string  // JSON字符串
-  aiPainPoints: string        // JSON字符串
-  aiUserNeeds: string         // JSON字符串
-  aiContentRhythm: string     // JSON字符串
-  aiOverallScore: number      // 综合评分
-} {
-  return {
-    aiOpeningQuality: JSON.stringify(analysis.openingQuality),
-    aiEmotionalTrigger: JSON.stringify(analysis.emotionalTrigger),
-    aiPainPoints: JSON.stringify(analysis.painPoints),
-    aiUserNeeds: JSON.stringify(analysis.userNeeds),
-    aiContentRhythm: JSON.stringify(analysis.contentRhythm),
-    aiOverallScore: analysis.overallQuality.score
-  }
-}
-
-/**
- * 从数据库格式反序列化
- */
-export function deserializeAnalysisResult(stored: {
-  aiOpeningQuality: string | null
-  aiEmotionalTrigger: string | null
-  aiPainPoints: string | null
-  aiUserNeeds: string | null
-  aiContentRhythm: string | null
-  aiOverallScore: number | null
-}): ContentQualityAnalysis | null {
-  try {
-    if (!stored.aiOpeningQuality || !stored.aiEmotionalTrigger || !stored.aiOverallScore) {
-      return null
-    }
-
-    return {
-      openingQuality: JSON.parse(stored.aiOpeningQuality),
-      emotionalTrigger: JSON.parse(stored.aiEmotionalTrigger),
-      painPoints: JSON.parse(stored.aiPainPoints || '[]'),
-      userNeeds: JSON.parse(stored.aiUserNeeds || '[]'),
-      contentRhythm: JSON.parse(stored.aiContentRhythm || '{"pace":"medium","variety":"medium","description":""}'),
-      overallQuality: {
-        score: stored.aiOverallScore,
-        strengths: [],
-        weaknesses: []
-      }
-    }
-  } catch (error) {
-    console.error('[ContentAnalyzer] 反序列化失败:', error)
-    return null
-  }
 }
