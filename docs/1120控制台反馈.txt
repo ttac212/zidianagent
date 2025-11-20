@@ -1,7 +1,3 @@
-[ProfileAPI] 开始生成档案: cmi5wp356000cwtr4yywunu8q
-[ProfileGenerator] 开始生成档案: cmi5wp356000cwtr4yywunu8q
-prisma:query SELECT `main`.`merchants`.`id`, `main`.`merchants`.`uid`, `main`.`merchants`.`name`, `main`.`merchants`.`description`, `main`.`merchants`.`categoryId`, `main`.`merchants`.`location`, `main`.`merchants`.`address`, `main`.`merchants`.`contactInfo`, `main`.`merchants`.`businessType`, `main`.`merchants`.`totalDiggCount`, `main`.`merchants`.`totalCommentCount`, `main`.`merchants`.`totalCollectCount`, `main`.`merchants`.`totalShareCount`, `main`.`merchants`.`totalEngagement`, `main`.`merchants`.`totalContentCount`, `main`.`merchants`.`followerCount`, `main`.`merchants`.`totalPlayCount`, `main`.`merchants`.`avgEngagementRate`, `main`.`merchants`.`dataSource`, `main`.`merchants`.`lastCollectedAt`, `main`.`merchants`.`monitoringEnabled`, `main`.`merchants`.`syncIntervalSeconds`, `main`.`merchants`.`nextSyncAt`, `main`.`merchants`.`status`, `main`.`merchants`.`isVerified`, `main`.`merchants`.`createdAt`, `main`.`merchants`.`updatedAt` FROM `main`.`merchants` WHERE (`main`.`merchants`.`id` = ? AND 1=1) LIMIT ? OFFSET ?
-prisma:query SELECT `main`.`merchant_contents`.`id`, `main`.`merchant_contents`.`merchantId`, `main`.`merchant_contents`.`externalId`, `main`.`merchant_contents`.`title`, `main`.`merchant_contents`.`content`, `main`.`merchant_contents`.`transcript`, `main`.`merchant_contents`.`contentType`, `main`.`merchant_contents`.`duration`, `main`.`merchant_contents`.`shareUrl`, `main`.`merchant_contents`.`hasTranscript`, `main`.`merchant_contents`.`diggCount`, `main`.`merchant_contents`.`commentCount`, `main`.`merchant_contents`.`collectCount`, `main`.`merchant_contents`.`shareCount`, `main`.`merchant_contents`.`totalEngagement`, `main`.`merchant_contents`.`playCount`, `main`.`merchant_contents`.`forwardCount`, `main`.`merchant_contents`.`likeRate`, `main`.`merchant_contents`.`commentRate`, `main`.`merchant_contents`.`completionRate`, `main`.`merchant_contents`.`avgWatchDuration`, `main`.`merchant_contents`.`isSuspicious`, `main`.`merchant_contents`.`suspiciousReason`, `main`.`merchant_contents`.`tags`, `main`.`merchant_contents`.`textExtra`, `main`.`merchant_contents`.`publishedAt`, `main`.`merchant_contents`.`collectedAt`, `main`.`merchant_contents`.`externalCreatedAt`, `main`.`merchant_contents`.`createdAt`, `main`.`merchant_contents`.`updatedAt` FROM `main`.`merchant_contents` WHERE `main`.`merchant_contents`.`merchantId` IN (?) ORDER BY `main`.`merchant_contents`.`diggCount` DESC, `main`.`merchant_contents`.`commentCount` DESC, `main`.`merchant_contents`.`collectCount` DESC LIMIT ? OFFSET ?
 [ProfileGenerator] 开始AI内容质量分析...
 [ContentAnalyzer] 批量分析: 10/10 条有效内容
 prisma:query PRAGMA journal_mode=WAL
@@ -11,92 +7,120 @@ prisma:query PRAGMA busy_timeout=30000
 prisma:query PRAGMA temp_store=memory
 prisma:query PRAGMA wal_autocheckpoint=1000
 prisma:query PRAGMA foreign_keys=ON
-[ContentAnalyzer] 缺少 emotionalTrigger.primary，使用默认值"other"
+[ContentAnalyzer] AI返回的顶层字段: ["opening_quality","emotion_points","pain_points","user_needs","content_rhythm","overall_evaluation"]
+[ContentAnalyzer] AI返回的顶层字段: ["opening_quality","emotion_points","pain_points","user_needs","content_rhythm","overall_score","strengths","weaknesses","improvement_suggestions"]
 [ContentAnalyzer] 缺少 overallQuality.score，使用默认值50
-[ContentAnalyzer] 缺少 emotionalTrigger.primary，使用默认值"other"
-[ContentAnalyzer] 缺少 overallQuality.score，使用默认值50
-[ContentAnalyzer] 缺少 emotionalTrigger.primary，使用默认值"other"
+[ContentAnalyzer] AI返回的顶层字段: ["opening_quality","emotion_points","pain_points","user_needs","content_rhythm","overall_score","strengths","weaknesses"]
 [ContentAnalyzer] 缺少 overallQuality.score，使用默认值50
 [ContentAnalyzer] 已处理 3/10
-[ContentAnalyzer] 解析失败: SyntaxError: Unexpected non-whitespace character after JSON at position 899 (line 40 column 1)
+[ContentAnalyzer] 解析失败: SyntaxError: Unexpected non-whitespace character after JSON at position 1121 (line 47 column 1)
     at JSON.parse (<anonymous>)
-    at parseAnalysisResponse (lib\ai\content-analyzer.ts:288:25)
-    at analyzeContentQuality (lib\ai\content-analyzer.ts:121:22)
-    at async (lib\ai\content-analyzer.ts:155:26)
-    at async analyzeContentQualityBatch (lib\ai\content-analyzer.ts:153:26)
+    at parseAnalysisResponse (lib\ai\content-analyzer.ts:289:25)
+    at analyzeContentQuality (lib\ai\content-analyzer.ts:120:22)
+    at async (lib\ai\content-analyzer.ts:154:26)
+    at async analyzeContentQualityBatch (lib\ai\content-analyzer.ts:152:26)
     at async analyzeContentsQuality (lib\ai\profile-generator.ts:140:27)
     at async generateMerchantProfile (lib\ai\profile-generator.ts:76:34)
     at async (app\api\merchants\[id]\profile\generate\route.ts:33:22)
-  286 |     }
-  287 |
-> 288 |     const parsed = JSON.parse(cleanedResponse.trim())
+  287 |     }
+  288 |
+> 289 |     const parsed = JSON.parse(cleanedResponse.trim())
       |                         ^
-  289 |
-  290 |     // 转换下划线命名为驼峰命名（兼容不同API返回格式）
-  291 |     const normalized = normalizeFieldNames(parsed)
-[ContentAnalyzer] 原始响应: ```json
+  290 |
+  291 |     // 调试：输出AI返回的完整JSON结构（仅在警告模式下）
+  292 |     if (process.env.DEBUG_CONTENT_ANALYZER) {
+[ContentAnalyzer] 响应长度: 1325
+[ContentAnalyzer] 原始响应（前1000字符）: ```json
 {
   "opening_quality": {
     "score": 0,
     "has_hook": false,
     "hook_types": [],
-    "evaluation": "数据不足 - 转录文本为系统错误提示，无法获取实际视频内容进行分析"
+    "evaluation": "数据不足 - 转录文本为系统错误提示，无法分析实际视频内容的开头质量"
   },
-  "emotional_points": {
+  "emotion_points": {
     "primary_emotion": "other",
     "emotion_intensity": 0,
-    "description": "数据不足 - 无有效转录文本，无法识别情绪点"
+    "description": "数据不足 - 无有效转录文本，无法识别情绪点",
+    "secondary_emotions": []
   },
   "pain_points": {
     "user_pains": [
-      "数据不足 - 无法从错误提示中提取用户痛点"
+      "数据不足 - 仅能从标题推测：工厂制造业、门窗、全屋定制等行业可能存在获客难题"
     ],
     "user_needs": [
-      "数据不足 - 无法从错误提示中提取用户需求"
+      "数据不足 - 仅能从标题推测：高客单价行业需要有效的获客方案"
     ]
   },
   "content_rhythm": {
     "pace": "slow",
     "pace_variation": "low",
-    "d
-[ContentAnalyzer] 分析失败: SyntaxError: Unexpected non-whitespace character after JSON at position 899 (line 40 column 1)
+    "description": "数据不足 - 转录文本为错误提示，无法分析实际内容节奏。从标题看，可能是咨询引导类内容"
+  },
+  "overall_evaluation": {
+    "quality_score": 0,
+    "strengths": [
+      "标题明确行业定位（工厂制造业、门窗、全屋定制）",
+      "标题包含互动性问句（老板您是什么行业的？）",
+      "标签覆盖精准（#高客单价 #工厂制造业）"
+    ],
+    "weaknesses": [
+      "【致命问题】转录文本缺失 - 提供的是系统错误提示而非实际语音内容",
+      "无法评估视频实际质量 - 缺少核心分析依据",
+      "需要重新提供正确的语音转录文本才能进行有效分析"
+    ],
+    "suggestions": [
+      "请提供视频的真实语音转录内容",
+      "确保转录文本完整且准确",
+      "建议包含视
+[ContentAnalyzer] 原始响应（后200字符）: "
+}
+```
+
+**重要提示**：
+当前分析结果**无效**，因为您提供的"转录文本"实际上是一条错误提示信息：
+> "对不起，我无法处理音频内容。如果您有其他问题或需要文字方面的帮助，请告诉我。"
+
+这不是视频的真实内容。
+
+**请提供**：
+1. 视频中实际说的话（语音转文字）
+2. 完整的对话内容或独白内容
+3. 如果视频无语音，请说明是纯画面视频
+
+提供正确转录后，我将重新进行专业分析。
+[ContentAnalyzer] 分析失败: SyntaxError: Unexpected non-whitespace character after JSON at position 1121 (line 47 column 1)
     at JSON.parse (<anonymous>)
-    at parseAnalysisResponse (lib\ai\content-analyzer.ts:288:25)
-    at analyzeContentQuality (lib\ai\content-analyzer.ts:121:22)
-    at async (lib\ai\content-analyzer.ts:155:26)
-    at async analyzeContentQualityBatch (lib\ai\content-analyzer.ts:153:26)
+    at parseAnalysisResponse (lib\ai\content-analyzer.ts:289:25)
+    at analyzeContentQuality (lib\ai\content-analyzer.ts:120:22)
+    at async (lib\ai\content-analyzer.ts:154:26)
+    at async analyzeContentQualityBatch (lib\ai\content-analyzer.ts:152:26)
     at async analyzeContentsQuality (lib\ai\profile-generator.ts:140:27)
     at async generateMerchantProfile (lib\ai\profile-generator.ts:76:34)
     at async (app\api\merchants\[id]\profile\generate\route.ts:33:22)
-  286 |     }
-  287 |
-> 288 |     const parsed = JSON.parse(cleanedResponse.trim())
+  287 |     }
+  288 |
+> 289 |     const parsed = JSON.parse(cleanedResponse.trim())
       |                         ^
-  289 |
-  290 |     // 转换下划线命名为驼峰命名（兼容不同API返回格式）
-  291 |     const normalized = normalizeFieldNames(parsed)
-[ContentAnalyzer] 缺少 emotionalTrigger.primary，使用默认值"other"
-[ContentAnalyzer] 缺少 overallQuality.score，使用默认值50
-[ContentAnalyzer] 缺少 emotionalTrigger.primary，使用默认值"other"
-[ContentAnalyzer] 缺少 overallQuality.score，使用默认值50
+  290 |
+  291 |     // 调试：输出AI返回的完整JSON结构（仅在警告模式下）
+  292 |     if (process.env.DEBUG_CONTENT_ANALYZER) {
+[ContentAnalyzer] AI返回的顶层字段: ["opening_quality","emotion_points","pain_points","user_needs","content_rhythm","overall_assessment"]
+[ContentAnalyzer] AI返回的顶层字段: ["opening_quality","emotion_points","pain_points","user_needs","content_rhythm","overall_evaluation"]
 [ContentAnalyzer] 已处理 6/10
-[ContentAnalyzer] 缺少 emotionalTrigger.primary，使用默认值"other"
-[ContentAnalyzer] 缺少 overallQuality.score，使用默认值50
-[ContentAnalyzer] 缺少 emotionalTrigger.primary，使用默认值"other"
-[ContentAnalyzer] 缺少 overallQuality.score，使用默认值50
-[ContentAnalyzer] 缺少 emotionalTrigger.primary，使用默认值"other"
-[ContentAnalyzer] 缺少 overallQuality.score，使用默认值50
+[ContentAnalyzer] AI返回的顶层字段: ["opening_quality","emotion_points","pain_points","content_rhythm","overall_assessment"]
+[ContentAnalyzer] AI返回的顶层字段: ["opening_quality","emotion_points","pain_points","user_needs","content_rhythm","overall_evaluation"]
+[ContentAnalyzer] AI返回的顶层字段: ["opening_quality","emotion_points","pain_points","user_needs","content_rhythm","overall_evaluation"]
 [ContentAnalyzer] 已处理 9/10
-[ContentAnalyzer] 缺少 emotionalTrigger.primary，使用默认值"other"
-[ContentAnalyzer] 缺少 overallQuality.score，使用默认值50
+[ContentAnalyzer] AI返回的顶层字段: ["opening_quality","emotion_points","pain_points","user_needs","content_rhythm","overall_evaluation"]
 [ContentAnalyzer] 已处理 10/10
 [ProfileGenerator] AI分析完成，成功分析: 9 条
-[ProfileGenerator] Prompt长度: 6238
-[ProfileGenerator] AI响应长度: 1146
+[ProfileGenerator] Prompt长度: 9772
+[ProfileGenerator] AI响应长度: 1126
 [ProfileGenerator] Token使用: {
-  completion_tokens: 869,
-  prompt_tokens: 6573,
-  total_tokens: 7442,
+  completion_tokens: 857,
+  prompt_tokens: 10397,
+  total_tokens: 11254,
   prompt_tokens_details: {
     cached_tokens: 0,
     ephemeral_5m_input_tokens: 0,
@@ -109,4 +133,4 @@ prisma:query SELECT 1
 prisma:query INSERT INTO `main`.`merchant_profiles` (`id`, `merchantId`, `briefIntro`, `briefSellingPoints`, `briefUsageScenarios`, `briefAudienceProfile`, `briefBrandTone`, `aiGeneratedAt`, `aiModelUsed`, `aiTokenUsed`, `createdAt`, `updatedAt`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT  (`merchantId`) DO UPDATE SET `briefIntro` = ?, `briefSellingPoints` = ?, `briefUsageScenarios` = ?, `briefAudienceProfile` = ?, `briefBrandTone` = ?, `aiGeneratedAt` = ?, `aiModelUsed` = ?, `aiTokenUsed` = ?, `updatedAt` = ? WHERE (`main`.`merchant_profiles`.`merchantId` = ? AND 1=1) RETURNING `id` AS `id`, `merchantId` AS `merchantId`, `briefIntro` AS `briefIntro`, `briefSellingPoints` AS `briefSellingPoints`, `briefUsageScenarios` AS `briefUsageScenarios`, `briefAudienceProfile` AS `briefAudienceProfile`, `briefBrandTone` AS `briefBrandTone`, `manualBrief` AS `manualBrief`, `aiGeneratedAt` AS `aiGeneratedAt`, `aiModelUsed` AS `aiModelUsed`, `aiTokenUsed` AS `aiTokenUsed`, `customBackground` AS `customBackground`, `customOfflineInfo` AS `customOfflineInfo`, `customProductDetails` AS `customProductDetails`, `customDosAndDonts` AS `customDosAndDonts`, `manualNotes` AS `manualNotes`, `createdAt` AS `createdAt`, `updatedAt` AS `updatedAt`
 [ProfileGenerator] 档案已保存: cmi5wpt84000ewtr43mo6zktq
 [ProfileAPI] 档案生成成功
- POST /api/merchants/cmi5wp356000cwtr4yywunu8q/profile/generate 200 in 128402ms
+ POST /api/merchants/cmi5wp356000cwtr4yywunu8q/profile/generate 200 in 136342ms

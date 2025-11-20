@@ -3,7 +3,7 @@
  * POST /api/merchants/[id]/profile/generate - 生成或刷新AI档案
  */
 
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { generateMerchantProfile } from '@/lib/ai/profile-generator'
 import type { GenerateProfileResponse } from '@/types/merchant'
 import { createErrorResponse, generateRequestId } from '@/lib/api/error-handler'
@@ -13,6 +13,7 @@ import {
   error as apiError
 } from '@/lib/api/http-response'
 import { withMerchantAdminAuth } from '@/lib/api/merchant-auth'
+import { isTranscriptionRequiredError } from '@/lib/errors/transcription-errors'
 
 // POST /api/merchants/[id]/profile/generate - 生成或刷新AI档案
 export async function POST(
@@ -45,7 +46,22 @@ export async function POST(
     } catch (error: any) {
       console.error('[ProfileAPI] 生成失败:', error)
 
-      // 处理特定错误
+      // 1. 优先处理转录需求错误（返回202 Accepted）
+      if (isTranscriptionRequiredError(error)) {
+        console.warn('[ProfileAPI] 检测到转录需求:', error.toJSON())
+        return NextResponse.json(
+          {
+            success: false,
+            ...error.toJSON(),
+            hint: '请先转录缺失的内容，然后重新生成档案'
+          },
+          {
+            status: 202 // Accepted - 需要先完成转录
+          }
+        )
+      }
+
+      // 2. 处理其他特定错误
       if (error.message?.includes('商家不存在')) {
         return apiError('商家不存在', { status: 404 })
       }

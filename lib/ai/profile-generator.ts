@@ -15,6 +15,8 @@ import { calculateContentMetrics, getQualityLevel } from '@/lib/utils/content-me
 import { detectFraud } from '@/lib/utils/fraud-detection'
 import { analyzeContentQualityBatch } from '@/lib/ai/content-analyzer'
 import { buildLLMRequestAuto } from '@/lib/ai/request-builder'
+import { validateTranscriptsBatch, shouldTranscribeBeforeProfile } from '@/lib/utils/transcript-validator'
+import { TranscriptionRequiredError } from '@/lib/errors/transcription-errors'
 
 // 使用grok-4-fast模型(ZenMux API,速度快成本低)
 const MODEL_ID = 'anthropic/claude-sonnet-4.5'
@@ -69,6 +71,35 @@ export async function generateMerchantProfile(merchantId: string) {
 
     if (merchant.totalContentCount === 0) {
       throw new Error('商家暂无内容,无法生成档案')
+    }
+
+    // 1.5. 检查转录状态（新增）
+    console.info('[ProfileGenerator] 检查转录状态...')
+    const validationResult = validateTranscriptsBatch(
+      (merchant.contents || []).map(c => ({
+        id: c.id,
+        title: c.title,
+        transcript: c.transcript
+      }))
+    )
+
+    console.info('[ProfileGenerator] 转录状态:', {
+      total: validationResult.total,
+      valid: validationResult.validCount,
+      missing: validationResult.missingCount,
+      invalid: validationResult.invalidCount,
+      percentage: validationResult.missingPercentage.toFixed(1) + '%'
+    })
+
+    // 如果缺失比例≥30%，抛出TranscriptionRequiredError
+    if (shouldTranscribeBeforeProfile(validationResult, 30)) {
+      console.warn('[ProfileGenerator] 转录缺失过多，需要先转录')
+      throw new TranscriptionRequiredError({
+        total: validationResult.total,
+        missingCount: validationResult.needsTranscriptionCount,
+        missingPercentage: validationResult.missingPercentage,
+        contentsToTranscribe: validationResult.needsTranscription
+      })
     }
 
     // 2. AI分析TOP10内容质量（批量并发）
