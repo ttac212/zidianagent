@@ -17,7 +17,6 @@ import { buildLLMRequestAuto } from '@/lib/ai/request-builder'
 // 使用与档案生成相同的模型配置
 const MODEL_ID = 'anthropic/claude-sonnet-4.5'
 const API_BASE = process.env.ZENMUX_API_BASE || 'https://zenmux.ai/api/v1'
-const API_KEY = process.env.ZENMUX_API_KEY || ''
 
 /**
  * 内容质量分析结果
@@ -224,7 +223,9 @@ ${first50}
  * 调用LLM API
  */
 async function callLLMAPI(userPrompt: string) {
-  if (!API_KEY) {
+  const apiKey = process.env.ZENMUX_API_KEY || ''
+
+  if (!apiKey) {
     throw new Error('未配置ZENMUX_API_KEY')
   }
 
@@ -246,7 +247,7 @@ async function callLLMAPI(userPrompt: string) {
   const response = await fetch(`${API_BASE}/chat/completions`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${API_KEY}`,
+      'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(requestBody)
@@ -286,6 +287,14 @@ function parseAnalysisResponse(aiResponse: string): ContentQualityAnalysis {
     }
 
     const parsed = JSON.parse(cleanedResponse.trim())
+
+    // 调试：输出AI返回的完整JSON结构（仅在警告模式下）
+    if (process.env.DEBUG_CONTENT_ANALYZER) {
+      console.log('[ContentAnalyzer] AI返回的完整JSON:', JSON.stringify(parsed, null, 2))
+    }
+
+    // 调试：输出AI返回的原始字段名
+    console.log('[ContentAnalyzer] AI返回的顶层字段:', JSON.stringify(Object.keys(parsed)))
 
     // 转换下划线命名为驼峰命名（兼容不同API返回格式）
     const normalized = normalizeFieldNames(parsed)
@@ -366,28 +375,40 @@ function normalizeFieldNames(obj: any): any {
     'opening_quality': 'openingQuality',
     'emotional_trigger': 'emotionalTrigger',
     'emotional_points': 'emotionalTrigger',      // AI常用的变体
+    'emotion_points': 'emotionalTrigger',        // 新增：AI实际返回的字段名
     'pain_points': 'painPoints',
     'user_needs': 'userNeeds',
     'content_rhythm': 'contentRhythm',
     'overall_quality': 'overallQuality',
+    'overall_evaluation': 'overallQuality',      // AI有时返回这个
+    'overall_assessment': 'overallQuality',      // 新增：AI实际返回的字段名
 
     // 嵌套字段 - openingQuality
     'has_hook': 'hasHook',
+    'has_hook_elements': 'hasHook',              // AI返回的是has_hook_elements对象
     'hook_types': 'hookTypes',
-    'evaluation': 'reason',                       // AI返回evaluation而非reason
+    'hook_elements': 'hookElements',             // 保留原字段
+    'evaluation': 'reason',
+    'effectiveness_analysis': 'reason',          // AI有时返回这个
+    'effectiveness': 'reason',                   // 新增：AI实际返回的字段名
 
     // 嵌套字段 - emotionalTrigger
-    'primary_emotion': 'primary',                 // AI返回primary_emotion而非primary
-    'emotion_intensity': 'intensity',             // AI返回emotion_intensity而非intensity
+    'primary_emotion': 'primary',
+    'emotion_intensity': 'intensity',
+    'type': 'primary',                           // 新增：emotion_points数组元素中使用type
 
     // 嵌套字段 - painPoints/userNeeds
-    'user_pains': 'painPoints',                   // AI可能直接返回user_pains数组
+    'user_pains': 'painPoints',
 
     // 嵌套字段 - contentRhythm
-    'pace_variation': 'variety',                  // AI返回pace_variation而非variety
+    'pace_variation': 'variety',
+    'variation': 'variety',                      // 新增：AI实际返回的字段名
 
     // 嵌套字段 - overallQuality
-    'overall_score': 'score'                      // AI可能返回overall_score
+    'overall_score': 'score',
+    'quality_score': 'score',                    // 新增：AI实际返回的字段名
+    'strengths': 'strengths',                    // 保持不变
+    'weaknesses': 'weaknesses'                   // 保持不变
   }
 
   const result: any = {}
@@ -397,9 +418,27 @@ function normalizeFieldNames(obj: any): any {
     const normalizedKey = fieldMap[key] || key
     const value = obj[key]
 
+    // 特殊处理：emotion_points数组转换为单个对象
+    if (key === 'emotion_points' && Array.isArray(value) && value.length > 0) {
+      result[normalizedKey] = normalizeFieldNames(value[0])  // 取第一个情绪点
+      continue
+    }
+
+    // 特殊处理：has_hook_elements对象转换为布尔值
+    if (key === 'has_hook_elements' && typeof value === 'object') {
+      // 检查是否有任何hook元素为true
+      result[normalizedKey] = Object.values(value).some(v => v === true)
+      continue
+    }
+
     // 递归处理嵌套对象
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       result[normalizedKey] = normalizeFieldNames(value)
+    } else if (Array.isArray(value)) {
+      // 递归处理数组元素
+      result[normalizedKey] = value.map(item =>
+        item && typeof item === 'object' ? normalizeFieldNames(item) : item
+      )
     } else {
       result[normalizedKey] = value
     }

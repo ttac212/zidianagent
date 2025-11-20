@@ -5,6 +5,11 @@
  * npx tsx scripts/test-content-analyzer.ts
  */
 
+// 加载环境变量
+import dotenv from 'dotenv'
+import path from 'path'
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') })
+
 import { prisma } from '@/lib/prisma'
 import { analyzeContentQuality } from '@/lib/ai/content-analyzer'
 

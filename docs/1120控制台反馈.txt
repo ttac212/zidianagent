@@ -1,0 +1,112 @@
+[ProfileAPI] 开始生成档案: cmi5wp356000cwtr4yywunu8q
+[ProfileGenerator] 开始生成档案: cmi5wp356000cwtr4yywunu8q
+prisma:query SELECT `main`.`merchants`.`id`, `main`.`merchants`.`uid`, `main`.`merchants`.`name`, `main`.`merchants`.`description`, `main`.`merchants`.`categoryId`, `main`.`merchants`.`location`, `main`.`merchants`.`address`, `main`.`merchants`.`contactInfo`, `main`.`merchants`.`businessType`, `main`.`merchants`.`totalDiggCount`, `main`.`merchants`.`totalCommentCount`, `main`.`merchants`.`totalCollectCount`, `main`.`merchants`.`totalShareCount`, `main`.`merchants`.`totalEngagement`, `main`.`merchants`.`totalContentCount`, `main`.`merchants`.`followerCount`, `main`.`merchants`.`totalPlayCount`, `main`.`merchants`.`avgEngagementRate`, `main`.`merchants`.`dataSource`, `main`.`merchants`.`lastCollectedAt`, `main`.`merchants`.`monitoringEnabled`, `main`.`merchants`.`syncIntervalSeconds`, `main`.`merchants`.`nextSyncAt`, `main`.`merchants`.`status`, `main`.`merchants`.`isVerified`, `main`.`merchants`.`createdAt`, `main`.`merchants`.`updatedAt` FROM `main`.`merchants` WHERE (`main`.`merchants`.`id` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`merchant_contents`.`id`, `main`.`merchant_contents`.`merchantId`, `main`.`merchant_contents`.`externalId`, `main`.`merchant_contents`.`title`, `main`.`merchant_contents`.`content`, `main`.`merchant_contents`.`transcript`, `main`.`merchant_contents`.`contentType`, `main`.`merchant_contents`.`duration`, `main`.`merchant_contents`.`shareUrl`, `main`.`merchant_contents`.`hasTranscript`, `main`.`merchant_contents`.`diggCount`, `main`.`merchant_contents`.`commentCount`, `main`.`merchant_contents`.`collectCount`, `main`.`merchant_contents`.`shareCount`, `main`.`merchant_contents`.`totalEngagement`, `main`.`merchant_contents`.`playCount`, `main`.`merchant_contents`.`forwardCount`, `main`.`merchant_contents`.`likeRate`, `main`.`merchant_contents`.`commentRate`, `main`.`merchant_contents`.`completionRate`, `main`.`merchant_contents`.`avgWatchDuration`, `main`.`merchant_contents`.`isSuspicious`, `main`.`merchant_contents`.`suspiciousReason`, `main`.`merchant_contents`.`tags`, `main`.`merchant_contents`.`textExtra`, `main`.`merchant_contents`.`publishedAt`, `main`.`merchant_contents`.`collectedAt`, `main`.`merchant_contents`.`externalCreatedAt`, `main`.`merchant_contents`.`createdAt`, `main`.`merchant_contents`.`updatedAt` FROM `main`.`merchant_contents` WHERE `main`.`merchant_contents`.`merchantId` IN (?) ORDER BY `main`.`merchant_contents`.`diggCount` DESC, `main`.`merchant_contents`.`commentCount` DESC, `main`.`merchant_contents`.`collectCount` DESC LIMIT ? OFFSET ?
+[ProfileGenerator] 开始AI内容质量分析...
+[ContentAnalyzer] 批量分析: 10/10 条有效内容
+prisma:query PRAGMA journal_mode=WAL
+prisma:query PRAGMA cache_size=-16000
+prisma:query PRAGMA synchronous=NORMAL
+prisma:query PRAGMA busy_timeout=30000
+prisma:query PRAGMA temp_store=memory
+prisma:query PRAGMA wal_autocheckpoint=1000
+prisma:query PRAGMA foreign_keys=ON
+[ContentAnalyzer] 缺少 emotionalTrigger.primary，使用默认值"other"
+[ContentAnalyzer] 缺少 overallQuality.score，使用默认值50
+[ContentAnalyzer] 缺少 emotionalTrigger.primary，使用默认值"other"
+[ContentAnalyzer] 缺少 overallQuality.score，使用默认值50
+[ContentAnalyzer] 缺少 emotionalTrigger.primary，使用默认值"other"
+[ContentAnalyzer] 缺少 overallQuality.score，使用默认值50
+[ContentAnalyzer] 已处理 3/10
+[ContentAnalyzer] 解析失败: SyntaxError: Unexpected non-whitespace character after JSON at position 899 (line 40 column 1)
+    at JSON.parse (<anonymous>)
+    at parseAnalysisResponse (lib\ai\content-analyzer.ts:288:25)
+    at analyzeContentQuality (lib\ai\content-analyzer.ts:121:22)
+    at async (lib\ai\content-analyzer.ts:155:26)
+    at async analyzeContentQualityBatch (lib\ai\content-analyzer.ts:153:26)
+    at async analyzeContentsQuality (lib\ai\profile-generator.ts:140:27)
+    at async generateMerchantProfile (lib\ai\profile-generator.ts:76:34)
+    at async (app\api\merchants\[id]\profile\generate\route.ts:33:22)
+  286 |     }
+  287 |
+> 288 |     const parsed = JSON.parse(cleanedResponse.trim())
+      |                         ^
+  289 |
+  290 |     // 转换下划线命名为驼峰命名（兼容不同API返回格式）
+  291 |     const normalized = normalizeFieldNames(parsed)
+[ContentAnalyzer] 原始响应: ```json
+{
+  "opening_quality": {
+    "score": 0,
+    "has_hook": false,
+    "hook_types": [],
+    "evaluation": "数据不足 - 转录文本为系统错误提示，无法获取实际视频内容进行分析"
+  },
+  "emotional_points": {
+    "primary_emotion": "other",
+    "emotion_intensity": 0,
+    "description": "数据不足 - 无有效转录文本，无法识别情绪点"
+  },
+  "pain_points": {
+    "user_pains": [
+      "数据不足 - 无法从错误提示中提取用户痛点"
+    ],
+    "user_needs": [
+      "数据不足 - 无法从错误提示中提取用户需求"
+    ]
+  },
+  "content_rhythm": {
+    "pace": "slow",
+    "pace_variation": "low",
+    "d
+[ContentAnalyzer] 分析失败: SyntaxError: Unexpected non-whitespace character after JSON at position 899 (line 40 column 1)
+    at JSON.parse (<anonymous>)
+    at parseAnalysisResponse (lib\ai\content-analyzer.ts:288:25)
+    at analyzeContentQuality (lib\ai\content-analyzer.ts:121:22)
+    at async (lib\ai\content-analyzer.ts:155:26)
+    at async analyzeContentQualityBatch (lib\ai\content-analyzer.ts:153:26)
+    at async analyzeContentsQuality (lib\ai\profile-generator.ts:140:27)
+    at async generateMerchantProfile (lib\ai\profile-generator.ts:76:34)
+    at async (app\api\merchants\[id]\profile\generate\route.ts:33:22)
+  286 |     }
+  287 |
+> 288 |     const parsed = JSON.parse(cleanedResponse.trim())
+      |                         ^
+  289 |
+  290 |     // 转换下划线命名为驼峰命名（兼容不同API返回格式）
+  291 |     const normalized = normalizeFieldNames(parsed)
+[ContentAnalyzer] 缺少 emotionalTrigger.primary，使用默认值"other"
+[ContentAnalyzer] 缺少 overallQuality.score，使用默认值50
+[ContentAnalyzer] 缺少 emotionalTrigger.primary，使用默认值"other"
+[ContentAnalyzer] 缺少 overallQuality.score，使用默认值50
+[ContentAnalyzer] 已处理 6/10
+[ContentAnalyzer] 缺少 emotionalTrigger.primary，使用默认值"other"
+[ContentAnalyzer] 缺少 overallQuality.score，使用默认值50
+[ContentAnalyzer] 缺少 emotionalTrigger.primary，使用默认值"other"
+[ContentAnalyzer] 缺少 overallQuality.score，使用默认值50
+[ContentAnalyzer] 缺少 emotionalTrigger.primary，使用默认值"other"
+[ContentAnalyzer] 缺少 overallQuality.score，使用默认值50
+[ContentAnalyzer] 已处理 9/10
+[ContentAnalyzer] 缺少 emotionalTrigger.primary，使用默认值"other"
+[ContentAnalyzer] 缺少 overallQuality.score，使用默认值50
+[ContentAnalyzer] 已处理 10/10
+[ProfileGenerator] AI分析完成，成功分析: 9 条
+[ProfileGenerator] Prompt长度: 6238
+[ProfileGenerator] AI响应长度: 1146
+[ProfileGenerator] Token使用: {
+  completion_tokens: 869,
+  prompt_tokens: 6573,
+  total_tokens: 7442,
+  prompt_tokens_details: {
+    cached_tokens: 0,
+    ephemeral_5m_input_tokens: 0,
+    ephemeral_1h_input_tokens: 0,
+    web_search: 0,
+    cacheCreationInputTokens: 0
+  }
+}
+prisma:query SELECT 1
+prisma:query INSERT INTO `main`.`merchant_profiles` (`id`, `merchantId`, `briefIntro`, `briefSellingPoints`, `briefUsageScenarios`, `briefAudienceProfile`, `briefBrandTone`, `aiGeneratedAt`, `aiModelUsed`, `aiTokenUsed`, `createdAt`, `updatedAt`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT  (`merchantId`) DO UPDATE SET `briefIntro` = ?, `briefSellingPoints` = ?, `briefUsageScenarios` = ?, `briefAudienceProfile` = ?, `briefBrandTone` = ?, `aiGeneratedAt` = ?, `aiModelUsed` = ?, `aiTokenUsed` = ?, `updatedAt` = ? WHERE (`main`.`merchant_profiles`.`merchantId` = ? AND 1=1) RETURNING `id` AS `id`, `merchantId` AS `merchantId`, `briefIntro` AS `briefIntro`, `briefSellingPoints` AS `briefSellingPoints`, `briefUsageScenarios` AS `briefUsageScenarios`, `briefAudienceProfile` AS `briefAudienceProfile`, `briefBrandTone` AS `briefBrandTone`, `manualBrief` AS `manualBrief`, `aiGeneratedAt` AS `aiGeneratedAt`, `aiModelUsed` AS `aiModelUsed`, `aiTokenUsed` AS `aiTokenUsed`, `customBackground` AS `customBackground`, `customOfflineInfo` AS `customOfflineInfo`, `customProductDetails` AS `customProductDetails`, `customDosAndDonts` AS `customDosAndDonts`, `manualNotes` AS `manualNotes`, `createdAt` AS `createdAt`, `updatedAt` AS `updatedAt`
+[ProfileGenerator] 档案已保存: cmi5wpt84000ewtr43mo6zktq
+[ProfileAPI] 档案生成成功
+ POST /api/merchants/cmi5wp356000cwtr4yywunu8q/profile/generate 200 in 128402ms
