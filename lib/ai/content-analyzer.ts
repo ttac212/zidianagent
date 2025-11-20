@@ -279,11 +279,44 @@ function parseAnalysisResponse(aiResponse: string): ContentQualityAnalysis {
     // 清理可能的markdown代码块包裹
     let cleanedResponse = aiResponse.trim()
 
-    // 移除 ```json 和 ``` 包裹
-    if (cleanedResponse.startsWith('```json')) {
-      cleanedResponse = cleanedResponse.replace(/^```json\n?/, '').replace(/\n?```$/, '')
-    } else if (cleanedResponse.startsWith('```')) {
-      cleanedResponse = cleanedResponse.replace(/^```\n?/, '').replace(/\n?```$/, '')
+    // 方法1: 移除 ```json 和 ``` 包裹，并提取第一个完整的JSON块
+    if (cleanedResponse.includes('```json')) {
+      const jsonBlockMatch = cleanedResponse.match(/```json\s*\n?([\s\S]*?)\n?```/)
+      if (jsonBlockMatch && jsonBlockMatch[1]) {
+        cleanedResponse = jsonBlockMatch[1].trim()
+      } else {
+        // fallback: 简单移除
+        cleanedResponse = cleanedResponse.replace(/^```json\n?/, '').replace(/\n?```[\s\S]*$/, '')
+      }
+    } else if (cleanedResponse.includes('```')) {
+      const codeBlockMatch = cleanedResponse.match(/```\s*\n?([\s\S]*?)\n?```/)
+      if (codeBlockMatch && codeBlockMatch[1]) {
+        cleanedResponse = codeBlockMatch[1].trim()
+      } else {
+        // fallback: 简单移除
+        cleanedResponse = cleanedResponse.replace(/^```\n?/, '').replace(/\n?```[\s\S]*$/, '')
+      }
+    }
+
+    // 方法2: 如果仍然包含非JSON内容，尝试提取第一个完整的JSON对象
+    if (cleanedResponse.includes('{')) {
+      const firstBrace = cleanedResponse.indexOf('{')
+      let braceCount = 0
+      let endIndex = -1
+
+      for (let i = firstBrace; i < cleanedResponse.length; i++) {
+        if (cleanedResponse[i] === '{') braceCount++
+        if (cleanedResponse[i] === '}') braceCount--
+
+        if (braceCount === 0) {
+          endIndex = i + 1
+          break
+        }
+      }
+
+      if (endIndex > firstBrace) {
+        cleanedResponse = cleanedResponse.substring(firstBrace, endIndex)
+      }
     }
 
     const parsed = JSON.parse(cleanedResponse.trim())
