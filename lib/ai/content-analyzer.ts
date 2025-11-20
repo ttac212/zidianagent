@@ -297,7 +297,10 @@ function parseAnalysisResponse(aiResponse: string): ContentQualityAnalysis {
 
   } catch (error) {
     console.error('[ContentAnalyzer] 解析失败:', error)
-    console.error('[ContentAnalyzer] 原始响应:', aiResponse.substring(0, 500))
+    // 输出更多调试信息
+    console.error('[ContentAnalyzer] 响应长度:', aiResponse.length)
+    console.error('[ContentAnalyzer] 原始响应（前1000字符）:', aiResponse.substring(0, 1000))
+    console.error('[ContentAnalyzer] 原始响应（后200字符）:', aiResponse.substring(Math.max(0, aiResponse.length - 200)))
     throw error
   }
 }
@@ -357,15 +360,34 @@ function validateAndFillDefaults(data: any): ContentQualityAnalysis {
 function normalizeFieldNames(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj
 
-  // 字段名映射表
+  // 字段名映射表（完整版，兼容多种AI返回格式）
   const fieldMap: Record<string, string> = {
+    // 顶层字段
     'opening_quality': 'openingQuality',
     'emotional_trigger': 'emotionalTrigger',
+    'emotional_points': 'emotionalTrigger',      // AI常用的变体
     'pain_points': 'painPoints',
     'user_needs': 'userNeeds',
     'content_rhythm': 'contentRhythm',
     'overall_quality': 'overallQuality',
-    'has_hook': 'hasHook'
+
+    // 嵌套字段 - openingQuality
+    'has_hook': 'hasHook',
+    'hook_types': 'hookTypes',
+    'evaluation': 'reason',                       // AI返回evaluation而非reason
+
+    // 嵌套字段 - emotionalTrigger
+    'primary_emotion': 'primary',                 // AI返回primary_emotion而非primary
+    'emotion_intensity': 'intensity',             // AI返回emotion_intensity而非intensity
+
+    // 嵌套字段 - painPoints/userNeeds
+    'user_pains': 'painPoints',                   // AI可能直接返回user_pains数组
+
+    // 嵌套字段 - contentRhythm
+    'pace_variation': 'variety',                  // AI返回pace_variation而非variety
+
+    // 嵌套字段 - overallQuality
+    'overall_score': 'score'                      // AI可能返回overall_score
   }
 
   const result: any = {}
