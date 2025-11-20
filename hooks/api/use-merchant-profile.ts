@@ -43,26 +43,65 @@ export function useMerchantProfile(merchantId: string | undefined) {
 }
 
 /**
+ * 转录需求响应类型
+ */
+export interface TranscriptionRequiredResponse {
+  requiresTranscription: true
+  error: 'TRANSCRIPTION_REQUIRED'
+  message: string
+  statusCode: 202
+  data: {
+    total: number
+    missingCount: number
+    missingPercentage: number
+    contentsToTranscribe: Array<{
+      id: string
+      title: string
+      reason: string
+    }>
+  }
+  hint: string
+}
+
+/**
+ * 生成档案响应类型（包括正常响应和转录需求响应）
+ */
+export type GenerateProfileResult = GenerateProfileResponse | TranscriptionRequiredResponse
+
+/**
  * 生成或刷新档案
  */
 export function useGenerateProfile(merchantId: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<GenerateProfileResult> => {
       const response = await fetch(`/api/merchants/${merchantId}/profile/generate`, {
         method: 'POST'
       })
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.message || '生成档案失败')
+      const data = await response.json()
+
+      // 处理202状态码 - 需要先转录
+      if (response.status === 202) {
+        return {
+          requiresTranscription: true,
+          ...data
+        } as TranscriptionRequiredResponse
       }
 
-      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.message || '生成档案失败')
+      }
+
       return data.data as GenerateProfileResponse
     },
     onSuccess: (data) => {
+      // 只有成功生成档案时才更新缓存（跳过转录需求响应）
+      if ('requiresTranscription' in data && data.requiresTranscription) {
+        return
+      }
+
       // 更新缓存
       queryClient.setQueryData(
         profileKeys.detail(merchantId),
@@ -70,7 +109,7 @@ export function useGenerateProfile(merchantId: string) {
           if (!old) return old
           return {
             ...old,
-            profile: data.profile
+            profile: (data as GenerateProfileResponse).profile
           }
         }
       )

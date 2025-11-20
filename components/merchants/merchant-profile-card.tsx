@@ -35,6 +35,9 @@ export function MerchantProfileCard({
 }: MerchantProfileCardProps) {
   const [isExpanded, setIsExpanded] = useState(true)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isTranscribing, setIsTranscribing] = useState(false)
+  const [transcribeProgress, setTranscribeProgress] = useState({ processed: 0, total: 0 })
+  const [eventSource, setEventSource] = useState<EventSource | null>(null)
 
   const { data, isLoading, error } = useMerchantProfile(merchantId)
   const generateMutation = useGenerateProfile(merchantId)
@@ -43,6 +46,66 @@ export function MerchantProfileCard({
 
   // 解析JSON字段
   const parsed = profile ? parseStoredProfile(profile) : { brief: null, source: 'none' as const }
+
+  /**
+   * 自动转录流程
+   */
+  const handleAutoTranscribe = async (contentIds: string[]): Promise<boolean> => {
+    return new Promise((resolve, reject) => {
+      setIsTranscribing(true)
+      setTranscribeProgress({ processed: 0, total: 0 })
+
+      // 创建 SSE 连接 - 使用'force'模式确保转录无效文本
+      const url = `/api/merchants/${merchantId}/contents/batch-transcribe/stream?contentIds=${contentIds.join(',')}&mode=force&concurrent=100`
+      const es = new EventSource(url)
+
+      setEventSource(es)
+
+      es.addEventListener('start', (e) => {
+        const data = JSON.parse(e.data)
+        setTranscribeProgress({ processed: 0, total: data.total })
+        toast.info(`检测到 ${data.total} 条内容需要转录，正在自动转录...`)
+      })
+
+      es.addEventListener('item', (e) => {
+        const data = JSON.parse(e.data)
+        setTranscribeProgress({
+          total: data.progress.total,
+          processed: data.progress.processed
+        })
+      })
+
+      es.addEventListener('done', (e) => {
+        const data = JSON.parse(e.data)
+        setIsTranscribing(false)
+        es.close()
+        setEventSource(null)
+
+        toast.success(
+          `转录完成！成功: ${data.summary.processed}, 失败: ${data.summary.failed}`
+        )
+
+        resolve(true)
+      })
+
+      es.addEventListener('error', (e: any) => {
+        const data = e.data ? JSON.parse(e.data) : { message: '连接错误' }
+        setIsTranscribing(false)
+        es.close()
+        setEventSource(null)
+        toast.error(`转录失败: ${data.message}`)
+        reject(new Error(data.message))
+      })
+
+      es.onerror = () => {
+        setIsTranscribing(false)
+        es.close()
+        setEventSource(null)
+        toast.error('转录连接断开')
+        reject(new Error('转录连接断开'))
+      }
+    })
+  }
 
   const handleGenerate = async () => {
     if (totalContentCount === 0) {
@@ -53,7 +116,27 @@ export function MerchantProfileCard({
     toast.loading('正在生成档案,预计10-15秒...', { id: 'generate-profile' })
 
     try {
-      await generateMutation.mutateAsync()
+      const result = await generateMutation.mutateAsync()
+
+      // 检测是否需要转录
+      if ('requiresTranscription' in result && result.requiresTranscription) {
+        toast.dismiss('generate-profile')
+
+        const contentIds = result.data.contentsToTranscribe.map(c => c.id)
+        toast.info(
+          `发现 ${result.data.missingCount} 条内容缺少有效转录（${result.data.missingPercentage.toFixed(1)}%），正在自动转录...`,
+          { duration: 5000 }
+        )
+
+        // 执行自动转录
+        await handleAutoTranscribe(contentIds)
+
+        // 转录完成后，递归重试档案生成
+        toast.loading('转录完成，正在重新生成档案...', { id: 'generate-profile' })
+        return handleGenerate()
+      }
+
+      // 成功生成档案
       toast.success('档案已生成', { id: 'generate-profile' })
     } catch (error: any) {
       toast.error(error.message || '生成失败', { id: 'generate-profile' })
@@ -113,12 +196,14 @@ export function MerchantProfileCard({
           ) : (
             <Button
               onClick={handleGenerate}
-              disabled={generateMutation.isPending || !isAdmin}
+              disabled={generateMutation.isPending || isTranscribing || !isAdmin}
             >
-              {generateMutation.isPending ? (
+              {generateMutation.isPending || isTranscribing ? (
                 <>
                   <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  生成中...
+                  {isTranscribing
+                    ? `转录中... (${transcribeProgress.processed}/${transcribeProgress.total})`
+                    : '生成中...'}
                 </>
               ) : (
                 <>
@@ -158,11 +243,12 @@ export function MerchantProfileCard({
                     variant="outline"
                     size="sm"
                     onClick={handleGenerate}
-                    disabled={generateMutation.isPending}
+                    disabled={generateMutation.isPending || isTranscribing}
+                    title={isTranscribing ? `转录中 ${transcribeProgress.processed}/${transcribeProgress.total}` : '刷新档案'}
                   >
                     <RefreshCw
                       className={`h-4 w-4 ${
-                        generateMutation.isPending ? 'animate-spin' : ''
+                        generateMutation.isPending || isTranscribing ? 'animate-spin' : ''
                       }`}
                     />
                   </Button>
