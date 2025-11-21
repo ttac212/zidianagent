@@ -146,8 +146,7 @@ function SmartChatCenterInternal({
   React.useEffect(() => {
     const savedSettings = loadChatSettings()
 
-    if (savedSettings.creativeMode !== undefined ||
-        savedSettings.reasoning_effort !== undefined ||
+    if (savedSettings.reasoning_effort !== undefined ||
         savedSettings.reasoning !== undefined) {
       dispatch({
         type: 'SET_SETTINGS',
@@ -171,7 +170,6 @@ function SmartChatCenterInternal({
 
     // 只有在字段有值时才保存（避免保存undefined覆盖已有设置）
     const hasValidSettings =
-      composerSettings.creativeMode !== undefined ||
       composerSettings.reasoning_effort !== undefined ||
       composerSettings.reasoning !== undefined
 
@@ -179,7 +177,7 @@ function SmartChatCenterInternal({
       saveChatSettings(composerSettings)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [composerSettings.creativeMode, composerSettings.reasoning_effort, composerSettings.reasoning])
+  }, [composerSettings.reasoning_effort, composerSettings.reasoning])
 
   // 对话切换时重置本地状态，等待最新数据同步
   React.useEffect(() => {

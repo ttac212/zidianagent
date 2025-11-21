@@ -54,9 +54,10 @@ export async function GET(
       }
     }
 
-    const windowSize = takeParam ?? (beforeId ? CHAT_HISTORY_CONFIG.initialWindow : undefined)
+    // 默认应用初始窗口大小，确保首次加载不会一次性返回所有消息
+    const windowSize = takeParam ?? CHAT_HISTORY_CONFIG.initialWindow
     let hasMoreBefore = false
-    
+
     if (beforeId) {
       const messageExists = await prisma.message.findFirst({
         where: { id: beforeId, conversationId: id },
@@ -96,7 +97,8 @@ export async function GET(
             metadata: true,
             createdAt: true,
           },
-          ...(windowSize ? { take: windowSize + 1 } : {}),
+          // 始终获取 windowSize + 1 条消息，用于判断是否还有更多
+          take: windowSize + 1,
           ...(beforeId ? { cursor: { id: beforeId }, skip: 1 } : {})
         } : false,
         _count: {
@@ -106,16 +108,16 @@ export async function GET(
         }
       }
     })
-    
+
     if (!conversation) {
       return notFound('对话不存在')
     }
-    
+
     // 验证用户权限
     if (conversation.userId !== userId) {
       return forbidden('无权限访问此对话')
     }
-    
+
     // 检查用户状态
     if (conversation.user.status === 'DELETED') {
       return notFound('对话所属用户已被删除')
@@ -125,8 +127,11 @@ export async function GET(
     let messages = conversation.messages as any[] | undefined
 
     if (includeMessages && messages) {
-      if (windowSize && messages.length > windowSize) {
+      // 基于实际获取的消息数量判断是否还有更多
+      // 如果获取到的消息数量 > windowSize，说明还有更多未读取的消息
+      if (messages.length > windowSize) {
         hasMoreBefore = true
+        // 裁剪到 windowSize，丢弃多余的第 (windowSize + 1) 条
         messages = messages.slice(0, windowSize)
       }
 

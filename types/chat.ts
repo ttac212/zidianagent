@@ -101,7 +101,6 @@ export interface ChatSettings {
   contextAware: boolean
   maxTokens?: number
   systemPrompt?: string
-  creativeMode?: boolean
   reasoning_effort?: 'low' | 'medium' | 'high'  // ZenMux 推理强度（仅推理模型支持）
   reasoning?: {
     enabled: boolean  // 是否启用推理模式

@@ -4,20 +4,24 @@
 
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
+import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   useMerchantProfile,
-  useGenerateProfile
+  useGenerateProfile,
+  isTranscriptionRequired
 } from '@/hooks/api/use-merchant-profile'
+import { useBatchTranscription } from '@/hooks/api/use-batch-transcription'
 import { ProfileAISection } from './profile-ai-section'
 import { ProfileCustomSection } from './profile-custom-section'
 import { ProfileEditDialog } from './profile-edit-dialog'
+import { TranscriptionProgressPanel } from './transcription-progress-panel'
 import { parseStoredProfile } from '@/lib/ai/profile-parser'
-import { ChevronDown, ChevronUp, RefreshCw, Edit, Sparkles } from 'lucide-react'
+import { ChevronDown, ChevronUp, RefreshCw, Edit, Sparkles, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 
 const MAX_GENERATE_ATTEMPTS = 2
@@ -37,143 +41,31 @@ export function MerchantProfileCard({
 }: MerchantProfileCardProps) {
   const [isExpanded, setIsExpanded] = useState(true)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [isTranscribing, setIsTranscribing] = useState(false)
-  const [transcribeProgress, setTranscribeProgress] = useState({ processed: 0, total: 0 })
-  const [eventSource, setEventSource] = useState<EventSource | null>(null)
-  const transcribeRejectRef = useRef<((error: Error) => void) | null>(null)
 
   const { data, isLoading, error } = useMerchantProfile(merchantId)
   const generateMutation = useGenerateProfile(merchantId)
 
-  // 组件卸载或 EventSource 变更时确保关闭 SSE，避免内存泄漏
-  useEffect(() => {
-    return () => {
-      if (eventSource) {
-        eventSource.close()
-      }
-      if (transcribeRejectRef.current) {
-        transcribeRejectRef.current(new Error('转录已取消'))
-        transcribeRejectRef.current = null
-      }
-    }
-  }, [eventSource])
+  // 使用新的批量转录hook
+  const {
+    startTranscription,
+    cancelTranscription,
+    isTranscribing,
+    progress,
+    error: transcriptionError
+  } = useBatchTranscription(merchantId, {
+    mode: 'force',
+    concurrent: 100,
+    showToast: true
+  })
 
   const profile = data?.profile
 
   // 解析JSON字段
   const parsed = profile ? parseStoredProfile(profile) : { brief: null, source: 'none' as const }
 
-  type TranscribeSummary = {
-    total: number
-    processed: number
-    failed: number
-    skipped: number
-    failedItems: Array<{
-      id: string
-      title?: string
-      error?: string
-    }>
-  }
-
   /**
-   * 自动转录流程
+   * 生成档案（支持自动转录和重试）
    */
-  const handleAutoTranscribe = async (contentIds: string[]): Promise<TranscribeSummary> => {
-    return new Promise((resolve, reject) => {
-      setIsTranscribing(true)
-      setTranscribeProgress({ processed: 0, total: 0 })
-      transcribeRejectRef.current = reject
-
-      const url = `/api/merchants/${merchantId}/contents/batch-transcribe/stream?contentIds=${contentIds.join(',')}&mode=force&concurrent=100`
-      const es = new EventSource(url)
-      const failedItems: TranscribeSummary['failedItems'] = []
-      let closed = false
-      const cleanup = () => {
-        if (closed) return
-        es.close()
-        setEventSource(null)
-        setIsTranscribing(false)
-        closed = true
-        transcribeRejectRef.current = null
-      }
-
-      setEventSource(es)
-
-      es.addEventListener('start', (e) => {
-        const data = JSON.parse(e.data)
-        setTranscribeProgress({ processed: 0, total: data.total })
-        toast.info(`检测到 ${data.total} 条内容需要转录，正在自动转录...`)
-      })
-
-      es.addEventListener('item', (e) => {
-        const data = JSON.parse(e.data)
-        setTranscribeProgress({
-          total: data.progress.total,
-          processed: data.progress.processed
-        })
-
-        if (data.status === 'failed') {
-          failedItems.push({
-            id: data.contentId,
-            title: data.title,
-            error: data.error
-          })
-        }
-      })
-
-      es.addEventListener('done', (e) => {
-        const data = JSON.parse(e.data)
-        const summary = {
-          ...(data.summary as Omit<TranscribeSummary, 'failedItems'>),
-          failedItems
-        }
-        cleanup()
-
-        if (summary.failed > 0) {
-          const preview = summary.failedItems.slice(0, 3).map((item) => item.title || item.id).join('、')
-          toast.info(
-            `转录完成，成功: ${summary.processed}, 失败: ${summary.failed}, 跳过: ${summary.skipped}${preview ? `。失败示例：${preview}` : ''}`
-          )
-        } else {
-          toast.success(
-            `转录完成，成功: ${summary.processed}, 跳过: ${summary.skipped}`
-          )
-        }
-
-        resolve(summary)
-      })
-
-      const handleError = (message: string) => {
-        cleanup()
-        toast.error(`转录失败: ${message}`)
-        reject(new Error(message))
-      }
-
-      es.addEventListener('error', (e: any) => {
-        const data = e.data ? JSON.parse(e.data) : { message: '连接错误' }
-        handleError(data.message || '转录失败')
-      })
-
-      es.onerror = () => {
-        handleError('转录连接中断')
-      }
-    })
-  }
-
-  // 手动取消自动转录
-  const handleCancelTranscribe = () => {
-    if (eventSource) {
-      eventSource.close()
-      setEventSource(null)
-    }
-    if (isTranscribing) {
-      setIsTranscribing(false)
-      transcribeRejectRef.current?.(new Error('已取消自动转录'))
-      transcribeRejectRef.current = null
-      toast.info('已取消自动转录')
-    }
-  }
-
   const handleGenerate = async (attempt = 1) => {
     if (attempt > MAX_GENERATE_ATTEMPTS) {
       toast.error('转录后仍检测到缺失，请手动补齐转录后再试')
@@ -190,8 +82,8 @@ export function MerchantProfileCard({
     try {
       const result = await generateMutation.mutateAsync()
 
-      // 检查是否需要转录
-      if ('requiresTranscription' in result && result.requiresTranscription) {
+      // 检查是否需要转录（使用类型守卫）
+      if (isTranscriptionRequired(result)) {
         toast.dismiss('generate-profile')
 
         if (attempt >= MAX_GENERATE_ATTEMPTS) {
@@ -205,20 +97,24 @@ export function MerchantProfileCard({
           { duration: 5000 }
         )
 
-        let summary: TranscribeSummary | null = null
+        // 使用新的批量转录hook
         try {
-          summary = await handleAutoTranscribe(contentIds)
+          const summary = await startTranscription(contentIds)
+
+          if (summary.failed > 0) {
+            toast.info(`已有 ${summary.failed} 条转录失败，其他内容将继续生成`)
+          }
+
+          toast.loading('转录完成，正在重新生成档案...', { id: 'generate-profile' })
+          return handleGenerate(attempt + 1)
         } catch (err: any) {
-          toast.error(err?.message || '自动转录失败，请稍后重试')
+          // 用户取消或转录失败
+          toast.dismiss('generate-profile')
+          if (!err?.message?.includes('取消')) {
+            toast.error(err?.message || '自动转录失败，请稍后重试')
+          }
           return
         }
-
-        if (summary && summary.failed > 0) {
-          toast.info(`已有 ${summary.failed} 条转录失败，其他内容将继续生成`)
-        }
-
-        toast.loading('转录完成，正在重新生成档案...', { id: 'generate-profile' })
-        return handleGenerate(attempt + 1)
       }
 
       // 成功生成档案
@@ -276,13 +172,24 @@ export function MerchantProfileCard({
             为商家生成专属的创作简报,包含爆款分析、创作建议等内容
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* 转录进度面板 */}
+          {isTranscribing && (
+            <TranscriptionProgressPanel
+              progress={progress}
+              isTranscribing={isTranscribing}
+              error={transcriptionError}
+              onCancel={cancelTranscription}
+            />
+          )}
+
+          {/* 生成按钮 */}
           {totalContentCount === 0 ? (
             <div className="text-sm text-muted-foreground">
               暂无内容,无法生成档案。请先添加商家内容。
             </div>
           ) : (
-            <>
+            <div className="flex items-center gap-2 flex-wrap">
               <Button
                 onClick={handleGenerateClick}
                 disabled={generateMutation.isPending || isTranscribing || !isAdmin}
@@ -291,7 +198,7 @@ export function MerchantProfileCard({
                   <>
                     <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                     {isTranscribing
-                      ? `转录中... (${transcribeProgress.processed}/${transcribeProgress.total})`
+                      ? `转录中... (${progress.current}/${progress.total})`
                       : '生成中...'}
                   </>
                 ) : (
@@ -301,7 +208,12 @@ export function MerchantProfileCard({
                   </>
                 )}
               </Button>
-            </>
+              {isTranscribing && (
+                <Button variant="outline" onClick={cancelTranscription}>
+                  取消转录
+                </Button>
+              )}
+            </div>
           )}
           {!isAdmin && (
             <p className="text-xs text-muted-foreground mt-2">
@@ -333,7 +245,7 @@ export function MerchantProfileCard({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={handleCancelTranscribe}
+                      onClick={cancelTranscription}
                     >
                       取消转录
                     </Button>
@@ -343,7 +255,7 @@ export function MerchantProfileCard({
                     size="sm"
                     onClick={handleGenerateClick}
                     disabled={generateMutation.isPending || isTranscribing}
-                    title={isTranscribing ? `转录中 ${transcribeProgress.processed}/${transcribeProgress.total}` : '刷新档案'}
+                    title={isTranscribing ? `转录中 ${progress.current}/${progress.total}` : '刷新档案'}
                   >
                     <RefreshCw
                       className={`h-4 w-4 ${
@@ -354,7 +266,18 @@ export function MerchantProfileCard({
                   <Button
                     variant="outline"
                     size="sm"
+                    asChild
+                    title="文档模式编辑"
+                  >
+                    <Link href={`/merchants/${merchantId}/profile/document`}>
+                      <FileText className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => setIsEditDialogOpen(true)}
+                    title="快速编辑"
                   >
                     <Edit className="h-4 w-4" />
                   </Button>
@@ -382,6 +305,16 @@ export function MerchantProfileCard({
 
         {isExpanded && (
           <CardContent className="space-y-6">
+            {/* 转录进度面板 */}
+            {isTranscribing && (
+              <TranscriptionProgressPanel
+                progress={progress}
+                isTranscribing={isTranscribing}
+                error={transcriptionError}
+                onCancel={cancelTranscription}
+              />
+            )}
+
             {/* AI生成内容 */}
             <ProfileAISection
               merchantId={merchantId}

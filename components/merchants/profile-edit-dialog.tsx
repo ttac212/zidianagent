@@ -62,9 +62,14 @@ export function ProfileEditDialog({
   const [manualAudienceInterests, setManualAudienceInterests] = useState(
     (parsedBrief?.audienceProfile?.interests || []).join(', ')
   )
-  const [manualAudienceBehaviors, setManualAudienceBehaviors] = useState(
-    parsedBrief?.audienceProfile?.behaviors || ''
-  )
+  const [manualAudienceBehaviors, setManualAudienceBehaviors] = useState(() => {
+    const behaviors = parsedBrief?.audienceProfile?.behaviors
+    // 确保始终返回字符串：如果是数组则join，否则转为字符串
+    if (Array.isArray(behaviors)) {
+      return behaviors.join(', ')
+    }
+    return behaviors ? String(behaviors) : ''
+  })
   const [manualBrandTone, setManualBrandTone] = useState(parsedBrief?.brandTone || '')
 
   const updateMutation = useUpdateProfile(merchantId)
@@ -87,24 +92,37 @@ export function ProfileEditDialog({
       setManualAudienceAge(parsed?.audienceProfile?.age || '')
       setManualAudienceGender(parsed?.audienceProfile?.gender || '')
       setManualAudienceInterests((parsed?.audienceProfile?.interests || []).join(', '))
-      setManualAudienceBehaviors(parsed?.audienceProfile?.behaviors || '')
+      // 确保behaviors始终是字符串
+      const behaviors = parsed?.audienceProfile?.behaviors
+      if (Array.isArray(behaviors)) {
+        setManualAudienceBehaviors(behaviors.join(', '))
+      } else {
+        setManualAudienceBehaviors(behaviors ? String(behaviors) : '')
+      }
       setManualBrandTone(parsed?.brandTone || '')
     }
   }, [profile])
 
   const handleSubmit = async () => {
     try {
+      // 安全转换：确保所有字段都是正确的类型
+      const safeTrim = (value: any): string => {
+        if (typeof value === 'string') return value.trim()
+        if (Array.isArray(value)) return value.join(', ').trim()
+        return value ? String(value).trim() : ''
+      }
+
       const manualBrief: ProfileBrief = {
-        intro: manualBriefIntro.trim(),
+        intro: safeTrim(manualBriefIntro),
         sellingPoints: splitToList(manualSellingPoints),
         usageScenarios: splitToList(manualUsageScenarios),
         audienceProfile: {
-          age: manualAudienceAge.trim(),
-          gender: manualAudienceGender.trim(),
+          age: safeTrim(manualAudienceAge),
+          gender: safeTrim(manualAudienceGender),
           interests: splitToList(manualAudienceInterests),
-          behaviors: manualAudienceBehaviors.trim()
+          behaviors: safeTrim(manualAudienceBehaviors)
         },
-        brandTone: manualBrandTone.trim()
+        brandTone: safeTrim(manualBrandTone)
       }
 
       const hasManual =

@@ -67,16 +67,28 @@ export class LocalStorage {
   }
 }
 
-// 存储键名常量
+/**
+ * 存储键名常量
+ *
+ * 数据结构说明：
+ * - CONVERSATIONS: Conversation[] - 对话列表纯数组（用于离线快速加载，不含 pagination）
+ * - CURRENT_CONVERSATION_ID: string - 当前选中的对话ID
+ * - USER_SETTINGS: object - 用户偏好设置
+ * - THEME: 'light' | 'dark' | 'system' - 主题设置
+ * - DOCUMENTS: Document[] - 文档列表
+ * - RECENT_MODELS: string[] - 最近使用的模型ID列表
+ * - CHAT_DRAFTS: Record<conversationId, string> - 对话草稿映射
+ * - SELECTED_MODEL: string - 最后选中的模型ID
+ */
 export const STORAGE_KEYS = {
   CONVERSATIONS: "conversations",
-  CURRENT_CONVERSATION_ID: "current_conversation_id", // 当前选中的对话ID
+  CURRENT_CONVERSATION_ID: "current_conversation_id",
   USER_SETTINGS: "user_settings",
   THEME: "theme",
   DOCUMENTS: "documents",
   RECENT_MODELS: "recent_models",
   CHAT_DRAFTS: "chat_drafts",
-  SELECTED_MODEL: "lastSelectedModelId", // 当前选中的模型ID
+  SELECTED_MODEL: "lastSelectedModelId",
 } as const
 
 // 导出导入函数用于数据迁移和备份

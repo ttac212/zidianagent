@@ -4,7 +4,7 @@
 
 import { AnimatePresence, motion } from 'framer-motion'
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, Plus } from "lucide-react"
+import { ChevronLeft, Plus, Loader2 } from "lucide-react"
 import { ConversationSearch } from "./conversation-search"
 import { ConversationList } from "./conversation-list"
 import type { DerivedConversation, ConversationSection } from "@/lib/utils/conversation-list"
@@ -43,6 +43,10 @@ interface ConversationSidebarProps {
   onExport: (conv: Conversation) => void
   onCopyLink: (conv: Conversation) => void
   onDelete: (conv: Conversation) => void
+
+  // 分页
+  onLoadMore?: () => void
+  hasMore?: boolean
 }
 
 export function ConversationSidebar({
@@ -66,7 +70,9 @@ export function ConversationSidebar({
   onTogglePin,
   onExport,
   onCopyLink,
-  onDelete
+  onDelete,
+  onLoadMore,
+  hasMore = false
 }: ConversationSidebarProps) {
   return (
     <AnimatePresence mode="wait">
@@ -131,6 +137,28 @@ export function ConversationSidebar({
               onCopyLink={onCopyLink}
               onDelete={onDelete}
             />
+
+            {/* 加载更多按钮 */}
+            {!isSearching && hasMore && onLoadMore && (
+              <div className="mt-2 px-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onLoadMore}
+                  disabled={loading}
+                  className="w-full text-muted-foreground hover:text-foreground"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                      加载中...
+                    </>
+                  ) : (
+                    '加载更多对话'
+                  )}
+                </Button>
+              </div>
+            )}
           </div>
         </motion.div>
       )}

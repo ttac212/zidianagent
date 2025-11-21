@@ -25,7 +25,7 @@ export function useConversationSections(
 ) {
   // 1. 派生所有对话数据（useMemo缓存）
   const derivedConversations = useMemo(
-    () => conversations.map(deriveConversationData),
+    () => (conversations || []).map(deriveConversationData),
     [conversations]
   )
 
@@ -38,7 +38,7 @@ export function useConversationSections(
 
   // 3. 分组构建（useMemo缓存,基于原始conversations）
   const conversationSections = useMemo(
-    () => buildConversationSections(conversations),
+    () => buildConversationSections(conversations || []),
     [conversations]
   )
 

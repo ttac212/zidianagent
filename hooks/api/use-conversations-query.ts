@@ -3,7 +3,7 @@
  * 提供缓存、重试和状态管理功能的数据获取
  */
 
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import type { QueryKey } from '@tanstack/react-query'
 import type { Conversation, ChatMessage } from '@/types/chat'
 
@@ -58,6 +58,7 @@ interface ApiMessage {
   createdAt: string
   totalTokens?: number
   modelId?: string
+  reasoning?: string  // 推理过程（从metadata.reasoning提取到顶层）
   metadata?: Record<string, unknown>
 }
 
@@ -147,6 +148,7 @@ function transformApiMessage(msg: ApiMessage): ChatMessage {
     id: msg.id,
     role: role as any, // 保留原始role，前端组件负责渲染处理
     content: msg.content,
+    reasoning: msg.reasoning, // ✅ 映射推理过程字段
     timestamp: new Date(msg.createdAt).getTime(),
     tokens: msg.totalTokens || 0,
     metadata: {
@@ -232,13 +234,23 @@ export function transformApiConversation(conv: ApiConversation): Conversation {
 
 // ==================== API函数 ====================
 
+interface FetchConversationsResult {
+  conversations: Conversation[]
+  pagination: {
+    page: number
+    limit: number
+    total: number
+    pages: number
+  }
+}
+
 export const conversationApi = {
-  // 获取对话列表
+  // 获取对话列表（返回分页信息）
   fetchConversations: async (params: {
     page?: number
     limit?: number
     includeMessages?: boolean
-  } = {}): Promise<Conversation[]> => {
+  } = {}): Promise<FetchConversationsResult> => {
     const { page = 1, limit = 20, includeMessages = false } = params
 
     const searchParams = new URLSearchParams({
@@ -272,7 +284,10 @@ export const conversationApi = {
     // 转换API响应为前端格式
     const conversations = result.data.conversations.map(transformApiConversation)
 
-    return conversations
+    return {
+      conversations,
+      pagination: result.data.pagination
+    }
   },
 
   // 获取单个对话详情
@@ -424,6 +439,7 @@ export function useConversationsQuery(options: {
     gcTime: 10 * 60 * 1000,   // 10分钟后清理缓存
     retry: 2,
     retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
+    select: (data) => data // 返回完整数据包括分页信息
   })
 }
 
@@ -447,6 +463,7 @@ export function useConversationsSummary(options: {
     gcTime: 10 * 60 * 1000,   // 10分钟后清理缓存
     retry: 2,
     retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
+    select: (data) => data // 返回完整数据包括分页信息
   })
 }
 
@@ -479,7 +496,7 @@ export function useConversationQuery(
  */
 export function useInvalidateConversations() {
   const queryClient = useQueryClient()
-  
+
   return {
     invalidateAll: () => {
       queryClient.invalidateQueries({ queryKey: conversationKeys.all })
@@ -491,4 +508,41 @@ export function useInvalidateConversations() {
       queryClient.invalidateQueries({ queryKey: conversationKeys.detail(id) })
     }
   }
+}
+
+// ==================== 加载更多消息 ====================
+
+/**
+ * 加载对话中更早的消息
+ * 使用 useMutation 因为这是一个增量操作，而不是完整查询
+ */
+export function useLoadMoreMessages(conversationId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ beforeId, take }: { beforeId: string; take?: number }) => {
+      return conversationApi.fetchConversation(conversationId, { beforeId, take })
+    },
+    onSuccess: (newData) => {
+      if (!newData) return
+
+      // 更新所有匹配此对话的缓存
+      queryClient.setQueriesData({
+        predicate: (query) => matchesConversationDetailKey(query.queryKey, conversationId)
+      }, (oldData: Conversation | undefined): Conversation | undefined => {
+        if (!oldData) return newData
+
+        // 合并消息，去重（基于消息ID）
+        const existingIds = new Set(oldData.messages.map(m => m.id))
+        const newMessages = newData.messages.filter(m => !existingIds.has(m.id))
+
+        // 新消息应该插入到列表开头（因为是更早的消息）
+        return {
+          ...oldData,
+          messages: [...newMessages, ...oldData.messages],
+          messagesWindow: newData.messagesWindow || oldData.messagesWindow
+        }
+      })
+    }
+  })
 }

@@ -76,25 +76,38 @@ export function useUpdateConversationMutation() {
           }
         },
         (oldData: any) => {
-          if (Array.isArray(oldData)) {
-            return oldData.map(conv => {
-              if (conv.id !== updatedConversation.id) return conv
+          const updateConv = (conv: any) => {
+            if (conv.id !== updatedConversation.id) return conv
 
-              // 【防御性合并】如果API返回不完整，保留旧缓存的metadata
-              if (!hasCompleteMetadata && conv.metadata) {
-                return {
-                  ...conv,
-                  ...updatedConversation,
-                  metadata: {
-                    ...conv.metadata,           // 保留旧metadata（包含lastMessage等）
-                    ...updatedConversation.metadata, // 覆盖更新字段（如pinned/tags）
-                  }
+            // 【防御性合并】如果API返回不完整，保留旧缓存的metadata
+            if (!hasCompleteMetadata && conv.metadata) {
+              return {
+                ...conv,
+                ...updatedConversation,
+                metadata: {
+                  ...conv.metadata,           // 保留旧metadata（包含lastMessage等）
+                  ...updatedConversation.metadata, // 覆盖更新字段（如pinned/tags）
                 }
               }
+            }
 
-              // API返回完整数据，直接合并
-              return { ...conv, ...updatedConversation }
-            })
+            // API返回完整数据，直接合并
+            return { ...conv, ...updatedConversation }
+          }
+
+          // 处理分页数据结构 { conversations, pagination }
+          if (oldData && oldData.conversations && Array.isArray(oldData.conversations)) {
+            return {
+              ...oldData,
+              conversations: oldData.conversations.map(updateConv)
+            }
+          }
+          // 向后兼容：处理纯数组结构（不应该出现）
+          if (Array.isArray(oldData)) {
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('[Cache] 检测到纯数组缓存格式，这不应该发生')
+            }
+            return oldData.map(updateConv)
           }
           return oldData
         }
@@ -134,7 +147,22 @@ export function useDeleteConversationMutation() {
           }
         },
         (oldData: any) => {
+          // 处理分页数据结构 { conversations, pagination }
+          if (oldData && oldData.conversations && Array.isArray(oldData.conversations)) {
+            return {
+              ...oldData,
+              conversations: oldData.conversations.filter((conv: any) => conv.id !== id),
+              pagination: oldData.pagination ? {
+                ...oldData.pagination,
+                total: Math.max(0, (oldData.pagination.total || 0) - 1)
+              } : undefined
+            }
+          }
+          // 向后兼容：处理纯数组结构（不应该出现）
           if (Array.isArray(oldData)) {
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('[Cache] 检测到纯数组缓存格式，这不应该发生')
+            }
             return oldData.filter(conv => conv.id !== id)
           }
           return oldData
@@ -190,10 +218,30 @@ export function useCreateConversationMutation() {
           }
         },
         (oldData: any) => {
+          // 处理分页数据结构 { conversations, pagination }
+          if (oldData && oldData.conversations && Array.isArray(oldData.conversations)) {
+            return {
+              ...oldData,
+              conversations: [newConversation, ...oldData.conversations],
+              pagination: oldData.pagination ? {
+                ...oldData.pagination,
+                total: (oldData.pagination.total || 0) + 1
+              } : undefined
+            }
+          }
+          // 向后兼容：处理纯数组结构（不应该出现）
           if (Array.isArray(oldData)) {
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('[Cache] 检测到纯数组缓存格式，这不应该发生')
+            }
             return [newConversation, ...oldData]
           }
-          return [newConversation]
+          // 空缓存：创建新的分页结构（极少情况，通常在首次创建对话且无初始数据时）
+          // 使用默认 limit=20，与 useConversationsSummary 的默认值保持一致
+          return {
+            conversations: [newConversation],
+            pagination: { page: 1, limit: 20, total: 1, pages: 1 }
+          }
         }
       )
 

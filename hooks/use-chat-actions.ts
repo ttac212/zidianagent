@@ -15,6 +15,7 @@ import { DEFAULT_MODEL } from '@/lib/ai/models'
 import { createBatchStreamThrottle } from '@/lib/utils/stream-throttle'
 import { normalizeEvent, isPipelineEvent } from '@/lib/chat/events'
 import { usePipelineHandler, computeResultMessageId } from '@/hooks/use-pipeline-handler'
+import { getFriendlyErrorMessage, isUserCancellation } from '@/lib/chat/error-messages'
 
 // 全局递增计数器确保 ID 唯一性
 let messageIdCounter = 0
@@ -136,10 +137,6 @@ export function useChatActions({
       if (settings?.reasoning) {
         requestBody.reasoning = settings.reasoning
       }
-      if (settings?.creativeMode) {
-        requestBody.creativeMode = settings.creativeMode
-      }
-
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -397,11 +394,7 @@ export function useChatActions({
             }
           },
           (oldData: any) => {
-            if (!Array.isArray(oldData)) {
-              return oldData
-            }
-
-            return oldData.map((conv: any) => {
+            const updateConv = (conv: any) => {
               if (conv.id !== activeConversationId) return conv
 
               const baseCount =
@@ -442,7 +435,23 @@ export function useChatActions({
                   }
                 }
               }
-            })
+            }
+
+            // 处理分页数据结构 { conversations, pagination }
+            if (oldData && oldData.conversations && Array.isArray(oldData.conversations)) {
+              return {
+                ...oldData,
+                conversations: oldData.conversations.map(updateConv)
+              }
+            }
+            // 向后兼容：处理纯数组结构（不应该出现）
+            if (Array.isArray(oldData)) {
+              if (process.env.NODE_ENV === 'development') {
+                console.warn('[Cache] 检测到纯数组缓存格式，这不应该发生')
+              }
+              return oldData.map(updateConv)
+            }
+            return oldData
           }
         )
       }
@@ -451,15 +460,18 @@ export function useChatActions({
         abortRef.current = null
       }
 
-      const isAbortError = error instanceof Error && error.name === 'AbortError'
-      const errorMessage = error instanceof Error ? error.message : '������Ϣʧ��'
+      // 使用统一的错误处理
+      const errorValue = error instanceof Error ? error : new Error(String(error))
+      const isAbort = isUserCancellation(errorValue)
+      const friendlyError = getFriendlyErrorMessage(errorValue)
+      const errorMessage = error instanceof Error ? error.message : '发送消息失败'
 
-      if (isAbortError) {
+      if (isAbort) {
         onEvent?.({
           type: 'error',
           requestId,
           pendingAssistantId,
-          error: '������ȡ��',
+          error: friendlyError.message,
           recoverable: false
         })
         return
@@ -473,7 +485,8 @@ export function useChatActions({
         recoverable: true
       })
 
-      toast.error(errorMessage)
+      // 显示友好的错误提示
+      toast.error(friendlyError.title, { description: friendlyError.message })
     }
   }, [conversationId, handlePipelineEvent, model, onEvent, queryClient, resetPipelineSession, settings])
   const sendMessage = useCallback(async (content: string, dynamicConversationId?: string) => {

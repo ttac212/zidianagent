@@ -121,13 +121,13 @@ function safeDate(timestamp: number | string | Date): Date {
     if (!isNaN(date.getTime())) {
       return date
     }
-    console.warn('⚠️ 无效的日期字符串:', timestamp, '使用当前时间')
+    console.warn('[Date] 无效的日期字符串:', timestamp, '使用当前时间')
     return new Date()
   }
 
   // 如果是数字，检查是否有效
   if (Number.isNaN(timestamp) || !Number.isFinite(timestamp)) {
-    console.warn('⚠️ 无效的时间戳:', timestamp, '使用当前时间')
+    console.warn('[Date] 无效的时间戳:', timestamp, '使用当前时间')
     return new Date()
   }
 
@@ -191,7 +191,7 @@ export function buildConversationSections(conversations: Conversation[]): Conver
   const pinnedConversations = sortedConversations.filter(conv => conv.isPinned)
   if (pinnedConversations.length > 0) {
     sections.push({
-      title: '📌 已固定',
+      title: '已固定',
       conversations: pinnedConversations
     })
   }

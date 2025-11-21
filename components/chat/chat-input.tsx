@@ -13,7 +13,7 @@ import React, {
 } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Send, Square, X, Sparkles, Brain } from 'lucide-react'
+import { Send, Square, X, Brain } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ChatInputProps } from '@/types/chat'
 import { CHAT_CONTAINER_MAX_WIDTH } from '@/lib/config/layout-config'
@@ -295,32 +295,6 @@ const ChatInputComponent = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                     className="h-7 px-2 text-[11px]"
                   />
                 </div>
-
-                {/* 创作模式切换 */}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onSettingsChange({ creativeMode: !settings.creativeMode })}
-                  disabled={isLoading}
-                  className={cn(
-                    'h-6 px-2 text-xs gap-1 transition-all shrink-0',
-                    settings.creativeMode
-                      ? 'bg-primary/10 text-primary hover:bg-primary/20'
-                      : 'text-muted-foreground hover:text-foreground'
-                  )}
-                  aria-label={settings.creativeMode ? '关闭创作模式' : '开启创作模式'}
-                  title={
-                    settings.creativeMode
-                      ? '创作模式已开启 - 使用90%上下文容量'
-                      : '开启创作模式 - 提升上下文限制至180k tokens'
-                  }
-                >
-                  <Sparkles className={cn('h-3 w-3', settings.creativeMode && 'fill-current')} />
-                  <span className="hidden sm:inline">
-                    {settings.creativeMode ? '创作' : '标准'}
-                  </span>
-                </Button>
 
                 {/* 推理强度选择器（总是显示） */}
                 <DropdownMenu>

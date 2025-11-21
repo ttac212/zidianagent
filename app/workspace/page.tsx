@@ -70,6 +70,8 @@ export default function WorkspacePage() {
     createConversation,
     updateConversation,
     deleteConversation,
+    loadMore,
+    hasMore,
   } = useConversations(currentConversationId)
 
   // 使用 memoized selector 处理分组和过滤
@@ -344,6 +346,8 @@ export default function WorkspacePage() {
           onExport={handleExportConversation}
           onCopyLink={handleCopyConversationLink}
           onDelete={handleOpenDeleteConfirm}
+          onLoadMore={loadMore}
+          hasMore={hasMore}
         />
 
         {/* 侧边栏折叠按钮 */}

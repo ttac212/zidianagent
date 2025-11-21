@@ -86,7 +86,29 @@ function normalizePayload(raw: unknown): SSEMessage | null {
 
     // 提取内容
     if (choice.delta?.content) {
-      message.content = choice.delta.content
+      // ✅ 修复：GPT-4o-audio-preview可能返回JSON对象而不是文本
+      // 过滤掉audio相关的配置对象（如 {"mode":"full","isActive":false}）
+      const content = choice.delta.content
+      if (typeof content === 'string') {
+        // 检查是否是纯JSON对象（不是转录文本）
+        if (content.trim().startsWith('{') && content.trim().endsWith('}')) {
+          try {
+            const parsed = JSON.parse(content)
+            // 如果包含mode、isActive等audio配置字段，跳过
+            if (parsed.mode || parsed.isActive !== undefined) {
+              // 跳过audio配置对象，不添加到content
+            } else {
+              message.content = content
+            }
+          } catch {
+            // 不是有效JSON，作为普通文本处理
+            message.content = content
+          }
+        } else {
+          // 不是JSON格式，作为普通文本处理
+          message.content = content
+        }
+      }
     }
 
     if (choice.message?.content) {
