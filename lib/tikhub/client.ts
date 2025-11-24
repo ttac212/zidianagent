@@ -42,6 +42,10 @@ import type {
   GetHotWordListParams,
   DouyinCityHotListResponse,
   GetCityHotListParams,
+  GeneralSearchV5Params,
+  DouyinGeneralSearchV5Response,
+  GeneralSearchV4Params,
+  DouyinGeneralSearchV4Response,
 } from './types'
 
 /**
@@ -726,6 +730,247 @@ export class TikHubClient {
       },
     })
     return response.data
+  }
+
+  /**
+   * 综合搜索V5（最新版本）
+   *
+   * @param params 搜索参数
+   * @param params.keyword 搜索关键词
+   * @param params.offset 偏移游标，用于翻页，首次请求传0
+   * @param params.page 页码，首次请求传0，之后每次加1
+   * @param params.backtrace 回溯参数，首次请求传空字符串
+   * @param params.search_id 搜索ID，首次请求传空字符串
+   *
+   * @returns 综合搜索结果，包含视频、用户、话题等多种类型
+   *
+   * @example
+   * // 首次搜索
+   * const result = await client.generalSearchV5({
+   *   keyword: '全屋定制',
+   *   offset: 0,
+   *   page: 0,
+   *   backtrace: '',
+   *   search_id: ''
+   * })
+   *
+   * // 翻页搜索
+   * const nextPage = await client.generalSearchV5({
+   *   keyword: '全屋定制',
+   *   offset: result.config.offset,
+   *   page: 1,
+   *   backtrace: result.config.backtrace,
+   *   search_id: result.config.search_id
+   * })
+   */
+  async generalSearchV5(params: GeneralSearchV5Params): Promise<DouyinGeneralSearchV5Response> {
+    if (!params.keyword) {
+      throw new Error('keyword is required for general search.')
+    }
+
+    const response = await this.request<DouyinGeneralSearchV5Response>({
+      endpoint: '/api/v1/douyin/search/fetch_general_search_v5',
+      method: 'POST',
+      body: {
+        keyword: params.keyword,
+        offset: params.offset ?? 0,
+        page: params.page ?? 0,
+        backtrace: params.backtrace ?? '',
+        search_id: params.search_id ?? '',
+      },
+    })
+    return response.data
+  }
+
+  /**
+   * 综合搜索V5自动分页（获取所有结果）
+   *
+   * @param keyword 搜索关键词
+   * @param options 配置选项
+   * @param options.maxPages 最大翻页数，默认5
+   * @param options.onProgress 进度回调
+   *
+   * @example
+   * // 获取最多5页的搜索结果
+   * for await (const page of client.getAllGeneralSearchV5Results('全屋定制')) {
+   *   console.log('获取到', page.data.length, '条结果')
+   * }
+   */
+  async *getAllGeneralSearchV5Results(
+    keyword: string,
+    options: {
+      maxPages?: number
+      onProgress?: (page: number, total: number) => void
+    } = {}
+  ): AsyncGenerator<DouyinGeneralSearchV5Response, void, unknown> {
+    const { maxPages = 5, onProgress } = options
+
+    let offset = 0
+    let page = 0
+    let backtrace = ''
+    let searchId = ''
+    let hasMore = true
+
+    while (hasMore && page < maxPages) {
+      const result = await this.generalSearchV5({
+        keyword,
+        offset,
+        page,
+        backtrace,
+        search_id: searchId,
+      })
+
+      yield result
+
+      if (onProgress) {
+        onProgress(page + 1, maxPages)
+      }
+
+      // 更新分页参数
+      hasMore = result.config.has_more === 1
+      offset = result.config.offset
+      backtrace = result.config.backtrace
+      searchId = result.config.search_id
+      page++
+
+      // 避免请求过快
+      if (hasMore && page < maxPages) {
+        await this.sleep(500)
+      }
+    }
+  }
+
+  /**
+   * 综合搜索V4
+   *
+   * @param params 搜索参数
+   * @param params.keyword 搜索关键词
+   * @param params.offset 翻页偏移量，默认0
+   * @param params.sort_type 排序方式：0-综合排序 1-最多点赞 2-最新发布
+   * @param params.publish_time 发布时间：0-不限 1-最近一天 7-最近一周 180-最近半年
+   * @param params.filter_duration 视频时长：0-不限 0-1-1分钟内 1-5-1-5分钟 5-10000-5分钟以上
+   * @param params.content_type 内容类型：0-不限 1-视频 2-图集
+   * @param params.search_id 搜索ID，翻页时需要提供
+   *
+   * @returns 综合搜索结果
+   *
+   * @example
+   * // 首次搜索
+   * const result = await client.generalSearchV4({
+   *   keyword: '全屋定制',
+   *   sort_type: '1', // 按点赞数排序
+   * })
+   *
+   * // 翻页搜索
+   * const nextPage = await client.generalSearchV4({
+   *   keyword: '全屋定制',
+   *   offset: 20,
+   *   search_id: result.extra.logid
+   * })
+   */
+  async generalSearchV4(params: GeneralSearchV4Params): Promise<DouyinGeneralSearchV4Response> {
+    if (!params.keyword) {
+      throw new Error('keyword is required for general search.')
+    }
+
+    const response = await this.request<DouyinGeneralSearchV4Response>({
+      endpoint: '/api/v1/douyin/search/fetch_general_search_v4',
+      method: 'POST',
+      body: {
+        keyword: params.keyword,
+        offset: params.offset ?? 0,
+        sort_type: params.sort_type ?? '0',
+        publish_time: params.publish_time ?? '0',
+        filter_duration: params.filter_duration ?? '0',
+        content_type: params.content_type ?? '0',
+        search_id: params.search_id ?? '',
+      },
+    })
+    return response.data
+  }
+
+  /**
+   * 综合搜索V4自动分页（获取所有结果）
+   *
+   * @param keyword 搜索关键词
+   * @param options 配置选项
+   * @param options.maxPages 最大翻页数，默认5
+   * @param options.pageSize 每页数量，默认20
+   * @param options.sort_type 排序方式
+   * @param options.publish_time 发布时间筛选
+   * @param options.filter_duration 视频时长筛选
+   * @param options.content_type 内容类型筛选
+   * @param options.onProgress 进度回调
+   *
+   * @example
+   * // 获取最多5页的搜索结果
+   * for await (const page of client.getAllGeneralSearchV4Results('全屋定制')) {
+   *   console.log('获取到', page.data.length, '条结果')
+   * }
+   *
+   * // 获取按点赞数排序的结果
+   * for await (const page of client.getAllGeneralSearchV4Results('全屋定制', {
+   *   sort_type: '1',
+   *   maxPages: 3
+   * })) {
+   *   console.log('获取到', page.data.length, '条结果')
+   * }
+   */
+  async *getAllGeneralSearchV4Results(
+    keyword: string,
+    options: {
+      maxPages?: number
+      pageSize?: number
+      sort_type?: '0' | '1' | '2'
+      publish_time?: '0' | '1' | '7' | '180'
+      filter_duration?: '0' | '0-1' | '1-5' | '5-10000'
+      content_type?: '0' | '1' | '2'
+      onProgress?: (page: number, total: number) => void
+    } = {}
+  ): AsyncGenerator<DouyinGeneralSearchV4Response, void, unknown> {
+    const {
+      maxPages = 5,
+      pageSize = 20,
+      sort_type = '0',
+      publish_time = '0',
+      filter_duration = '0',
+      content_type = '0',
+      onProgress,
+    } = options
+
+    let offset = 0
+    let page = 0
+    let searchId = ''
+    let hasMore = true
+
+    while (hasMore && page < maxPages) {
+      const result = await this.generalSearchV4({
+        keyword,
+        offset,
+        sort_type,
+        publish_time,
+        filter_duration,
+        content_type,
+        search_id: searchId,
+      })
+
+      yield result
+
+      if (onProgress) {
+        onProgress(page + 1, maxPages)
+      }
+
+      // 更新分页参数
+      hasMore = result.has_more === 1
+      offset += pageSize
+      searchId = result.extra?.logid || ''
+      page++
+
+      // 避免请求过快
+      if (hasMore && page < maxPages) {
+        await this.sleep(500)
+      }
+    }
   }
 
   /**

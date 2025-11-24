@@ -693,3 +693,204 @@ export interface DouyinCityHotListResponse {
   }
   message: string // 响应消息
 }
+
+/**
+ * 综合搜索V5请求参数
+ */
+export interface GeneralSearchV5Params {
+  keyword: string // 搜索关键词
+  offset?: number // 偏移游标，用于翻页，首次请求传0
+  page?: number // 页码，首次请求传0，之后每次加1
+  backtrace?: string // 回溯参数，首次请求传空字符串
+  search_id?: string // 搜索ID，首次请求传空字符串
+}
+
+/**
+ * 综合搜索结果中的作者信息
+ */
+export interface SearchAuthorInfo {
+  uid: string
+  nickname: string
+  sec_uid?: string
+  unique_id?: string
+  avatar_thumb?: {
+    url_list: string[]
+  }
+  avatar_larger?: {
+    url_list: string[]
+  }
+  follower_count?: number
+  following_count?: number
+  signature?: string
+  [key: string]: any
+}
+
+/**
+ * 综合搜索结果中的视频信息
+ */
+export interface SearchVideoInfo {
+  play_addr?: {
+    url_list: string[]
+  }
+  cover?: {
+    url_list: string[]
+  }
+  dynamic_cover?: {
+    url_list: string[]
+  }
+  duration: number // 视频时长(毫秒)
+  width?: number
+  height?: number
+  [key: string]: any
+}
+
+/**
+ * 综合搜索结果中的统计信息
+ */
+export interface SearchStatistics {
+  digg_count: number // 点赞数
+  comment_count: number // 评论数
+  share_count: number // 分享数
+  play_count?: number // 播放次数
+  collect_count?: number // 收藏数
+  [key: string]: any
+}
+
+/**
+ * 综合搜索结果中的视频详情
+ */
+export interface SearchAwemeInfo {
+  aweme_id: string // 视频ID
+  desc: string // 视频描述
+  create_time?: number // 创建时间戳
+  author: SearchAuthorInfo // 作者信息
+  video: SearchVideoInfo // 视频播放信息
+  statistics: SearchStatistics // 统计数据
+  share_url?: string // 分享链接
+  text_extra?: Array<{
+    hashtag_name?: string
+    hashtag_id?: string
+    type?: number
+  }>
+  [key: string]: any
+}
+
+/**
+ * 综合搜索结果中的用户信息
+ */
+export interface SearchUserInfo {
+  uid: string
+  sec_uid: string
+  nickname: string
+  unique_id?: string
+  signature?: string
+  avatar_thumb?: {
+    url_list: string[]
+  }
+  follower_count?: number
+  following_count?: number
+  total_favorited?: number
+  aweme_count?: number
+  [key: string]: any
+}
+
+/**
+ * 综合搜索结果中的话题信息
+ */
+export interface SearchChallengeInfo {
+  cid: string // 话题ID
+  cha_name: string // 话题名称
+  desc?: string // 话题描述
+  user_count?: number // 参与人数
+  view_count?: number // 浏览次数
+  [key: string]: any
+}
+
+/**
+ * 综合搜索单条结果
+ */
+export interface GeneralSearchResultItem {
+  type: number // 结果类型：1=视频, 2=用户, 3=话题等
+  aweme_info?: SearchAwemeInfo // 视频信息(type=1时)
+  user_list?: Array<{
+    user_info: SearchUserInfo
+  }> // 用户列表
+  challenge_list?: SearchChallengeInfo[] // 话题列表
+  [key: string]: any
+}
+
+/**
+ * 综合搜索配置信息
+ */
+export interface GeneralSearchConfig {
+  offset: number // 下一页的偏移游标
+  has_more: number // 是否还有更多数据 (1=有, 0=无)
+  search_id: string // 搜索ID (用于翻页)
+  backtrace: string // 回溯参数 (用于翻页)
+  [key: string]: any
+}
+
+/**
+ * 综合搜索V5响应数据
+ */
+export interface GeneralSearchV5Data {
+  config: GeneralSearchConfig // 业务配置信息
+  data: GeneralSearchResultItem[] // 搜索结果列表
+  [key: string]: any
+}
+
+/**
+ * 综合搜索V5响应
+ */
+export interface DouyinGeneralSearchV5Response {
+  config: GeneralSearchConfig // 业务配置信息
+  data: GeneralSearchResultItem[] // 搜索结果列表
+  [key: string]: any
+}
+
+/**
+ * 综合搜索V4请求参数
+ */
+export interface GeneralSearchV4Params {
+  keyword: string // 搜索关键词
+  offset?: number // 翻页偏移量，默认0
+  sort_type?: '0' | '1' | '2' // 排序方式：0-综合排序 1-最多点赞 2-最新发布
+  publish_time?: '0' | '1' | '7' | '180' // 发布时间：0-不限 1-最近一天 7-最近一周 180-最近半年
+  filter_duration?: '0' | '0-1' | '1-5' | '5-10000' // 视频时长：0-不限 0-1-1分钟内 1-5-1-5分钟 5-10000-5分钟以上
+  content_type?: '0' | '1' | '2' // 内容类型：0-不限 1-视频 2-图集
+  search_id?: string // 搜索ID，翻页时需要提供，从上次响应的extra.logid获取
+}
+
+/**
+ * 综合搜索V4单条结果
+ */
+export interface GeneralSearchV4ResultItem {
+  aweme_info?: SearchAwemeInfo // 视频信息
+  card_info?: any // 卡片信息
+  card_unique_name?: string
+  type?: number
+  [key: string]: any
+}
+
+/**
+ * 综合搜索V4响应数据
+ */
+export interface GeneralSearchV4Data {
+  data: GeneralSearchV4ResultItem[] // 搜索结果列表
+  has_more: number // 是否有更多：1-有 0-无
+  cursor: number // 游标
+  extra: {
+    logid: string // 用于翻页的search_id
+    now: number
+    [key: string]: any
+  }
+  log_pb?: {
+    impr_id: string // 也可用作search_id
+  }
+  [key: string]: any
+}
+
+/**
+ * 综合搜索V4响应
+ */
+export interface DouyinGeneralSearchV4Response extends GeneralSearchV4Data {}
