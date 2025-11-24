@@ -10,12 +10,6 @@
       "maxDuration": 30
     }
   },
-  "crons": [
-    {
-      "path": "/api/cron/sync-merchants",
-      "schedule": "0 * * * *"
-    }
-  ],
   "rewrites": [
     {
       "source": "/api/:path*",
