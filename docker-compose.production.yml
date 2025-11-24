@@ -1,0 +1,158 @@
+version: '3.8'
+
+# 智点AI平台 - Docker Compose 生产配置
+# 优化版：包含健康检查、资源限制、自动重启
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:15-alpine
+    container_name: zhidian-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: zhidianai
+      POSTGRES_USER: zhidian
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups  # 备份目录
+    ports:
+      - "127.0.0.1:5432:5432"  # 只允许本地访问
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zhidian -d zhidianai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    # 性能优化
+    command: >
+      postgres
+      -c max_connections=100
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c maintenance_work_mem=128MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=2621kB
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
+
+  # Next.js 应用
+  app:
+    image: node:20-alpine
+    container_name: zhidian-app
+    restart: always
+    working_dir: /app
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://zhidian:${POSTGRES_PASSWORD}@postgres:5432/zhidianai
+      NEXTAUTH_URL: ${NEXTAUTH_URL}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      ZENMUX_API_BASE: ${ZENMUX_API_BASE}
+      ZENMUX_API_KEY: ${ZENMUX_API_KEY}
+      ZENMUX_DEFAULT_MODEL: ${ZENMUX_DEFAULT_MODEL}
+      MODEL_ALLOWLIST: ${MODEL_ALLOWLIST}
+      NEXT_PUBLIC_MODEL_ALLOWLIST: ${MODEL_ALLOWLIST}
+      TIKHUB_API_BASE_URL: ${TIKHUB_API_BASE_URL}
+      TIKHUB_API_KEY: ${TIKHUB_API_KEY}
+      LLM_API_BASE: ${LLM_API_BASE}
+      LLM_API_KEY: ${LLM_API_KEY}
+      DOUBAO_ASR_API_URL: ${DOUBAO_ASR_API_URL}
+      NEXT_PUBLIC_CONNECTION_MONITORING: enabled
+      NEXT_PUBLIC_APP_NAME: ${APP_NAME}
+      ADMIN_LOGIN_PASSWORD: ${ADMIN_LOGIN_PASSWORD}
+      # 性能优化
+      NODE_OPTIONS: "--max-old-space-size=2048"
+    volumes:
+      - ./app:/app
+      - node_modules:/app/node_modules
+      - next_cache:/app/.next/cache
+    ports:
+      - "127.0.0.1:3007:3007"  # 只允许本地访问（通过Nginx代理）
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3007/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    # 启动命令
+    command: sh -c "
+      echo '=== 安装 pnpm ===' &&
+      npm install -g pnpm@9.6.0 &&
+      echo '=== 安装依赖 ===' &&
+      pnpm install --frozen-lockfile &&
+      echo '=== 生成 Prisma Client ===' &&
+      pnpm db:generate &&
+      echo '=== 同步数据库 ===' &&
+      pnpm db:push &&
+      echo '=== 构建应用 ===' &&
+      pnpm build &&
+      echo '=== 启动应用 ===' &&
+      pnpm start
+      "
+
+  # Redis 缓存（可选，用于会话存储和速率限制）
+  redis:
+    image: redis:7-alpine
+    container_name: zhidian-redis
+    restart: always
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+volumes:
+  postgres_data:
+    driver: local
+  node_modules:
+    driver: local
+  next_cache:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  default:
+    name: zhidian-network
+    driver: bridge
