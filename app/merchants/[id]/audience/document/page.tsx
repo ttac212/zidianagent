@@ -3,7 +3,7 @@ import type { Metadata } from "next"
 import { AudienceDocumentEditor } from "@/components/merchants/audience-document-editor"
 
 interface PageProps {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 export const metadata: Metadata = {
@@ -11,6 +11,7 @@ export const metadata: Metadata = {
   description: "全屏文档模式，编辑客群分析与推进计划。"
 }
 
-export default function MerchantAudienceDocumentPage({ params }: PageProps) {
-  return <AudienceDocumentEditor merchantId={params.id} />
+export default async function MerchantAudienceDocumentPage({ params }: PageProps) {
+  const { id } = await params
+  return <AudienceDocumentEditor merchantId={id} />
 }
