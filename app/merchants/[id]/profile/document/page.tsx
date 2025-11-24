@@ -3,7 +3,7 @@ import type { Metadata } from "next"
 import { ProfileDocumentEditor } from "@/components/merchants/profile-document-editor"
 
 interface PageProps {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 export const metadata: Metadata = {
@@ -11,6 +11,7 @@ export const metadata: Metadata = {
   description: "全屏文档模式，分段编辑商家创作档案。"
 }
 
-export default function MerchantProfileDocumentPage({ params }: PageProps) {
-  return <ProfileDocumentEditor merchantId={params.id} />
+export default async function MerchantProfileDocumentPage({ params }: PageProps) {
+  const { id } = await params
+  return <ProfileDocumentEditor merchantId={id} />
 }
