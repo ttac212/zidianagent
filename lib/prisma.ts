@@ -30,10 +30,10 @@ const getDatabaseUrl = () => {
   if (isDatabasePostgres() && !baseUrl.includes('connection_limit')) {
     const separator = baseUrl.includes('?') ? '&' : '?'
     // Serverless环境优化：
-    // - connection_limit=1: 每个Serverless实例只保持1个连接
-    // - pool_timeout=20: 连接池等待超时20秒
+    // - connection_limit=5: 每个Serverless实例保持5个连接（支持更高并发）
+    // - pool_timeout=30: 连接池等待超时30秒
     // - connect_timeout=15: 建立连接超时15秒
-    return `${baseUrl}${separator}connection_limit=1&pool_timeout=20&connect_timeout=15`
+    return `${baseUrl}${separator}connection_limit=5&pool_timeout=30&connect_timeout=15`
   }
 
   return baseUrl
