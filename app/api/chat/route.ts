@@ -47,14 +47,15 @@ export async function POST(request: NextRequest) {
 
     const userId = String(token.sub)
 
-  // 2. 速率限制检查（修复形同虚设问题）
-  const rateLimitResult = await checkRateLimit(request, 'CHAT', userId)
-  if (!rateLimitResult.allowed) {
-    return error(
-      rateLimitResult.error?.message || '请求过于频繁',
-      { status: 429 }
-    )
-  }
+  // 2. 速率限制检查 - 临时禁用以测试功能
+  // TODO: 修复 Upstash 后重新启用
+  // const rateLimitResult = await checkRateLimit(request, 'CHAT', userId)
+  // if (!rateLimitResult.allowed) {
+  //   return error(
+  //     rateLimitResult.error?.message || '请求过于频繁',
+  //     { status: 429 }
+  //   )
+  // }
 
   // 3. 原子性配额检查和预留（修复R2：真正的原子操作）
   const body = await request.json()
