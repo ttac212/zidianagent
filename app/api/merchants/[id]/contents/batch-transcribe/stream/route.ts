@@ -101,10 +101,17 @@ async function transcribeContent(
     }
     const apiUrl = new URL('/api/douyin/extract-text', baseUrl).toString()
 
+    // 使用内部调用密钥进行服务端-服务端认证
+    const internalKey = process.env.INTERNAL_API_KEY || process.env.NEXTAUTH_SECRET
+    if (!internalKey) {
+      throw new Error('缺少内部调用密钥配置')
+    }
+
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-Internal-Key': internalKey,
       },
       body: JSON.stringify({
         shareLink: content.shareUrl,

@@ -19,9 +19,16 @@ import { buildLLMRequestAuto } from '@/lib/ai/request-builder';
 
 export async function POST(req: NextRequest) {
   try {
-    // 验证用户认证
+    // 验证用户认证 - 支持两种方式：
+    // 1. 正常的用户 session token
+    // 2. 内部服务调用（通过 X-Internal-Key header）
     const token = await getToken({ req });
-    if (!token?.sub) {
+    const internalKey = req.headers.get('X-Internal-Key');
+    const expectedInternalKey = process.env.INTERNAL_API_KEY || process.env.NEXTAUTH_SECRET;
+
+    const isAuthorized = token?.sub || (internalKey && internalKey === expectedInternalKey);
+
+    if (!isAuthorized) {
       return new Response(
         JSON.stringify({ error: '未授权访问' }),
         { status: 401, headers: { 'Content-Type': 'application/json' } }
