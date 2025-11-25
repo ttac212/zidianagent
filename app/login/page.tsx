@@ -80,7 +80,10 @@ export default function LoginPage() {
 
         // 获取回调URL或默认跳转到工作区
         const callbackUrl = getSafeCallbackUrl(searchParams.get('callbackUrl'))
-        router.push(callbackUrl)
+
+        // 使用 window.location.href 进行硬刷新导航
+        // 确保 NextAuth session 被正确加载
+        window.location.href = callbackUrl
       }
     } catch (_error) {
       toast.error('登录失败', {

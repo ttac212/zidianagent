@@ -94,9 +94,11 @@ async function transcribeContent(
     // 2. 调用对话模块的转录API
     console.info(`[批量转录] 调用转录API, shareUrl: ${content.shareUrl.substring(0, 60)}...`)
 
-    // 修复：构建完整URL，避免localhost硬编码
-    // 优先使用环境变量，回退到请求的origin（在route handler中不可用），最后使用localhost开发
-    const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3007'
+    // 构建完整URL - 生产环境必须配置 NEXTAUTH_URL
+    const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL
+    if (!baseUrl) {
+      throw new Error('生产环境必须配置 NEXTAUTH_URL 环境变量')
+    }
     const apiUrl = new URL('/api/douyin/extract-text', baseUrl).toString()
 
     const response = await fetch(apiUrl, {

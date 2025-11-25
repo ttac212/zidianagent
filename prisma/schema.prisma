@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -96,7 +96,7 @@ model Conversation {
   messages      Message[]
 
   // 优化索引
-  @@index([userId, lastMessageAt(sort: Desc)])
+  @@index([userId, lastMessageAt])
   @@index([createdAt])
   @@index([modelId])
   @@index([updatedAt])
@@ -254,8 +254,8 @@ model MerchantContent {
 
   @@unique([externalId, merchantId])
   @@index([merchantId, publishedAt])
-  @@index([merchantId, totalEngagement(sort: Desc)])  // 按总互动量排序优化
-  @@index([merchantId, likeRate(sort: Desc)])  // 按真实互动率排序
+  @@index([merchantId, totalEngagement])  // 按总互动量排序优化
+  @@index([merchantId, likeRate])  // 按真实互动率排序
   @@index([contentType])
   @@index([externalId])
   @@index([collectedAt])
@@ -279,8 +279,8 @@ model MerchantContentComment {
   collectedAt DateTime        @default(now()) // 采集时间
   content     MerchantContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
 
-  @@index([contentId, diggCount(sort: Desc)]) // 按点赞数排序查询热门评论
-  @@index([contentId, createdAt(sort: Desc)]) // 按时间排序查询最新评论
+  @@index([contentId, diggCount]) // 按点赞数排序查询热门评论
+  @@index([contentId, createdAt]) // 按时间排序查询最新评论
   @@map("merchant_content_comments")
 }
 

@@ -10,6 +10,7 @@
  */
 
 import { NextRequest } from 'next/server';
+import { getToken } from 'next-auth/jwt';
 import { VideoProcessor } from '@/lib/video/video-processor';
 import { createVideoSourceFromShareLink } from '@/lib/douyin/video-source';
 import { mapStageProgress } from '@/lib/douyin/progress-mapper';
@@ -18,6 +19,15 @@ import { buildLLMRequestAuto } from '@/lib/ai/request-builder';
 
 export async function POST(req: NextRequest) {
   try {
+    // 验证用户认证
+    const token = await getToken({ req });
+    if (!token?.sub) {
+      return new Response(
+        JSON.stringify({ error: '未授权访问' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
     const { shareLink } = await req.json();
 
     if (!shareLink) {

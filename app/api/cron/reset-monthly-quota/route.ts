@@ -23,17 +23,17 @@ export async function GET(request: NextRequest) {
     const authHeader = request.headers.get('authorization')
     const cronSecret = process.env.CRON_SECRET
 
-    // 如果设置了CRON_SECRET，则验证
+    // 生产环境必须设置CRON_SECRET
+    const isProduction = process.env.NODE_ENV === 'production'
+
+    if (isProduction && !cronSecret) {
+      console.error('[Cron] CRON_SECRET must be set in production environment')
+      return new NextResponse('Unauthorized', { status: 401 })
+    }
+
     if (cronSecret) {
       if (authHeader !== `Bearer ${cronSecret}`) {
         console.error('[Cron] Unauthorized access attempt to reset-monthly-quota')
-        return new NextResponse('Unauthorized', { status: 401 })
-      }
-    } else {
-      // 开发环境：检查是否本地请求
-      const host = request.headers.get('host')
-      if (!host?.includes('localhost') && !host?.includes('127.0.0.1')) {
-        console.error('[Cron] CRON_SECRET not set and request not from localhost')
         return new NextResponse('Unauthorized', { status: 401 })
       }
     }

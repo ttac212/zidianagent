@@ -13,11 +13,11 @@ const PUBLIC_PREFIXES = [
 
 // 需要保护的路径
 const PROTECTED_PATHS = new Set([
-  '/workspace', '/settings', '/admin', '/merchants'
+  '/workspace', '/settings', '/merchants'
 ])
 
 const PROTECTED_API_PREFIXES = [
-  '/api/chat', '/api/conversations', '/api/users', '/api/admin',
+  '/api/chat', '/api/conversations', '/api/users',
   '/api/merchants', '/api/workspace'
 ]
 
@@ -38,11 +38,6 @@ function needsAuth(pathname: string): boolean {
   return PROTECTED_API_PREFIXES.some(prefix =>
     pathname === prefix || pathname.startsWith(prefix + '/')
   )
-}
-
-function isAdminPath(pathname: string): boolean {
-  return pathname === '/admin' || pathname.startsWith('/admin/') ||
-         pathname === '/api/admin' || pathname.startsWith('/api/admin/')
 }
 
 export default async function middleware(req: NextRequest) {
@@ -84,11 +79,6 @@ export default async function middleware(req: NextRequest) {
 
       const userId = token.sub as string
       const role = (token as any)?.role as string
-
-      // 管理员权限检查
-      if (isAdminPath(pathname) && role !== 'ADMIN') {
-        return new NextResponse('Forbidden', { status: 403 })
-      }
 
       // API请求添加用户ID到header
       if (pathname.startsWith('/api/')) {

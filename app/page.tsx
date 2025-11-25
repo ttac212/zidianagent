@@ -12,13 +12,15 @@ import { HomePageSkeleton } from "@/components/skeletons/home-page-skeleton"
 
 export default function HomePage() {
   const { status } = useSession()
-  
-  const workspaceTarget = status === "authenticated" ? "/workspace" : "/login"
 
   // 在session加载期间显示骨架屏
   if (status === "loading") {
     return <HomePageSkeleton />
   }
+
+  // 统一指向 /workspace，未登录用户会被 middleware 重定向到 /login
+  // 这样可以避免 hydration 不匹配问题
+  const workspaceTarget = "/workspace"
 
 
 

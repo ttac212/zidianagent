@@ -7,7 +7,6 @@ import { MobileDrawer } from "./ui/mobile-drawer"
 import { DEFAULT_NAV_ITEMS, type NavItem } from "@/config/navigation"
 import { cn } from "@/lib/utils"
 import type { ReactNode } from "react"
-import { useSession } from "next-auth/react"
 
 export type HeaderProps = {
   showNavigation?: boolean
@@ -26,12 +25,9 @@ export function Header({
   variant = "default",
   className,
 }: HeaderProps) {
-  const { status } = useSession()
-  const dynamicNavItems = (navItems || []).map((item) =>
-    item.href === "/workspace"
-      ? { ...item, href: status === "authenticated" ? "/workspace" : "/login" }
-      : item
-  )
+  // 统一使用原始 navItems，让 middleware 处理未认证用户的重定向
+  // 这样可以避免 SSR/CSR hydration 不匹配问题
+  const dynamicNavItems = navItems || []
 
   const base = "sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 transition-all duration-200"
   const variants: Record<NonNullable<HeaderProps["variant"]>, string> = {

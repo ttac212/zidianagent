@@ -246,8 +246,9 @@ export default function MerchantDetailPage() {
           message,
           title: `商家对齐-${merchant.name}`
         }))
+        // 使用 window.location.href 确保 sessionStorage 写入完成后再导航
+        window.location.href = `/workspace?prefill=${encodeURIComponent(key)}`
       }
-      router.push(`/workspace?prefill=${encodeURIComponent(key)}`)
     } catch (error: any) {
       toast.error(error?.message || '推送失败')
     } finally {
