@@ -22,25 +22,42 @@ const sqliteOptimizations = [
   { sql: 'PRAGMA foreign_keys=ON', type: 'execute', desc: '外键约束' }
 ]
 
+// 构建数据库URL（添加Serverless优化参数）
+const getDatabaseUrl = () => {
+  const baseUrl = process.env.DATABASE_URL || ''
+
+  // 如果是PostgreSQL且未配置连接池参数，添加Serverless优化参数
+  if (isDatabasePostgres() && !baseUrl.includes('connection_limit')) {
+    const separator = baseUrl.includes('?') ? '&' : '?'
+    // Serverless环境优化：
+    // - connection_limit=1: 每个Serverless实例只保持1个连接
+    // - pool_timeout=20: 连接池等待超时20秒
+    // - connect_timeout=15: 建立连接超时15秒
+    return `${baseUrl}${separator}connection_limit=1&pool_timeout=20&connect_timeout=15`
+  }
+
+  return baseUrl
+}
+
 // 创建 Prisma 客户端实例
+// PostgreSQL 连接池配置通过 DATABASE_URL 参数控制
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({
   // 日志配置：开发环境显示查询，生产环境只显示错误
-  log: process.env.NODE_ENV === 'development' 
-    ? ['query', 'warn', 'error'] 
+  log: process.env.NODE_ENV === 'development'
+    ? ['query', 'warn', 'error']
     : ['error'],
-  
+
   // 数据源配置
   datasources: {
     db: {
-      url: process.env.DATABASE_URL
+      url: getDatabaseUrl()
     }
   },
 
-  // 事务优化配置（优化超时设置）
+  // 事务优化配置（增加超时时间适应Serverless冷启动）
   transactionOptions: {
-    maxWait: 5000,         // 最大等待时间：5秒（减少锁等待）
-    timeout: 45000         // 事务超时：45秒（匹配API超时）
-    // 移除isolationLevel - SQLite不支持ReadCommitted
+    maxWait: 20000,        // 最大等待时间：20秒（适应冷启动）
+    timeout: 120000        // 事务超时：120秒（适应长事务）
   }
 })
 
@@ -64,9 +81,10 @@ async function initializeDatabase() {
           console.warn(`⚠️  ${opt.desc} 配置失败:`, (pragmaError as Error).message)
         }
       }
+    } else {
+      console.info('✅ PostgreSQL 数据库已连接')
     }
 
-    // ✅ 数据库连接已建立
   } catch (error) {
     console.warn('⚠️  数据库初始化失败:', error)
   }
