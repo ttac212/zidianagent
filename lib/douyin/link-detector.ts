@@ -14,7 +14,6 @@
  * - 新增域名时，请同时更新 domains.ts 和本文件的 PATTERNS
  */
 
-import { processSSEStream } from '@/lib/utils/sse-parser'
 import { ALLOWED_DOUYIN_DOMAINS } from '@/lib/douyin/domains'
 
 
@@ -458,91 +457,4 @@ ${transcribedText}
 用户的原始消息: "${originalUserMessage}"
 
 请根据视频信息和转录文案,为用户提供有价值的分析或回答用户的问题。`;
-}
-
-/**
- * 调用抖音文案提取API
- */
-export async function processDouyinVideo(shareLink: string): Promise<{
-  success: boolean;
-  data?: {
-    text: string;
-    originalText: string;
-    videoInfo: {
-      title: string;
-      author: string;
-      duration: number;
-      videoId: string;
-    };
-    stats: {
-      totalCharacters: number;
-    };
-  };
-  error?: string;
-}> {
-  try {
-    const response = await fetch('/api/douyin/extract-text', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ shareLink }),
-    });
-
-    if (!response.ok) {
-      return {
-        success: false,
-        error: `API调用失败: ${response.status}`,
-      };
-    }
-
-    // 读取SSE流
-    const reader = response.body?.getReader();
-    if (!reader) {
-      return {
-        success: false,
-        error: '响应体为空',
-      };
-    }
-
-    let result: any = null;
-
-    // 使用统一的 SSE 解析器 (支持 ZenMux 和标准格式)
-    await processSSEStream(reader, {
-      onMessage: (message) => {
-        // 查找 type === 'done' 的事件
-        if (message.payload && typeof message.payload === 'object') {
-          const payload = message.payload as Record<string, any>
-          if (payload.type === 'done') {
-            result = payload
-          }
-        }
-      },
-      onError: (error) => {
-        console.error('[链接检测] SSE错误:', error)
-      }
-    })
-
-    if (!result) {
-      return {
-        success: false,
-        error: '未收到完整响应',
-      };
-    }
-
-    return {
-      success: true,
-      data: {
-        text: result.text,
-        originalText: result.originalText,
-        videoInfo: result.videoInfo,
-        stats: result.stats,
-      },
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : '未知错误',
-    };
-  }
 }
