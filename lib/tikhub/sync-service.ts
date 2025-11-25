@@ -594,8 +594,9 @@ async function bulkUpsertMerchantContents(
     const chunk = rows.slice(i, i + MAX_ROWS_PER_BATCH)
     if (!chunk.length) continue
 
+    // PostgreSQL 枚举类型需要显式类型转换
     const values = chunk.map((row) =>
-      Prisma.sql`(${row.id}, ${row.merchantId}, ${row.externalId}, ${row.title}, ${row.content ?? null}, ${row.transcript ?? null}, ${row.contentType}, ${row.duration ?? null}, ${row.shareUrl ?? null}, ${row.hasTranscript}, ${row.diggCount}, ${row.commentCount}, ${row.collectCount}, ${row.shareCount}, ${row.playCount}, ${row.forwardCount}, ${row.totalEngagement}, ${row.likeRate ?? null}, ${row.commentRate ?? null}, ${row.completionRate ?? null}, ${row.avgWatchDuration ?? null}, ${row.isSuspicious}, ${row.suspiciousReason ?? null}, ${row.tags}, ${row.textExtra}, ${row.publishedAt ?? null}, ${row.collectedAt}, ${row.externalCreatedAt ?? null}, ${row.createdAt}, ${row.updatedAt})`
+      Prisma.sql`(${row.id}, ${row.merchantId}, ${row.externalId}, ${row.title}, ${row.content ?? null}, ${row.transcript ?? null}, ${row.contentType}::"ContentType", ${row.duration ?? null}, ${row.shareUrl ?? null}, ${row.hasTranscript}, ${row.diggCount}, ${row.commentCount}, ${row.collectCount}, ${row.shareCount}, ${row.playCount}, ${row.forwardCount}, ${row.totalEngagement}, ${row.likeRate ?? null}, ${row.commentRate ?? null}, ${row.completionRate ?? null}, ${row.avgWatchDuration ?? null}, ${row.isSuspicious}, ${row.suspiciousReason ?? null}, ${row.tags}, ${row.textExtra}, ${row.publishedAt ?? null}, ${row.collectedAt}, ${row.externalCreatedAt ?? null}, ${row.createdAt}, ${row.updatedAt})`
     )
 
     const query = Prisma.sql`
