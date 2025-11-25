@@ -99,11 +99,12 @@ export class QuotaManager {
         return result
       } else {
         // 生产环境：使用真正的SQL原子操作
+        // PostgreSQL 需要用双引号包裹 camelCase 列名
         const result = await prisma.$executeRaw`
           UPDATE users
-          SET currentMonthUsage = currentMonthUsage + ${estimatedTokens}
+          SET "currentMonthUsage" = "currentMonthUsage" + ${estimatedTokens}
           WHERE id = ${userId}
-          AND currentMonthUsage + ${estimatedTokens} <= monthlyTokenLimit
+          AND "currentMonthUsage" + ${estimatedTokens} <= "monthlyTokenLimit"
         `
 
         if (result === 0) {
@@ -205,11 +206,12 @@ export class QuotaManager {
 
           if (adjustment > 0) {
             // 增加使用量：需要检查是否超限
+            // PostgreSQL 需要用双引号包裹 camelCase 列名
             result = await tx.$executeRaw`
               UPDATE users
-              SET currentMonthUsage = currentMonthUsage + ${adjustment}
+              SET "currentMonthUsage" = "currentMonthUsage" + ${adjustment}
               WHERE id = ${userId}
-              AND currentMonthUsage + ${adjustment} <= monthlyTokenLimit
+              AND "currentMonthUsage" + ${adjustment} <= "monthlyTokenLimit"
             `
 
             if (result === 0) {
@@ -228,12 +230,13 @@ export class QuotaManager {
             }
           } else {
             // 减少使用量（返还配额）：无需检查限制，但确保不会变成负数
+            // PostgreSQL 需要用双引号包裹 camelCase 列名
             const absAdjustment = Math.abs(adjustment)
             result = await tx.$executeRaw`
               UPDATE users
-              SET currentMonthUsage = currentMonthUsage - ${absAdjustment}
+              SET "currentMonthUsage" = "currentMonthUsage" - ${absAdjustment}
               WHERE id = ${userId}
-              AND currentMonthUsage >= ${absAdjustment}
+              AND "currentMonthUsage" >= ${absAdjustment}
             `
 
             if (result === 0) {
@@ -295,11 +298,12 @@ export class QuotaManager {
         })
       } else {
         // 生产环境：使用真正的SQL原子操作
+        // PostgreSQL 需要用双引号包裹 camelCase 列名
         const result = await prisma.$executeRaw`
           UPDATE users
-          SET currentMonthUsage = currentMonthUsage - ${estimatedTokens}
+          SET "currentMonthUsage" = "currentMonthUsage" - ${estimatedTokens}
           WHERE id = ${userId}
-          AND currentMonthUsage >= ${estimatedTokens}
+          AND "currentMonthUsage" >= ${estimatedTokens}
         `
 
         if (result === 0) {
@@ -394,11 +398,12 @@ export class QuotaManager {
    */
   static async resetAllUsersMonthlyUsage(): Promise<number> {
     try {
+      // PostgreSQL 需要用双引号包裹 camelCase 列名
       const result = await prisma.$executeRaw`
         UPDATE users
-        SET currentMonthUsage = 0,
-            lastResetAt = ${dt.now()}
-        WHERE currentMonthUsage > 0
+        SET "currentMonthUsage" = 0,
+            "lastResetAt" = ${dt.now()}
+        WHERE "currentMonthUsage" > 0
       `
       console.info(`[QuotaManager] Batch reset completed: ${result} users`)
       return result as number
