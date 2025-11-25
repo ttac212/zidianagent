@@ -51,6 +51,7 @@ export type MerchantListItem = {
   totalCommentCount: number
   totalCollectCount: number
   totalShareCount: number
+  totalEngagement: number  // 总互动量 - API返回此字段用于排序
   lastCollectedAt?: Date | string | null  // JSON API返回字符串
   createdAt: Date | string  // JSON API返回字符串
   category?: {

@@ -183,46 +183,76 @@ export class UpstashRateLimitStore implements RateLimitStore {
     this.token = config.token
   }
 
-  private async request(command: (string | number)[][]): Promise<any> {
-    const response = await fetch(`${this.baseUrl}/multi-exec`, {
+  private async request(commands: (string | number)[][]): Promise<any[]> {
+    // Upstash REST API 使用 /pipeline 端点进行批量命令
+    const response = await fetch(`${this.baseUrl}/pipeline`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(command)
+      body: JSON.stringify(commands)
     })
 
     if (!response.ok) {
-      throw new Error(`Upstash request failed: ${response.statusText}`)
+      const errorText = await response.text()
+      throw new Error(`Upstash request failed: ${response.status} ${response.statusText} - ${errorText}`)
     }
 
+    // Upstash pipeline 返回数组，每个元素是 { result: value } 或 { error: message }
     return response.json()
   }
 
   async increment(key: string, window: number): Promise<{ count: number; ttl: number }> {
     const windowSeconds = Math.ceil(window / 1000)
 
-    // 使用MULTI/EXEC事务确保原子性
+    // 使用 pipeline 执行多个命令
     const commands = [
       ['INCR', key],
       ['EXPIRE', key, windowSeconds],
       ['TTL', key]
     ]
 
-    const results = await this.request(commands)
-    const count = results.result[0]
-    const ttl = results.result[2]
+    try {
+      const results = await this.request(commands)
 
-    return {
-      count: count || 1,
-      ttl: ttl > 0 ? ttl * 1000 : window
+      // Upstash pipeline 返回格式: [{ result: 1 }, { result: 1 }, { result: 60 }]
+      if (!Array.isArray(results) || results.length < 3) {
+        console.warn('[Upstash] Unexpected response format:', JSON.stringify(results))
+        return { count: 1, ttl: window }
+      }
+
+      // 检查是否有错误
+      const hasError = results.some(r => r.error)
+      if (hasError) {
+        console.warn('[Upstash] Command error:', JSON.stringify(results))
+        return { count: 1, ttl: window }
+      }
+
+      const count = results[0]?.result
+      const ttl = results[2]?.result
+
+      return {
+        count: typeof count === 'number' ? count : 1,
+        ttl: typeof ttl === 'number' && ttl > 0 ? ttl * 1000 : window
+      }
+    } catch (error) {
+      console.error('[Upstash] Request failed:', error)
+      // 出错时返回默认值，允许请求通过（fail-open策略）
+      return { count: 1, ttl: window }
     }
   }
 
   async get(key: string): Promise<number> {
-    const result = await this.request([['GET', key]])
-    return result.result ? parseInt(result.result, 10) : 0
+    try {
+      const results = await this.request([['GET', key]])
+      // pipeline 返回 [{ result: "123" }] 或 [{ result: null }]
+      const value = results[0]?.result
+      return value ? parseInt(value, 10) : 0
+    } catch (error) {
+      console.error('[Upstash] GET failed:', error)
+      return 0
+    }
   }
 
   async block(key: string, duration: number): Promise<void> {
@@ -230,19 +260,33 @@ export class UpstashRateLimitStore implements RateLimitStore {
     const blockedUntil = dt.timestamp() + duration
     const durationSeconds = Math.ceil(duration / 1000)
 
-    await this.request([['SET', blockKey, blockedUntil, 'EX', durationSeconds]])
+    try {
+      await this.request([['SET', blockKey, blockedUntil, 'EX', durationSeconds]])
+    } catch (error) {
+      console.error('[Upstash] BLOCK failed:', error)
+    }
   }
 
   async isBlocked(key: string): Promise<number | null> {
     const blockKey = `${key}:blocked`
-    const result = await this.request([['GET', blockKey]])
-
-    return result.result ? parseInt(result.result, 10) : null
+    try {
+      const results = await this.request([['GET', blockKey]])
+      // pipeline 返回 [{ result: "timestamp" }] 或 [{ result: null }]
+      const value = results[0]?.result
+      return value ? parseInt(value, 10) : null
+    } catch (error) {
+      console.error('[Upstash] IS_BLOCKED failed:', error)
+      return null
+    }
   }
 
   async reset(key: string): Promise<void> {
     const blockKey = `${key}:blocked`
-    await this.request([['DEL', key, blockKey]])
+    try {
+      await this.request([['DEL', key, blockKey]])
+    } catch (error) {
+      console.error('[Upstash] RESET failed:', error)
+    }
   }
 }
 
