@@ -5,10 +5,15 @@
  * - 调用TikHub API获取视频元数据
  * - 提取播放URL
  * - 构建videoInfo对象
+ * - 检查视频时长限制（Vercel部署保护）
  */
 
 import { getTikHubClient } from '@/lib/tikhub'
 import { DouyinPipelineStepError } from '@/lib/douyin/pipeline'
+import {
+  DOUYIN_PIPELINE_LIMITS,
+  formatDuration
+} from '@/lib/douyin/constants'
 import type { DouyinVideoInfo } from '@/lib/douyin/pipeline-steps'
 
 export interface FetchDetailContext {
@@ -18,6 +23,7 @@ export interface FetchDetailContext {
 export interface FetchDetailResult {
   videoInfo: DouyinVideoInfo
   playUrl: string
+  audioUrl: string | null  // 音频直链（来自 music.play_url），可直接下载跳过 FFmpeg
   awemeDetail: any  // 原始TikHub数据，供后续步骤使用
 }
 
@@ -57,6 +63,28 @@ function resolvePlayableVideoUrl(awemeDetail: any): string | null {
 
   // 优先返回包含aweme的URL
   return sanitized.find((url) => url.includes('aweme')) || sanitized[0] || null
+}
+
+/**
+ * 从TikHub返回的aweme_detail中提取音频URL
+ * 音频URL来自 music.play_url.url_list，可直接下载MP3
+ * 这样可以跳过FFmpeg音频提取步骤，解决Vercel部署问题
+ */
+function resolveAudioUrl(awemeDetail: any): string | null {
+  const music = awemeDetail?.music
+  if (!music) return null
+
+  // 优先使用 play_url.url_list
+  if (Array.isArray(music.play_url?.url_list) && music.play_url.url_list.length > 0) {
+    return music.play_url.url_list[0]
+  }
+
+  // 备选：直接使用 play_url.uri（如果是完整URL）
+  if (music.play_url?.uri && music.play_url.uri.startsWith('http')) {
+    return music.play_url.uri
+  }
+
+  return null
 }
 
 /**
@@ -113,9 +141,29 @@ export async function fetchVideoDetail(
       coverUrl: awemeDetail.video?.cover?.url_list?.[0]
     }
 
+    // 检查视频时长限制（Vercel部署保护）
+    if (DOUYIN_PIPELINE_LIMITS.ENABLED && videoInfo.duration > 0) {
+      const maxDuration = DOUYIN_PIPELINE_LIMITS.MAX_VIDEO_DURATION_SECONDS
+      if (videoInfo.duration > maxDuration) {
+        throw new DouyinPipelineStepError(
+          `视频时长超出限制：当前${formatDuration(videoInfo.duration)}，` +
+          `最大支持${formatDuration(maxDuration)}。` +
+          `如需处理更长视频，请联系管理员或使用自托管部署。`,
+          'fetch-detail'
+        )
+      }
+    }
+
+    // 提取音频URL（用于跳过FFmpeg，直接下载音频）
+    const audioUrl = resolveAudioUrl(awemeDetail)
+    if (audioUrl) {
+      console.info('[fetch-detail] 发现音频直链，可跳过FFmpeg提取')
+    }
+
     return {
       videoInfo,
       playUrl,
+      audioUrl,
       awemeDetail  // 传递给后续步骤使用（如提取hashtags）
     }
   } catch (error) {

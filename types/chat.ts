@@ -287,6 +287,8 @@ export interface DouyinDoneEventPayload {
   markdown: string
   videoInfo: DouyinVideoInfo
   transcript: string
+  /** 配额警告（partial 场景：内容已生成但追加配额失败） */
+  quotaWarning?: string
 }
 
 export type DouyinProgressStepStatus = 'pending' | 'active' | 'completed' | 'error'
@@ -334,6 +336,8 @@ export interface DouyinCommentsDoneEventPayload {
     userProfile: any
     suggestions: any
   }
+  /** 配额警告（partial 场景：内容已生成但追加配额失败） */
+  quotaWarning?: string
 }
 
 export interface DouyinCommentsProgressState {

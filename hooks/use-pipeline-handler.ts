@@ -503,6 +503,7 @@ export function usePipelineHandler(options: UsePipelineHandlerOptions = {}) {
     let updatedRecord: PipelineStateRecord
     let finalContent: string | undefined
     let errorMessage: string | undefined
+    let quotaWarning: string | undefined
 
     if (event.source === 'douyin-video') {
       const base: DouyinVideoPipelineState = current && current.source === 'douyin-video'
@@ -545,6 +546,7 @@ export function usePipelineHandler(options: UsePipelineHandlerOptions = {}) {
             updatedAt: now()
           }
           finalContent = resultPayload.markdown
+          quotaWarning = resultPayload.quotaWarning
           break
         }
         case 'error': {
@@ -602,6 +604,7 @@ export function usePipelineHandler(options: UsePipelineHandlerOptions = {}) {
             updatedAt: now()
           }
           finalContent = resultPayload.markdown
+          quotaWarning = resultPayload.quotaWarning
           break
         }
         case 'error': {
@@ -696,6 +699,15 @@ export function usePipelineHandler(options: UsePipelineHandlerOptions = {}) {
           pipelineLinkedMessageId: context.pendingAssistantId
         }
       })
+
+      // 如果有配额警告（partial 场景），发送 warn 事件
+      if (quotaWarning) {
+        emitEvent?.({
+          type: 'warn',
+          requestId: context.requestId,
+          message: quotaWarning
+        })
+      }
 
       initializedResultMessagesRef.current.delete(resultMessageId)
     }

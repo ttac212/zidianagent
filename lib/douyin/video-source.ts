@@ -17,6 +17,7 @@ export interface DouyinVideoSource {
   title: string;
   author: string;
   playUrl: string;
+  audioUrl: string | null;  // 音频直链（来自 music.play_url），可直接下载跳过 FFmpeg
   duration: number;
   hashtags: string[];
   videoTags: string[];
@@ -60,6 +61,28 @@ function extractPlayableUrl(video: DouyinVideo): string | null {
 }
 
 /**
+ * 从 TikHub 返回的 aweme_detail 中提取音频 URL
+ * 音频 URL 来自 music.play_url.url_list，可直接下载 MP3
+ * 这样可以跳过 FFmpeg 音频提取步骤，解决 Vercel 部署问题
+ */
+function extractAudioUrl(video: DouyinVideo): string | null {
+  const music = (video as any)?.music;
+  if (!music) return null;
+
+  // 优先使用 play_url.url_list
+  if (Array.isArray(music.play_url?.url_list) && music.play_url.url_list.length > 0) {
+    return music.play_url.url_list[0];
+  }
+
+  // 备选：直接使用 play_url.uri（如果是完整 URL）
+  if (music.play_url?.uri && music.play_url.uri.startsWith('http')) {
+    return music.play_url.uri;
+  }
+
+  return null;
+}
+
+/**
  * 规范化视频时长（统一为秒）
  */
 function normalizeDuration(duration?: number | null): number {
@@ -98,7 +121,13 @@ export async function createVideoSourceFromShareLink(
     throw new Error('未能获取可用的视频播放地址');
   }
 
-  // 4. 提取视频元数据
+  // 4. 提取音频 URL（用于跳过 FFmpeg，直接下载音频）
+  const audioUrl = extractAudioUrl(awemeDetail);
+  if (audioUrl) {
+    console.info('[video-source] 发现音频直链，可跳过 FFmpeg 提取');
+  }
+
+  // 5. 提取视频元数据
   const hashtags =
     awemeDetail.text_extra
       ?.filter((item: any) => item.hashtag_name)
@@ -107,7 +136,7 @@ export async function createVideoSourceFromShareLink(
   const videoTags =
     awemeDetail.video_tag?.map((tag: any) => tag.tag_name).filter(Boolean) || [];
 
-  // 5. 构建视频源对象
+  // 6. 构建视频源对象
   return {
     videoId: shareResult.videoId,
     userId: shareResult.userId,
@@ -115,6 +144,7 @@ export async function createVideoSourceFromShareLink(
     title: awemeDetail.desc || '未知标题',
     author: awemeDetail.author?.nickname || '未知作者',
     playUrl,
+    audioUrl,
     duration: normalizeDuration(awemeDetail.video?.duration),
     hashtags,
     videoTags,

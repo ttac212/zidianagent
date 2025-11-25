@@ -14,7 +14,7 @@ import { getToken } from 'next-auth/jwt';
 import { VideoProcessor } from '@/lib/video/video-processor';
 import { createVideoSourceFromShareLink } from '@/lib/douyin/video-source';
 import { mapStageProgress } from '@/lib/douyin/progress-mapper';
-import { DOUYIN_DEFAULT_HEADERS } from '@/lib/douyin/constants';
+import { DOUYIN_DEFAULT_HEADERS, DOUYIN_PIPELINE_LIMITS, isVercelEnvironment } from '@/lib/douyin/constants';
 import { buildLLMRequestAuto } from '@/lib/ai/request-builder';
 
 export async function POST(req: NextRequest) {
@@ -80,70 +80,166 @@ export async function POST(req: NextRequest) {
             },
           });
 
-          // 2. 下载视频
-          sendEvent('progress', {
-            stage: 'downloading',
-            message: '正在下载视频...',
-            percent: mapStageProgress('downloading', 0),
-          });
+          // 2. 获取音频
+          let audioBuffer!: Buffer;  // 使用断言，因为下面的逻辑保证了赋值
+          let audioDownloadSuccess = false;
 
-          const requestHeaders: Record<string, string> = {
-            ...DOUYIN_DEFAULT_HEADERS,
-          };
+          // 检查是否有音频直链
+          if (videoSource.audioUrl) {
+            // 尝试直接下载音频（跳过视频下载和 FFmpeg）
+            sendEvent('progress', {
+              stage: 'downloading',
+              message: '发现音频直链，正在下载音频...',
+              percent: mapStageProgress('downloading', 50),
+            });
 
-          // 先获取视频大小
-          const videoInfo = await VideoProcessor.getVideoInfo(videoSource.playUrl, {
-            headers: requestHeaders,
-          });
+            try {
+              // 创建带超时的 AbortController，同时链接请求的 signal
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), DOUYIN_PIPELINE_LIMITS.DOWNLOAD_TIMEOUT_MS);
 
-          let lastDownloadPercent = -1;
-          const downloadResult = await VideoProcessor.downloadVideo(
-            videoSource.playUrl,
-            videoInfo,
-            {
-              headers: requestHeaders,
-              signal: req.signal,
-              onProgress: async (downloaded, total) => {
-                if (!total) return;
-                const percent = Math.floor((downloaded / total) * 100);
-                if (percent === lastDownloadPercent) return;
-                lastDownloadPercent = percent;
-                sendEvent('progress', {
-                  stage: 'downloading',
-                  message: `下载进度 ${percent}%`,
-                  percent: mapStageProgress('downloading', percent),
+              // 如果请求被中断，也中断下载
+              const abortHandler = () => controller.abort();
+              req.signal.addEventListener('abort', abortHandler);
+
+              try {
+                const audioResponse = await fetch(videoSource.audioUrl, {
+                  headers: DOUYIN_DEFAULT_HEADERS,
+                  signal: controller.signal,
                 });
-              },
+
+                if (!audioResponse.ok) {
+                  throw new Error(`HTTP ${audioResponse.status}`);
+                }
+
+                audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+                audioDownloadSuccess = true;
+
+                sendEvent('info', {
+                  stage: 'downloaded',
+                  message: '音频下载完成（使用音频直链）',
+                  size: (audioBuffer.length / (1024 * 1024)).toFixed(2) + ' MB',
+                });
+
+                sendEvent('progress', {
+                  stage: 'extracting',
+                  message: '使用音频直链，跳过提取步骤',
+                  percent: mapStageProgress('extracting', 100),
+                });
+
+                sendEvent('info', {
+                  stage: 'extracted',
+                  message: '已跳过（使用音频直链）',
+                  size: (audioBuffer.length / (1024 * 1024)).toFixed(2) + ' MB',
+                });
+              } finally {
+                clearTimeout(timeoutId);
+                req.signal.removeEventListener('abort', abortHandler);
+              }
+            } catch (error) {
+              // 音频直链下载失败，检查是否可以回退
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              console.warn(`[文案提取] 音频直链下载失败: ${errorMessage}`);
+
+              // 用户取消请求，直接抛出
+              if (req.signal.aborted) {
+                throw new Error('用户取消请求');
+              }
+
+              // 超时错误
+              if (error instanceof Error && error.name === 'AbortError') {
+                // Vercel 环境无法回退
+                if (isVercelEnvironment()) {
+                  throw new Error('音频下载超时且无法回退 (Vercel环境)');
+                }
+                console.info('[文案提取] 音频下载超时，回退到传统 FFmpeg 流程');
+              } else if (isVercelEnvironment()) {
+                // Vercel 环境不支持 FFmpeg 回退
+                throw new Error(`音频直链下载失败且无法回退 (Vercel环境): ${errorMessage}`);
+              }
+
+              // 本地环境可以回退
+              console.info('[文案提取] 回退到传统 FFmpeg 流程');
+              sendEvent('progress', {
+                stage: 'downloading',
+                message: '音频直链失败，回退到视频下载...',
+                percent: mapStageProgress('downloading', 10),
+              });
             }
-          );
-          const videoBuffer = downloadResult.buffer;
+          }
 
-          sendEvent('info', {
-            stage: 'downloaded',
-            message:
-              downloadResult.strategy === 'chunked' ? '视频分段下载完成' : '视频下载完成',
-            size: (videoBuffer.length / (1024 * 1024)).toFixed(2) + ' MB',
-          });
+          // 如果音频直链下载失败或没有音频直链，使用传统流程
+          if (!audioDownloadSuccess) {
+            // Vercel 环境检查
+            if (!videoSource.audioUrl && isVercelEnvironment()) {
+              throw new Error('未找到音频直链，Vercel环境不支持FFmpeg');
+            }
 
-          // 3. 提取音频
-          sendEvent('progress', {
-            stage: 'extracting',
-            message: '正在提取音频...',
-            percent: mapStageProgress('extracting', 0),
-          });
+            // 备用：下载视频 + FFmpeg 提取
+            sendEvent('progress', {
+              stage: 'downloading',
+              message: '正在下载视频...',
+              percent: mapStageProgress('downloading', 0),
+            });
 
-          const audioBuffer = await VideoProcessor.extractAudio(videoBuffer, {
-            format: 'mp3',
-            sampleRate: 16000,
-            channels: 1,
-            bitrate: '128k',
-          });
+            const requestHeaders: Record<string, string> = {
+              ...DOUYIN_DEFAULT_HEADERS,
+            };
 
-          sendEvent('info', {
-            stage: 'extracted',
-            message: '音频提取完成',
-            size: (audioBuffer.length / (1024 * 1024)).toFixed(2) + ' MB',
-          });
+            // 先获取视频大小
+            const videoInfo = await VideoProcessor.getVideoInfo(videoSource.playUrl, {
+              headers: requestHeaders,
+            });
+
+            let lastDownloadPercent = -1;
+            const downloadResult = await VideoProcessor.downloadVideo(
+              videoSource.playUrl,
+              videoInfo,
+              {
+                headers: requestHeaders,
+                signal: req.signal,
+                onProgress: async (downloaded, total) => {
+                  if (!total) return;
+                  const percent = Math.floor((downloaded / total) * 100);
+                  if (percent === lastDownloadPercent) return;
+                  lastDownloadPercent = percent;
+                  sendEvent('progress', {
+                    stage: 'downloading',
+                    message: `下载进度 ${percent}%`,
+                    percent: mapStageProgress('downloading', percent),
+                  });
+                },
+              }
+            );
+            const videoBuffer = downloadResult.buffer;
+
+            sendEvent('info', {
+              stage: 'downloaded',
+              message:
+                downloadResult.strategy === 'chunked' ? '视频分段下载完成' : '视频下载完成',
+              size: (videoBuffer.length / (1024 * 1024)).toFixed(2) + ' MB',
+            });
+
+            // 提取音频
+            sendEvent('progress', {
+              stage: 'extracting',
+              message: '正在提取音频...',
+              percent: mapStageProgress('extracting', 0),
+            });
+
+            audioBuffer = await VideoProcessor.extractAudio(videoBuffer, {
+              format: 'mp3',
+              sampleRate: 16000,
+              channels: 1,
+              bitrate: '128k',
+            });
+
+            sendEvent('info', {
+              stage: 'extracted',
+              message: '音频提取完成',
+              size: (audioBuffer.length / (1024 * 1024)).toFixed(2) + ' MB',
+            });
+          }
 
           // 4. 使用 GPT-4o Audio Preview 转录
           sendEvent('progress', {

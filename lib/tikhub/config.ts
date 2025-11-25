@@ -5,6 +5,19 @@
  * Swagger UI: https://api.tikhub.io
  */
 
+import { DOUYIN_PIPELINE_LIMITS } from '@/lib/douyin/constants'
+
+/**
+ * 获取超时配置
+ * 如果启用了 Vercel 限制，使用较短的超时时间
+ */
+function getTimeoutConfig(): number {
+  if (DOUYIN_PIPELINE_LIMITS.ENABLED) {
+    return DOUYIN_PIPELINE_LIMITS.TIKHUB_TIMEOUT_MS
+  }
+  return 60000 // 默认60秒
+}
+
 export const TIKHUB_CONFIG = {
   // API基础URL
   baseURL: process.env.TIKHUB_API_BASE_URL || 'https://api.tikhub.io',
@@ -12,8 +25,10 @@ export const TIKHUB_CONFIG = {
   // API密钥（从环境变量获取）
   apiKey: process.env.TIKHUB_API_KEY || '',
 
-  // 请求超时时间（毫秒）
-  timeout: 60000,
+  // 请求超时时间（毫秒）- 根据环境动态配置
+  get timeout() {
+    return getTimeoutConfig()
+  },
 
   // 最大重试次数
   maxRetries: 3,

@@ -16,6 +16,7 @@ import {
   serverError,
 } from '@/lib/api/http-response'
 import { buildLLMRequestAuto } from '@/lib/ai/request-builder'
+import { DOUYIN_DEFAULT_HEADERS, DOUYIN_PIPELINE_LIMITS, isVercelEnvironment } from '@/lib/douyin/constants'
 
 export const maxDuration = 300 // 5分钟超时
 
@@ -70,42 +71,108 @@ async function transcribeContent(
 
     const awemeDetail = videoDetail.aweme_detail
 
-    // 3. 获取视频播放地址
-    const videoUrl = resolvePlayableVideoUrl(awemeDetail)
-    if (!videoUrl) {
-      return {
-        contentId,
-        status: 'failed',
-        error: '无法获取视频播放地址',
+    // 3. 获取音频直链（优先）或视频播放地址（备用）
+    const audioUrl = resolveAudioUrl(awemeDetail)
+    let audioBuffer: Buffer
+
+    if (audioUrl) {
+      // 尝试直接下载音频（跳过 FFmpeg）
+      console.info(`[批量转录] 发现音频直链，直接下载: ${audioUrl.substring(0, 80)}...`)
+
+      try {
+        // 创建带超时的 AbortController
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), DOUYIN_PIPELINE_LIMITS.DOWNLOAD_TIMEOUT_MS)
+
+        try {
+          const audioResponse = await fetch(audioUrl, {
+            headers: DOUYIN_DEFAULT_HEADERS,
+            signal: controller.signal,
+          })
+
+          if (!audioResponse.ok) {
+            throw new Error(`HTTP ${audioResponse.status}`)
+          }
+
+          audioBuffer = Buffer.from(await audioResponse.arrayBuffer())
+          console.info(`[批量转录] 音频下载完成，大小: ${(audioBuffer.length / 1024).toFixed(2)} KB`)
+        } finally {
+          clearTimeout(timeoutId)
+        }
+      } catch (error) {
+        // 音频直链下载失败，检查是否可以回退
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        console.warn(`[批量转录] 音频直链下载失败: ${errorMessage}`)
+
+        // Vercel 环境不支持 FFmpeg 回退，直接返回失败
+        if (isVercelEnvironment()) {
+          const isTimeout = error instanceof Error && error.name === 'AbortError'
+          return {
+            contentId,
+            status: 'failed',
+            error: isTimeout
+              ? '下载音频超时且无法回退 (Vercel环境)'
+              : `音频直链下载失败且无法回退 (Vercel环境): ${errorMessage}`,
+          }
+        }
+
+        // 本地环境：无论超时还是其他错误都可以回退到 FFmpeg 流程
+        console.info('[批量转录] 回退到传统 FFmpeg 流程')
+        const videoUrl = resolvePlayableVideoUrl(awemeDetail)
+        if (!videoUrl) {
+          return { contentId, status: 'failed', error: '无法获取视频播放地址' }
+        }
+
+        const videoInfo = await VideoProcessor.getVideoInfo(videoUrl, {
+          headers: DOUYIN_DEFAULT_HEADERS,
+        })
+
+        const downloadResult = await VideoProcessor.downloadVideo(videoUrl, videoInfo, {
+          headers: DOUYIN_DEFAULT_HEADERS,
+          maxRetries: 3,
+        })
+
+        audioBuffer = await VideoProcessor.extractAudio(downloadResult.buffer, {
+          format: 'mp3',
+          sampleRate: 16000,
+          channels: 1,
+          bitrate: '128k',
+        })
       }
+    } else {
+      // 备用：下载视频 + FFmpeg 提取（仅本地环境可用）
+      console.warn('[批量转录] 未找到音频直链，使用传统 FFmpeg 流程')
+
+      // Vercel 环境不支持 FFmpeg
+      if (isVercelEnvironment()) {
+        return {
+          contentId,
+          status: 'failed',
+          error: '未找到音频直链，Vercel环境不支持FFmpeg',
+        }
+      }
+
+      const videoUrl = resolvePlayableVideoUrl(awemeDetail)
+      if (!videoUrl) {
+        return { contentId, status: 'failed', error: '无法获取视频播放地址' }
+      }
+
+      const videoInfo = await VideoProcessor.getVideoInfo(videoUrl, {
+        headers: DOUYIN_DEFAULT_HEADERS,
+      })
+
+      const downloadResult = await VideoProcessor.downloadVideo(videoUrl, videoInfo, {
+        headers: DOUYIN_DEFAULT_HEADERS,
+        maxRetries: 3,
+      })
+
+      audioBuffer = await VideoProcessor.extractAudio(downloadResult.buffer, {
+        format: 'mp3',
+        sampleRate: 16000,
+        channels: 1,
+        bitrate: '128k',
+      })
     }
-
-    // 4. 下载视频
-    const requestHeaders: Record<string, string> = {
-      'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      Referer: 'https://www.douyin.com/',
-    }
-
-    // 先获取视频信息（更可靠）
-    const videoInfo = await VideoProcessor.getVideoInfo(videoUrl, {
-      headers: requestHeaders,
-    })
-
-    const downloadResult = await VideoProcessor.downloadVideo(videoUrl, videoInfo, {
-      headers: requestHeaders,
-      maxRetries: 3,
-    })
-
-    const videoBuffer = downloadResult.buffer
-
-    // 5. 提取音频
-    const audioBuffer = await VideoProcessor.extractAudio(videoBuffer, {
-      format: 'mp3',
-      sampleRate: 16000,
-      channels: 1,
-      bitrate: '128k',
-    })
 
     // 6. GPT-4o 转录
     const base64Audio = audioBuffer.toString('base64')
@@ -351,6 +418,28 @@ function resolvePlayableVideoUrl(awemeDetail: any): string | null {
   // 备用: download_addr
   if (awemeDetail.video?.download_addr?.url_list?.length > 0) {
     return awemeDetail.video.download_addr.url_list[0]
+  }
+
+  return null
+}
+
+/**
+ * 从 aweme_detail 中提取音频 URL
+ * 音频 URL 来自 music.play_url.url_list，可直接下载 MP3
+ * 这样可以跳过 FFmpeg 音频提取步骤，解决 Vercel 部署问题
+ */
+function resolveAudioUrl(awemeDetail: any): string | null {
+  const music = awemeDetail?.music
+  if (!music) return null
+
+  // 优先使用 play_url.url_list
+  if (Array.isArray(music.play_url?.url_list) && music.play_url.url_list.length > 0) {
+    return music.play_url.url_list[0]
+  }
+
+  // 备选：直接使用 play_url.uri（如果是完整 URL）
+  if (music.play_url?.uri && music.play_url.uri.startsWith('http')) {
+    return music.play_url.uri
   }
 
   return null
