@@ -64,9 +64,10 @@ export async function ensureMerchantMembership(
   }
 
   const now = new Date()
+  // PostgreSQL 枚举类型需要显式类型转换
   await prisma.$executeRaw`
     INSERT INTO merchant_members ("id","merchantId","userId","role","createdAt","updatedAt")
-    VALUES (${randomUUID()}, ${merchantId}, ${userId}, ${role}, ${now}, ${now})
+    VALUES (${randomUUID()}, ${merchantId}, ${userId}, ${role}::"MerchantMemberRole", ${now}, ${now})
   `
 
   return true
