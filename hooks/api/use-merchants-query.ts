@@ -45,9 +45,9 @@ async function fetchMerchants(filters: MerchantFilters): Promise<MerchantsRespon
     }
   })
 
-  const response = await fetch(`/api/merchants?${params.toString()}`, {
-    cache: 'no-store',
-  })
+  // 移除 cache: 'no-store'，让 Next.js 使用默认缓存策略
+  // React Query 的 staleTime 会控制数据新鲜度
+  const response = await fetch(`/api/merchants?${params.toString()}`)
 
   if (!response.ok) {
     const errorText = await response.text()
@@ -58,9 +58,8 @@ async function fetchMerchants(filters: MerchantFilters): Promise<MerchantsRespon
 }
 
 async function fetchMerchantCategories(): Promise<MerchantCategory[]> {
-  const response = await fetch('/api/merchants/categories', {
-    cache: 'no-store',
-  })
+  // 分类数据几乎不变，可以使用浏览器缓存
+  const response = await fetch('/api/merchants/categories')
 
   if (!response.ok) {
     throw new Error('获取商家分类失败')
@@ -74,9 +73,8 @@ interface StatsResponse {
 }
 
 async function fetchMerchantStats(): Promise<MerchantStats> {
-  const response = await fetch('/api/merchants/stats', {
-    cache: 'no-store',
-  })
+  // 统计数据可以容忍几分钟的延迟
+  const response = await fetch('/api/merchants/stats')
 
   if (!response.ok) {
     throw new Error('获取商家统计失败')
@@ -88,7 +86,6 @@ async function fetchMerchantStats(): Promise<MerchantStats> {
 
 async function fetchMerchantDetail(id: string, signal?: AbortSignal): Promise<MerchantWithDetails> {
   const response = await fetch(`/api/merchants/${id}?includeContents=false`, {
-    cache: 'no-store',
     signal,
   })
 
@@ -130,7 +127,6 @@ async function fetchMerchantContents(
 ): Promise<ContentListResponse> {
   const params = buildContentParams(filters)
   const response = await fetch(`/api/merchants/${merchantId}/contents?${params.toString()}`, {
-    cache: 'no-store',
     signal,
   })
 
@@ -169,8 +165,8 @@ export function useMerchantsQuery(filters: MerchantFilters) {
   return useQuery({
     queryKey: merchantKeys.list(filters),
     queryFn: () => fetchMerchants(filters),
-    staleTime: 2 * 60 * 1000, // 2分钟
-    gcTime: 5 * 60 * 1000,    // 5分钟
+    staleTime: 5 * 60 * 1000,  // 5分钟（商家数据变化不频繁）
+    gcTime: 10 * 60 * 1000,    // 10分钟
   })
 }
 
@@ -181,8 +177,8 @@ export function useMerchantCategoriesQuery() {
   return useQuery({
     queryKey: merchantKeys.categories(),
     queryFn: fetchMerchantCategories,
-    staleTime: 10 * 60 * 1000, // 10分钟（分类数据变化不频繁）
-    gcTime: 30 * 60 * 1000,    // 30分钟
+    staleTime: 30 * 60 * 1000, // 30分钟（分类几乎不变）
+    gcTime: 60 * 60 * 1000,    // 1小时
   })
 }
 
@@ -193,8 +189,8 @@ export function useMerchantStatsQuery() {
   return useQuery({
     queryKey: merchantKeys.stats(),
     queryFn: fetchMerchantStats,
-    staleTime: 5 * 60 * 1000,  // 5分钟
-    gcTime: 10 * 60 * 1000,    // 10分钟
+    staleTime: 10 * 60 * 1000, // 10分钟
+    gcTime: 20 * 60 * 1000,    // 20分钟
   })
 }
 
@@ -204,8 +200,8 @@ export function useMerchantDetailQuery(merchantId?: string) {
     queryKey: ['merchant-detail', merchantId ?? 'unknown'],
     queryFn: ({ signal }) => fetchMerchantDetail(merchantId!, signal),
     enabled,
-    staleTime: 2 * 60 * 1000,
-    gcTime: 5 * 60 * 1000,
+    staleTime: 5 * 60 * 1000,  // 5分钟
+    gcTime: 10 * 60 * 1000,    // 10分钟
   })
 }
 
@@ -219,8 +215,8 @@ export function useMerchantContentsQuery(
     queryFn: ({ signal }) => fetchMerchantContents(merchantId!, filters, signal),
     enabled,
     placeholderData: keepPreviousData,
-    staleTime: 60 * 1000,
-    gcTime: 5 * 60 * 1000,
+    staleTime: 3 * 60 * 1000,  // 3分钟
+    gcTime: 10 * 60 * 1000,    // 10分钟
   })
 }
 
