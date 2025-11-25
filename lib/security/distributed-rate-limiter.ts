@@ -405,14 +405,17 @@ let globalRateLimiter: DistributedRateLimiter | null = null
  * @param options - 可选配置
  */
 export function getRateLimiter(options?: { skipProductionCheck?: boolean }): DistributedRateLimiter {
-  // 每次调用都重新检查生产环境安全性（除非明确跳过）
+  // 生产环境检查 - 仅警告，不阻止
   if (!options?.skipProductionCheck && process.env.NODE_ENV === 'production') {
-    // 生产环境必须配置分布式存储
     if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
-      throw new Error(
-        'PRODUCTION SECURITY ERROR: Rate limiting requires distributed storage. ' +
-        'Configure UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN environment variables.'
-      )
+      // 仅在首次调用时警告，不阻止应用启动
+      if (!globalRateLimiter) {
+        console.warn(
+          '[RateLimiter] WARNING: Production environment without distributed storage. ' +
+          'Rate limiting will use in-memory store which does not persist across serverless invocations. ' +
+          'For proper rate limiting, configure UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN.'
+        )
+      }
     }
   }
 
