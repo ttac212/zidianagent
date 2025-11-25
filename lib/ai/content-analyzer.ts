@@ -4,7 +4,7 @@
  * 用途: 分析商家TOP内容的质量特征，用于优化商家Brief生成
  * 注意: 分析结果不持久化，仅在生成档案时临时使用
  *
- * 使用Claude Sonnet 4.5分析短视频内容质量：
+ * 使用Claude Opus 4.5分析短视频内容质量：
  * - 开头吸引力（前3秒）
  * - 情绪点（humor/pain/satisfaction等）
  * - 痛点和需求提取
@@ -15,7 +15,7 @@
 import { buildLLMRequestAuto } from '@/lib/ai/request-builder'
 
 // 使用与档案生成相同的模型配置
-const MODEL_ID = 'anthropic/claude-sonnet-4.5'
+const MODEL_ID = 'anthropic/claude-opus-4.5'
 const API_BASE = process.env.ZENMUX_API_BASE || 'https://zenmux.ai/api/v1'
 
 /**
@@ -97,12 +97,13 @@ const SYSTEM_PROMPT = `你是短视频内容质量分析专家，擅长从文案
  * 分析单条内容质量
  *
  * @param content 内容数据（标题、转录文本）
+ * @param signal 中断信号
  * @returns AI分析结果
  */
 export async function analyzeContentQuality(content: {
   title: string
   transcript: string | null
-}): Promise<ContentQualityAnalysis | null> {
+}, signal?: AbortSignal): Promise<ContentQualityAnalysis | null> {
   // 检查数据完整性
   if (!content.transcript || content.transcript.length < 10) {
     console.warn('[ContentAnalyzer] 转录文本过短或缺失，跳过分析')
@@ -114,7 +115,7 @@ export async function analyzeContentQuality(content: {
     const userPrompt = buildAnalysisPrompt(content)
 
     // 调用LLM API
-    const response = await callLLMAPI(userPrompt)
+    const response = await callLLMAPI(userPrompt, signal)
 
     // 解析响应
     const analysis = parseAnalysisResponse(response.content)
@@ -122,36 +123,91 @@ export async function analyzeContentQuality(content: {
     return analysis
 
   } catch (error) {
+    // 中断错误直接抛出
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw error
+    }
     console.error('[ContentAnalyzer] 分析失败:', error)
     return null
   }
 }
 
 /**
- * 批量分析内容质量（并发控制）
+ * 进度回调函数类型
+ */
+export type AnalysisProgressCallback = (progress: {
+  current: number
+  total: number
+  contentId: string
+  contentTitle: string
+  status: 'started' | 'completed' | 'failed'
+}) => void
+
+/**
+ * 批量分析内容质量（并发控制，支持中断）
  *
  * @param contents 内容列表
- * @param concurrency 并发数（默认3）
+ * @param concurrency 并发数（默认10）
+ * @param onProgress 进度回调函数
+ * @param signal 中断信号
  * @returns 分析结果Map（contentId -> analysis）
  */
 export async function analyzeContentQualityBatch(
   contents: Array<{ id: string; title: string; transcript: string | null }>,
-  concurrency = 3
+  concurrency = 10,
+  onProgress?: AnalysisProgressCallback,
+  signal?: AbortSignal
 ): Promise<Map<string, ContentQualityAnalysis>> {
   const results = new Map<string, ContentQualityAnalysis>()
 
   // 过滤掉无效数据
   const validContents = contents.filter(c => c.transcript && c.transcript.length >= 10)
 
-  console.info(`[ContentAnalyzer] 批量分析: ${validContents.length}/${contents.length} 条有效内容`)
+  console.info(`[ContentAnalyzer] 批量分析: ${validContents.length}/${contents.length} 条有效内容，并发数: ${concurrency}`)
 
-  // 分批处理
+  // 进度计数器
+  let startedCount = 0
+  let completedCount = 0
+
+  // 分批处理（10并发，一次性处理所有内容）
   for (let i = 0; i < validContents.length; i += concurrency) {
+    // 检查是否已中断
+    if (signal?.aborted) {
+      console.info('[ContentAnalyzer] 分析被中断')
+      break
+    }
+
     const batch = validContents.slice(i, i + concurrency)
 
     const batchResults = await Promise.allSettled(
       batch.map(async (content) => {
-        const analysis = await analyzeContentQuality(content)
+        // 检查中断
+        if (signal?.aborted) {
+          throw new Error('分析被中断')
+        }
+
+        // 通知开始分析（使用内容在批次中的索引+已处理数量）
+        startedCount++
+        onProgress?.({
+          current: startedCount,
+          total: validContents.length,
+          contentId: content.id,
+          contentTitle: content.title,
+          status: 'started'
+        })
+
+        const analysis = await analyzeContentQuality(content, signal)
+        completedCount++
+
+        // 通知分析完成
+        onProgress?.({
+          current: completedCount,
+          total: validContents.length,
+          contentId: content.id,
+          contentTitle: content.title,
+          status: analysis ? 'completed' : 'failed'
+        })
+
         return { id: content.id, analysis }
       })
     )
@@ -163,11 +219,6 @@ export async function analyzeContentQualityBatch(
     })
 
     console.info(`[ContentAnalyzer] 已处理 ${Math.min(i + concurrency, validContents.length)}/${validContents.length}`)
-
-    // 避免过快请求，每批间隔1秒
-    if (i + concurrency < validContents.length) {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-    }
   }
 
   return results
@@ -222,7 +273,7 @@ ${first50}
 /**
  * 调用LLM API
  */
-async function callLLMAPI(userPrompt: string) {
+async function callLLMAPI(userPrompt: string, signal?: AbortSignal) {
   const apiKey = process.env.ZENMUX_API_KEY || ''
 
   if (!apiKey) {
@@ -250,7 +301,8 @@ async function callLLMAPI(userPrompt: string) {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify(requestBody)
+    body: JSON.stringify(requestBody),
+    signal // 传递中断信号
   })
 
   if (!response.ok) {

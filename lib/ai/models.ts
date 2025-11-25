@@ -5,7 +5,7 @@ const publicAllowlist = (process.env.NEXT_PUBLIC_MODEL_ALLOWLIST || '').trim()
 const privateAllowlist = (process.env.MODEL_ALLOWLIST || '').trim()
 const raw = publicAllowlist || privateAllowlist
 const DEFAULT_ALLOWLIST = [
-  'anthropic/claude-sonnet-4.5'
+  'anthropic/claude-opus-4.5'
 ]
 
 const allowlist = raw
@@ -14,6 +14,7 @@ const allowlist = raw
 
 // 模型友好名称映射
 const MODEL_NAME_MAP: Record<string, string> = {
+  'anthropic/claude-opus-4.5': 'Claude Opus 4.5',
   'anthropic/claude-sonnet-4.5': 'Claude Sonnet 4.5',
   'openai/gpt-5.1': 'GPT-5.1',
   'google/gemini-3-pro-preview': 'Gemini 3 Pro'
@@ -27,6 +28,11 @@ export interface ModelCapabilities {
 }
 
 const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
+  'anthropic/claude-opus-4.5': {
+    supportsReasoning: true,
+    provider: 'ZenMux',
+    family: 'claude'
+  },
   'anthropic/claude-sonnet-4.5': {
     supportsReasoning: true,
     provider: 'ZenMux',

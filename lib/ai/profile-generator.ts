@@ -13,15 +13,32 @@ import { prisma } from '@/lib/prisma'
 import { parseProfileResponse } from '@/lib/ai/profile-parser'
 import { calculateContentMetrics, getQualityLevel } from '@/lib/utils/content-metrics'
 import { detectFraud } from '@/lib/utils/fraud-detection'
-import { analyzeContentQualityBatch } from '@/lib/ai/content-analyzer'
+import { analyzeContentQualityBatch, type AnalysisProgressCallback } from '@/lib/ai/content-analyzer'
 import { buildLLMRequestAuto } from '@/lib/ai/request-builder'
 import { validateTranscriptsBatch, shouldTranscribeBeforeProfile } from '@/lib/utils/transcript-validator'
 import { TranscriptionRequiredError } from '@/lib/errors/transcription-errors'
 
-// 使用grok-4-fast模型(ZenMux API,速度快成本低)
-const MODEL_ID = 'anthropic/claude-sonnet-4.5'
+// 使用Claude Opus 4.5模型(ZenMux API)
+const MODEL_ID = 'anthropic/claude-opus-4.5'
 const API_BASE = process.env.ZENMUX_API_BASE || 'https://zenmux.ai/api/v1'
 const API_KEY = process.env.ZENMUX_API_KEY || ''
+
+/**
+ * 档案生成进度事件类型
+ */
+export type ProfileGenerateEvent =
+  | { type: 'started'; data: { merchantId: string; merchantName: string; totalContents: number } }
+  | { type: 'step'; data: { step: string; status: 'started' | 'completed'; message: string } }
+  | { type: 'content_analysis'; data: { current: number; total: number; contentId: string; contentTitle: string; status: 'started' | 'completed' | 'failed' } }
+  | { type: 'profile_generating'; data: { message: string } }
+  | { type: 'done'; data: { profile: any; tokensUsed: number; model: string } }
+  | { type: 'error'; data: { message: string; code?: string } }
+  | { type: 'transcription_required'; data: { total: number; missingCount: number; missingPercentage: number; contentsToTranscribe: Array<{ id: string; title: string }> } }
+
+/**
+ * 进度回调函数类型
+ */
+export type ProfileProgressCallback = (event: ProfileGenerateEvent) => void
 
 /**
  * System Prompt - 定义AI的角色和输出要求
@@ -56,13 +73,26 @@ const SYSTEM_PROMPT = `你是抖音短视频文案创作专家。
 6. 只输出JSON，不要额外的解释文字`
 
 /**
- * 生成商家档案的主函数
+ * 生成商家档案的主函数（支持进度回调和中断）
+ * @param merchantId 商家ID
+ * @param onProgress 进度回调函数（可选，用于SSE流式输出）
+ * @param signal 中断信号（可选，用于取消生成）
  */
-export async function generateMerchantProfile(merchantId: string) {
+export async function generateMerchantProfile(
+  merchantId: string,
+  onProgress?: ProfileProgressCallback,
+  signal?: AbortSignal
+) {
   try {
     console.info('[ProfileGenerator] 开始生成档案:', merchantId)
 
+    // 检查是否已中断
+    if (signal?.aborted) {
+      throw new Error('生成被取消')
+    }
+
     // 1. 获取商家和TOP10内容
+    onProgress?.({ type: 'step', data: { step: 'fetch_merchant', status: 'started', message: '正在获取商家信息...' } })
     const merchant = await fetchMerchantWithContents(merchantId)
 
     if (!merchant) {
@@ -73,7 +103,16 @@ export async function generateMerchantProfile(merchantId: string) {
       throw new Error('商家暂无内容,无法生成档案')
     }
 
+    onProgress?.({ type: 'started', data: { merchantId, merchantName: merchant.name, totalContents: merchant.contents?.length || 0 } })
+    onProgress?.({ type: 'step', data: { step: 'fetch_merchant', status: 'completed', message: `已获取商家信息: ${merchant.name}` } })
+
+    // 检查是否已中断
+    if (signal?.aborted) {
+      throw new Error('生成被取消')
+    }
+
     // 1.5. 检查转录状态（新增）
+    onProgress?.({ type: 'step', data: { step: 'validate_transcripts', status: 'started', message: '正在验证转录状态...' } })
     console.info('[ProfileGenerator] 检查转录状态...')
     const validationResult = validateTranscriptsBatch(
       (merchant.contents || []).map(c => ({
@@ -94,26 +133,63 @@ export async function generateMerchantProfile(merchantId: string) {
     // 如果缺失比例≥30%，抛出TranscriptionRequiredError
     if (shouldTranscribeBeforeProfile(validationResult, 30)) {
       console.warn('[ProfileGenerator] 转录缺失过多，需要先转录')
-      throw new TranscriptionRequiredError({
+      const transcriptionData = {
         total: validationResult.total,
         missingCount: validationResult.needsTranscriptionCount,
         missingPercentage: validationResult.missingPercentage,
         contentsToTranscribe: validationResult.needsTranscription
-      })
+      }
+      onProgress?.({ type: 'transcription_required', data: transcriptionData })
+      throw new TranscriptionRequiredError(transcriptionData)
+    }
+
+    onProgress?.({ type: 'step', data: { step: 'validate_transcripts', status: 'completed', message: `转录验证完成，有效内容: ${validationResult.validCount}/${validationResult.total}` } })
+
+    // 检查是否已中断
+    if (signal?.aborted) {
+      throw new Error('生成被取消')
     }
 
     // 2. AI分析TOP10内容质量（批量并发）
+    onProgress?.({ type: 'step', data: { step: 'content_analysis', status: 'started', message: '正在进行AI内容质量分析...' } })
     console.info('[ProfileGenerator] 开始AI内容质量分析...')
-    const contentsWithAnalysis = await analyzeContentsQuality(merchant.contents || [])
+
+    // 创建内容分析进度回调
+    const analysisProgressCallback: AnalysisProgressCallback = (progress) => {
+      onProgress?.({
+        type: 'content_analysis',
+        data: {
+          current: progress.current,
+          total: progress.total,
+          contentId: progress.contentId,
+          contentTitle: progress.contentTitle,
+          status: progress.status
+        }
+      })
+    }
+
+    const contentsWithAnalysis = await analyzeContentsQualityWithProgress(merchant.contents || [], analysisProgressCallback, signal)
     console.info('[ProfileGenerator] AI分析完成，成功分析:', contentsWithAnalysis.filter(c => c.aiAnalysis).length, '条')
+    onProgress?.({ type: 'step', data: { step: 'content_analysis', status: 'completed', message: `AI分析完成，成功分析 ${contentsWithAnalysis.filter(c => c.aiAnalysis).length} 条内容` } })
+
+    // 检查是否已中断
+    if (signal?.aborted) {
+      throw new Error('生成被取消')
+    }
 
     // 3. 构建Prompt（包含AI分析结果）
+    onProgress?.({ type: 'profile_generating', data: { message: '正在生成商家创作简报...' } })
     const userPrompt = buildUserPrompt(merchant, contentsWithAnalysis)
 
     console.info('[ProfileGenerator] Prompt长度:', userPrompt.length)
 
     // 4. 调用LLM API生成档案
-    const aiResponse = await callLLMAPI(userPrompt)
+    const aiResponse = await callLLMAPI(userPrompt, signal)
+
+    // 检查是否已中断
+    if (signal?.aborted) {
+      throw new Error('生成被取消')
+    }
 
     console.info('[ProfileGenerator] AI响应长度:', aiResponse.content.length)
     console.info('[ProfileGenerator] Token使用:', aiResponse.usage)
@@ -142,22 +218,31 @@ export async function generateMerchantProfile(merchantId: string) {
 
     console.info('[ProfileGenerator] 档案已保存:', profile.id)
 
-    return {
+    const result = {
       profile,
       tokensUsed: aiResponse.usage.total_tokens,
       model: MODEL_ID
     }
 
+    onProgress?.({ type: 'done', data: result })
+
+    return result
+
   } catch (error) {
     console.error('[ProfileGenerator] 生成失败:', error)
+    // 不在这里推送error事件，由调用方统一处理，避免重复推送
     throw error
   }
 }
 
 /**
- * AI分析内容质量（批量）
+ * AI分析内容质量（带进度回调和中断支持）
  */
-async function analyzeContentsQuality(contents: any[]) {
+async function analyzeContentsQualityWithProgress(
+  contents: any[],
+  onProgress?: AnalysisProgressCallback,
+  signal?: AbortSignal
+) {
   if (contents.length === 0) return []
 
   // 准备分析数据
@@ -167,8 +252,8 @@ async function analyzeContentsQuality(contents: any[]) {
     transcript: c.transcript
   }))
 
-  // 批量调用AI分析（并发控制=3）
-  const analysisResults = await analyzeContentQualityBatch(analysisInput, 3)
+  // 批量调用AI分析（并发控制=10，带进度回调和中断支持）
+  const analysisResults = await analyzeContentQualityBatch(analysisInput, 10, onProgress, signal)
 
   // 合并分析结果
   return contents.map(c => ({
@@ -367,7 +452,7 @@ function translateVariety(variety: string): string {
 /**
  * 调用LLM API (ZenMux) - 使用结构化输出
  */
-async function callLLMAPI(userPrompt: string) {
+async function callLLMAPI(userPrompt: string, signal?: AbortSignal) {
   if (!API_KEY) {
     throw new Error('未配置ZENMUX_API_KEY')
   }
@@ -438,7 +523,8 @@ async function callLLMAPI(userPrompt: string) {
       'Authorization': `Bearer ${API_KEY}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify(requestBody)
+    body: JSON.stringify(requestBody),
+    signal // 传递中断信号
   })
 
   if (!response.ok) {

@@ -10,16 +10,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  useMerchantProfile,
-  useGenerateProfile,
-  isTranscriptionRequired
-} from '@/hooks/api/use-merchant-profile'
+import { useMerchantProfile } from '@/hooks/api/use-merchant-profile'
+import { useGenerateProfileStream } from '@/hooks/api/use-generate-profile-stream'
 import { useBatchTranscription } from '@/hooks/api/use-batch-transcription'
 import { ProfileAISection } from './profile-ai-section'
 import { ProfileCustomSection } from './profile-custom-section'
 import { ProfileEditDialog } from './profile-edit-dialog'
 import { TranscriptionProgressPanel } from './transcription-progress-panel'
+import { ProfileGenerateProgressPanel } from './profile-generate-progress'
 import { parseStoredProfile } from '@/lib/ai/profile-parser'
 import { ChevronDown, ChevronUp, RefreshCw, Edit, Sparkles, FileText } from 'lucide-react'
 import { toast } from 'sonner'
@@ -41,16 +39,26 @@ export function MerchantProfileCard({
 }: MerchantProfileCardProps) {
   const [isExpanded, setIsExpanded] = useState(true)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [generateAttempt, setGenerateAttempt] = useState(0)
 
   const { data, isLoading, error } = useMerchantProfile(merchantId)
-  const generateMutation = useGenerateProfile(merchantId)
 
-  // 使用新的批量转录hook
+  // 使用新的流式生成hook
+  const {
+    generate: generateStream,
+    cancel: cancelGenerate,
+    progress: generateProgress,
+    isGenerating,
+    transcriptionRequired,
+    resetProgress
+  } = useGenerateProfileStream(merchantId)
+
+  // 使用批量转录hook
   const {
     startTranscription,
     cancelTranscription,
     isTranscribing,
-    progress,
+    progress: transcriptionProgress,
     error: transcriptionError
   } = useBatchTranscription(merchantId, {
     mode: 'force',
@@ -77,50 +85,44 @@ export function MerchantProfileCard({
       return
     }
 
-    toast.loading('正在生成档案...', { id: 'generate-profile' })
+    setGenerateAttempt(attempt)
+
+    // 使用流式生成
+    await generateStream()
+
+    // 生成完成后检查是否需要转录
+    // 注意：transcriptionRequired会在SSE事件中更新
+  }
+
+  /**
+   * 处理转录需求后重新生成
+   */
+  const handleTranscriptionAndRetry = async () => {
+    if (!transcriptionRequired || generateAttempt >= MAX_GENERATE_ATTEMPTS) {
+      toast.error('转录后仍检测到缺失，请手动处理转录再重试')
+      return
+    }
+
+    const contentIds = transcriptionRequired.contentsToTranscribe.map((c) => c.id)
+    toast.info(
+      `发现 ${transcriptionRequired.missingCount} 条内容缺失有效转录（${transcriptionRequired.missingPercentage.toFixed(1)}%），正在自动转录...`,
+      { duration: 5000 }
+    )
 
     try {
-      const result = await generateMutation.mutateAsync()
+      const summary = await startTranscription(contentIds)
 
-      // 检查是否需要转录（使用类型守卫）
-      if (isTranscriptionRequired(result)) {
-        toast.dismiss('generate-profile')
-
-        if (attempt >= MAX_GENERATE_ATTEMPTS) {
-          toast.error('转录后仍检测到缺失，请手动处理转录再重试')
-          return
-        }
-
-        const contentIds = result.data.contentsToTranscribe.map((c) => c.id)
-        toast.info(
-          `发现 ${result.data.missingCount} 条内容缺失有效转录（${result.data.missingPercentage.toFixed(1)}%），正在自动转录...`,
-          { duration: 5000 }
-        )
-
-        // 使用新的批量转录hook
-        try {
-          const summary = await startTranscription(contentIds)
-
-          if (summary.failed > 0) {
-            toast.info(`已有 ${summary.failed} 条转录失败，其他内容将继续生成`)
-          }
-
-          toast.loading('转录完成，正在重新生成档案...', { id: 'generate-profile' })
-          return handleGenerate(attempt + 1)
-        } catch (err: any) {
-          // 用户取消或转录失败
-          toast.dismiss('generate-profile')
-          if (!err?.message?.includes('取消')) {
-            toast.error(err?.message || '自动转录失败，请稍后重试')
-          }
-          return
-        }
+      if (summary.failed > 0) {
+        toast.info(`已有 ${summary.failed} 条转录失败，其他内容将继续生成`)
       }
 
-      // 成功生成档案
-      toast.success('档案生成成功', { id: 'generate-profile' })
-    } catch (error: any) {
-      toast.error(error.message || '生成失败', { id: 'generate-profile' })
+      toast.info('转录完成，正在重新生成档案...')
+      resetProgress()
+      return handleGenerate(generateAttempt + 1)
+    } catch (err: any) {
+      if (!err?.message?.includes('取消')) {
+        toast.error(err?.message || '自动转录失败，请稍后重试')
+      }
     }
   }
 
@@ -173,10 +175,36 @@ export function MerchantProfileCard({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* 生成进度面板 */}
+          {(isGenerating || generateProgress.error) && (
+            <ProfileGenerateProgressPanel
+              progress={generateProgress}
+              onCancel={cancelGenerate}
+            />
+          )}
+
+          {/* 转录需求提示 */}
+          {transcriptionRequired && !isTranscribing && (
+            <div className="rounded-lg border bg-amber-50 dark:bg-amber-950/20 p-4 space-y-3">
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                发现 {transcriptionRequired.missingCount} 条内容缺失有效转录
+                （{transcriptionRequired.missingPercentage.toFixed(1)}%），需要先完成转录。
+              </p>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={handleTranscriptionAndRetry}>
+                  自动转录并继续
+                </Button>
+                <Button size="sm" variant="outline" onClick={resetProgress}>
+                  取消
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* 转录进度面板 */}
           {isTranscribing && (
             <TranscriptionProgressPanel
-              progress={progress}
+              progress={transcriptionProgress}
               isTranscribing={isTranscribing}
               error={transcriptionError}
               onCancel={cancelTranscription}
@@ -188,18 +216,16 @@ export function MerchantProfileCard({
             <div className="text-sm text-muted-foreground">
               暂无内容,无法生成档案。请先添加商家内容。
             </div>
-          ) : (
+          ) : !isGenerating && !transcriptionRequired && (
             <div className="flex items-center gap-2 flex-wrap">
               <Button
                 onClick={handleGenerateClick}
-                disabled={generateMutation.isPending || isTranscribing || !isAdmin}
+                disabled={isGenerating || isTranscribing || !isAdmin}
               >
-                {generateMutation.isPending || isTranscribing ? (
+                {isTranscribing ? (
                   <>
                     <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    {isTranscribing
-                      ? `转录中... (${progress.current}/${progress.total})`
-                      : '生成中...'}
+                    转录中... ({transcriptionProgress.current}/{transcriptionProgress.total})
                   </>
                 ) : (
                   <>
@@ -208,11 +234,6 @@ export function MerchantProfileCard({
                   </>
                 )}
               </Button>
-              {isTranscribing && (
-                <Button variant="outline" onClick={cancelTranscription}>
-                  取消转录
-                </Button>
-              )}
             </div>
           )}
           {!isAdmin && (
@@ -241,25 +262,25 @@ export function MerchantProfileCard({
             <div className="flex items-center gap-2">
               {isAdmin && (
                 <>
-                  {isTranscribing && (
+                  {(isTranscribing || isGenerating) && (
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={cancelTranscription}
+                      onClick={isGenerating ? cancelGenerate : cancelTranscription}
                     >
-                      取消转录
+                      取消
                     </Button>
                   )}
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={handleGenerateClick}
-                    disabled={generateMutation.isPending || isTranscribing}
-                    title={isTranscribing ? `转录中 ${progress.current}/${progress.total}` : '刷新档案'}
+                    disabled={isGenerating || isTranscribing}
+                    title={isTranscribing ? `转录中 ${transcriptionProgress.current}/${transcriptionProgress.total}` : '刷新档案'}
                   >
                     <RefreshCw
                       className={`h-4 w-4 ${
-                        generateMutation.isPending || isTranscribing ? 'animate-spin' : ''
+                        isGenerating || isTranscribing ? 'animate-spin' : ''
                       }`}
                     />
                   </Button>
@@ -305,10 +326,36 @@ export function MerchantProfileCard({
 
         {isExpanded && (
           <CardContent className="space-y-6">
+            {/* 生成进度面板 */}
+            {(isGenerating || generateProgress.error) && (
+              <ProfileGenerateProgressPanel
+                progress={generateProgress}
+                onCancel={cancelGenerate}
+              />
+            )}
+
+            {/* 转录需求提示 */}
+            {transcriptionRequired && !isTranscribing && (
+              <div className="rounded-lg border bg-amber-50 dark:bg-amber-950/20 p-4 space-y-3">
+                <p className="text-sm text-amber-800 dark:text-amber-200">
+                  发现 {transcriptionRequired.missingCount} 条内容缺失有效转录
+                  （{transcriptionRequired.missingPercentage.toFixed(1)}%），需要先完成转录。
+                </p>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={handleTranscriptionAndRetry}>
+                    自动转录并继续
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={resetProgress}>
+                    取消
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* 转录进度面板 */}
             {isTranscribing && (
               <TranscriptionProgressPanel
-                progress={progress}
+                progress={transcriptionProgress}
                 isTranscribing={isTranscribing}
                 error={transcriptionError}
                 onCancel={cancelTranscription}

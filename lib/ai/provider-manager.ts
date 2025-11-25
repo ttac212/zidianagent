@@ -86,7 +86,7 @@ export function transformModelId(modelId: string, provider: LLMProvider): string
       return normalizedModelId
     }
 
-    return process.env.ZENMUX_DEFAULT_MODEL || 'anthropic/claude-sonnet-4.5'
+    return process.env.ZENMUX_DEFAULT_MODEL || 'anthropic/claude-opus-4.5'
   }
 
   // 302.AI等其他提供商保持原格式
