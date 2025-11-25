@@ -9,7 +9,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { Readable, Writable } from 'stream';
 import pLimit from 'p-limit';
-import { extractAudioWasm, resetFFmpegInstance } from './ffmpeg-wasm';
+import { extractAudioWasm, USE_WASM_FFMPEG } from './ffmpeg-wasm';
 
 type SupportedAudioFormat = 'mp3' | 'wav' | 'pcm';
 
@@ -104,8 +104,7 @@ function shouldFallbackToTempFile(error: unknown): boolean {
 function isFFmpegNotFoundError(error: unknown): boolean {
   const errno = error as NodeJS.ErrnoException;
   // ENOENT: spawn ffmpeg 失败，找不到可执行文件
-  // EACCES: 权限不足（某些受限环境）
-  return errno?.code === 'ENOENT' || errno?.code === 'EACCES';
+  return errno?.code === 'ENOENT';
 }
 
 function mergeFfmpegErrors(primary: unknown, fallback: unknown): Error {
@@ -663,7 +662,11 @@ export class VideoProcessor {
 
   /**
    * 从视频Buffer提取音频
-   * 自动检测环境：优先使用原生 ffmpeg，不可用时降级到 WebAssembly 版本
+   *
+   * 决策逻辑（静态优先）：
+   * 1. Vercel 环境（USE_WASM_FFMPEG=true）：直接使用 WebAssembly 版本
+   * 2. 本地/VPS 环境：使用原生 ffmpeg（性能更好）
+   * 3. 安全网：如果原生 ffmpeg 不存在，降级到 WASM
    */
   static async extractAudio(
     videoBuffer: Buffer,
@@ -674,6 +677,12 @@ export class VideoProcessor {
       bitrate?: string;
     }
   ): Promise<Buffer> {
+    // 静态决策：Vercel 环境直接使用 WASM
+    if (USE_WASM_FFMPEG) {
+      console.info('[VideoProcessor] Vercel 环境，使用 FFmpeg WebAssembly');
+      return await extractAudioWasm(videoBuffer, options);
+    }
+
     const config: ExtractAudioConfig = {
       format: options?.format ?? 'mp3',
       sampleRate: options?.sampleRate ?? 16000,
@@ -684,9 +693,9 @@ export class VideoProcessor {
     try {
       return await VideoProcessor.extractAudioFromPipe(videoBuffer, config);
     } catch (error) {
-      // 检测是否是 ffmpeg 不存在的错误（Vercel serverless 环境）
+      // 安全网：如果原生 ffmpeg 不存在，降级到 WASM
       if (isFFmpegNotFoundError(error)) {
-        console.info('[VideoProcessor] 原生 ffmpeg 不可用，使用 WebAssembly 版本');
+        console.warn('[VideoProcessor] 原生 ffmpeg 不可用，降级到 WebAssembly 版本');
         return await extractAudioWasm(videoBuffer, options);
       }
 
@@ -697,9 +706,9 @@ export class VideoProcessor {
       try {
         return await VideoProcessor.extractAudioWithTempFile(videoBuffer, config);
       } catch (fallbackError) {
-        // 临时文件方式也失败，检查是否是 ffmpeg 不存在
+        // 安全网：临时文件方式也失败，尝试 WASM
         if (isFFmpegNotFoundError(fallbackError)) {
-          console.info('[VideoProcessor] 原生 ffmpeg 不可用，使用 WebAssembly 版本');
+          console.warn('[VideoProcessor] 原生 ffmpeg 不可用，降级到 WebAssembly 版本');
           return await extractAudioWasm(videoBuffer, options);
         }
         throw mergeFfmpegErrors(error, fallbackError);
