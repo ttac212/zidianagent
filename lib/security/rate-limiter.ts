@@ -10,28 +10,28 @@ import { getRateLimiter } from './distributed-rate-limiter'
 // 速率限制配置
 export const RATE_LIMIT_CONFIG = {
   // 通用API限制 (requests per minute)
-  GENERAL: { requests: 60, window: 60 * 1000, blockDuration: 60 * 1000 },
-  
-  // 聊天API限制 (更严格)
-  CHAT: { requests: 30, window: 60 * 1000, blockDuration: 5 * 60 * 1000 },
-  
-  // 认证相关API限制 (非常严格)
-  AUTH: { requests: 10, window: 60 * 1000, blockDuration: 15 * 60 * 1000 },
-  
+  GENERAL: { requests: 120, window: 60 * 1000, blockDuration: 30 * 1000 },
+
+  // 聊天API限制 (放宽限制)
+  CHAT: { requests: 60, window: 60 * 1000, blockDuration: 60 * 1000 },
+
+  // 认证相关API限制
+  AUTH: { requests: 20, window: 60 * 1000, blockDuration: 5 * 60 * 1000 },
+
   // 管理员API限制
-  ADMIN: { requests: 100, window: 60 * 1000, blockDuration: 60 * 1000 },
-  
+  ADMIN: { requests: 200, window: 60 * 1000, blockDuration: 30 * 1000 },
+
   // 文件上传限制
-  UPLOAD: { requests: 20, window: 60 * 1000, blockDuration: 10 * 60 * 1000 },
-  
+  UPLOAD: { requests: 30, window: 60 * 1000, blockDuration: 5 * 60 * 1000 },
+
   // 搜索API限制
-  SEARCH: { requests: 50, window: 60 * 1000, blockDuration: 2 * 60 * 1000 },
-  
+  SEARCH: { requests: 100, window: 60 * 1000, blockDuration: 60 * 1000 },
+
   // IP级别的全局限制
-  GLOBAL_IP: { requests: 200, window: 60 * 1000, blockDuration: 10 * 60 * 1000 },
-  
+  GLOBAL_IP: { requests: 500, window: 60 * 1000, blockDuration: 60 * 1000 },
+
   // 用户级别的限制
-  USER: { requests: 300, window: 60 * 1000, blockDuration: 5 * 60 * 1000 }
+  USER: { requests: 500, window: 60 * 1000, blockDuration: 30 * 1000 }
 }
 
 // 限制类型
