@@ -9,6 +9,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { Readable, Writable } from 'stream';
 import pLimit from 'p-limit';
+import { extractAudioWasm, resetFFmpegInstance } from './ffmpeg-wasm';
 
 type SupportedAudioFormat = 'mp3' | 'wav' | 'pcm';
 
@@ -94,6 +95,17 @@ function shouldFallbackToTempFile(error: unknown): boolean {
 
   const errno = error as NodeJS.ErrnoException;
   return errno?.code === 'EPIPE' || errno?.code === 'ERR_STREAM_DESTROYED';
+}
+
+/**
+ * 检测是否是 ffmpeg 不存在的错误（ENOENT）
+ * 这通常发生在 Vercel serverless 等不支持系统二进制文件的环境
+ */
+function isFFmpegNotFoundError(error: unknown): boolean {
+  const errno = error as NodeJS.ErrnoException;
+  // ENOENT: spawn ffmpeg 失败，找不到可执行文件
+  // EACCES: 权限不足（某些受限环境）
+  return errno?.code === 'ENOENT' || errno?.code === 'EACCES';
 }
 
 function mergeFfmpegErrors(primary: unknown, fallback: unknown): Error {
@@ -651,6 +663,7 @@ export class VideoProcessor {
 
   /**
    * 从视频Buffer提取音频
+   * 自动检测环境：优先使用原生 ffmpeg，不可用时降级到 WebAssembly 版本
    */
   static async extractAudio(
     videoBuffer: Buffer,
@@ -671,6 +684,12 @@ export class VideoProcessor {
     try {
       return await VideoProcessor.extractAudioFromPipe(videoBuffer, config);
     } catch (error) {
+      // 检测是否是 ffmpeg 不存在的错误（Vercel serverless 环境）
+      if (isFFmpegNotFoundError(error)) {
+        console.info('[VideoProcessor] 原生 ffmpeg 不可用，使用 WebAssembly 版本');
+        return await extractAudioWasm(videoBuffer, options);
+      }
+
       if (!shouldFallbackToTempFile(error)) {
         throw error;
       }
@@ -678,6 +697,11 @@ export class VideoProcessor {
       try {
         return await VideoProcessor.extractAudioWithTempFile(videoBuffer, config);
       } catch (fallbackError) {
+        // 临时文件方式也失败，检查是否是 ffmpeg 不存在
+        if (isFFmpegNotFoundError(fallbackError)) {
+          console.info('[VideoProcessor] 原生 ffmpeg 不可用，使用 WebAssembly 版本');
+          return await extractAudioWasm(videoBuffer, options);
+        }
         throw mergeFfmpegErrors(error, fallbackError);
       }
     }
