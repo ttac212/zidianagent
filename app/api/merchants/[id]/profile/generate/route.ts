@@ -47,19 +47,19 @@ export async function POST(
 
       // 处理特定错误
       if (error.message?.includes('商家不存在')) {
-        return apiError('商家不存在', 404)
+        return apiError('商家不存在', { status: 404 })
       }
 
       if (error.message?.includes('商家暂无内容')) {
-        return apiError('商家暂无内容,无法生成档案。请先添加商家内容后再试。', 400)
+        return apiError('商家暂无内容,无法生成档案。请先添加商家内容后再试。', { status: 400 })
       }
 
       if (error.message?.includes('未配置LLM API Key')) {
-        return apiError('服务配置错误,请联系管理员', 500)
+        return apiError('服务配置错误,请联系管理员', { status: 500 })
       }
 
       if (error.message?.includes('LLM API调用失败')) {
-        return apiError('AI服务暂时不可用,请稍后重试', 503)
+        return apiError('AI服务暂时不可用,请稍后重试', { status: 503 })
       }
 
       // 通用错误

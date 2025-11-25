@@ -55,6 +55,10 @@ export function mapUserProfileToMerchant(
       (profile.total_favorited || 0) +
       (profile.favoriting_count || 0) +
       (profile.forward_count || 0),
+    // 新增字段
+    followerCount: profile.follower_count || 0,
+    totalPlayCount: BigInt(0), // 需要从视频数据聚合
+    avgEngagementRate: null, // 需要计算
     dataSource: 'douyin',
     lastCollectedAt: dt.now(),
     status: 'ACTIVE',
@@ -103,6 +107,15 @@ export function mapVideoToMerchantContent(
     commentCount: video.statistics?.comment_count || 0,
     collectCount: video.statistics?.collect_count || 0,
     shareCount: video.statistics?.share_count || 0,
+    // 新增字段
+    playCount: video.statistics?.play_count || 0,
+    forwardCount: video.statistics?.forward_count || 0,
+    likeRate: null, // 需要计算: diggCount/playCount
+    commentRate: null, // 需要计算: commentCount/playCount
+    completionRate: null, // 需要从API获取
+    avgWatchDuration: null, // 需要从API获取
+    isSuspicious: false, // 默认不标记为刷量
+    suspiciousReason: null,
     tags: JSON.stringify(tags),
     textExtra: JSON.stringify(textExtra),
     publishedAt: resolvedCreatedAt,
