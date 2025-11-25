@@ -5,7 +5,13 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
-// SQLite优化配置（修复版 - 区分查询和执行类型）
+// 检测数据库类型
+const isDatabasePostgres = () => {
+  const url = process.env.DATABASE_URL || ''
+  return url.startsWith('postgres://') || url.startsWith('postgresql://')
+}
+
+// SQLite优化配置（仅在SQLite数据库时使用）
 const sqliteOptimizations = [
   { sql: 'PRAGMA journal_mode=WAL', type: 'query', desc: 'WAL模式' },
   { sql: 'PRAGMA cache_size=-16000', type: 'execute', desc: '缓存大小' },
@@ -44,22 +50,25 @@ async function initializeDatabase() {
     // 确保连接已建立
     await prisma.$connect()
 
-    // 执行SQLite优化配置（区分查询和执行类型）
-    for (const opt of sqliteOptimizations) {
-      try {
-        if (opt.type === 'query') {
-          await prisma.$queryRawUnsafe(opt.sql)
-        } else {
-          await prisma.$executeRawUnsafe(opt.sql)
+    // 只在SQLite数据库时执行PRAGMA优化
+    if (!isDatabasePostgres()) {
+      // 执行SQLite优化配置（区分查询和执行类型）
+      for (const opt of sqliteOptimizations) {
+        try {
+          if (opt.type === 'query') {
+            await prisma.$queryRawUnsafe(opt.sql)
+          } else {
+            await prisma.$executeRawUnsafe(opt.sql)
+          }
+        } catch (pragmaError) {
+          console.warn(`⚠️  ${opt.desc} 配置失败:`, (pragmaError as Error).message)
         }
-      } catch (pragmaError) {
-        console.warn(`⚠️  ${opt.desc} 配置失败:`, (pragmaError as Error).message)
       }
     }
 
-    // ✅ 数据库优化配置已应用
+    // ✅ 数据库连接已建立
   } catch (error) {
-    console.warn('⚠️  数据库优化配置失败，使用默认设置:', error)
+    console.warn('⚠️  数据库初始化失败:', error)
   }
 }
 
