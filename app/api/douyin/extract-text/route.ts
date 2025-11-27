@@ -3,15 +3,15 @@
  *
  * 流程:
  * 1. 解析分享链接并获取视频信息
- * 2. 下载视频
- * 3. 提取音频
- * 4. 使用 GPT-4o Audio Preview 转录
- * 5. 使用LLM优化文案
+ * 2. 获取音频（Vercel环境使用302.AI视频工具，本地环境使用FFmpeg）
+ * 3. 使用 GPT-4o Audio Preview 转录
+ * 4. 使用LLM优化文案
  */
 
 import { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { VideoProcessor } from '@/lib/video/video-processor';
+import { VideoToolkit302 } from '@/lib/video/video-toolkit-302';
 import { createVideoSourceFromShareLink } from '@/lib/douyin/video-source';
 import { mapStageProgress } from '@/lib/douyin/progress-mapper';
 import { DOUYIN_DEFAULT_HEADERS, DOUYIN_PIPELINE_LIMITS, isVercelEnvironment } from '@/lib/douyin/constants';
@@ -83,113 +83,150 @@ export async function POST(req: NextRequest) {
           // 2. 获取音频
           let audioBuffer!: Buffer;  // 使用断言，因为下面的逻辑保证了赋值
           let audioDownloadSuccess = false;
+          const isVercel = isVercelEnvironment();
 
-          // 检查是否有音频直链
-          if (videoSource.audioUrl) {
-            // 尝试直接下载音频（跳过视频下载和 FFmpeg）
+          // Vercel 环境：使用 302.AI 视频工具提取音频
+          if (isVercel) {
             sendEvent('progress', {
-              stage: 'downloading',
-              message: '发现音频直链，正在下载音频...',
-              percent: mapStageProgress('downloading', 50),
+              stage: 'extracting',
+              message: '使用云端服务提取音频...',
+              percent: mapStageProgress('extracting', 10),
             });
 
             try {
-              // 创建带超时的 AbortController，同时链接请求的 signal
-              const controller = new AbortController();
-              const timeoutId = setTimeout(() => controller.abort(), DOUYIN_PIPELINE_LIMITS.DOWNLOAD_TIMEOUT_MS);
+              const toolkit = new VideoToolkit302(apiKey);
 
-              // 如果请求被中断，也中断下载
-              const abortHandler = () => controller.abort();
-              req.signal.addEventListener('abort', abortHandler);
+              // 使用视频播放URL提取音频
+              const extractResult = await toolkit.extractAudio(videoSource.playUrl, {
+                maxWait: DOUYIN_PIPELINE_LIMITS.DOWNLOAD_TIMEOUT_MS,
+                signal: req.signal,
+                onProgress: (message, percent) => {
+                  sendEvent('progress', {
+                    stage: 'extracting',
+                    message,
+                    percent: mapStageProgress('extracting', percent || 50),
+                  });
+                },
+              });
 
-              try {
-                const audioResponse = await fetch(videoSource.audioUrl, {
-                  headers: DOUYIN_DEFAULT_HEADERS,
-                  signal: controller.signal,
-                });
+              console.info(`[文案提取] 302.AI音频提取完成: ${extractResult.audioUrl}`);
 
-                if (!audioResponse.ok) {
-                  throw new Error(`HTTP ${audioResponse.status}`);
-                }
+              // 下载提取后的音频
+              sendEvent('progress', {
+                stage: 'downloading',
+                message: '下载提取的音频...',
+                percent: mapStageProgress('downloading', 80),
+              });
 
-                const rawAudioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+              const audioResponse = await fetch(extractResult.audioUrl, {
+                signal: req.signal,
+              });
 
-                sendEvent('info', {
-                  stage: 'downloaded',
-                  message: '音频下载完成（使用音频直链）',
-                  size: (rawAudioBuffer.length / (1024 * 1024)).toFixed(2) + ' MB',
-                });
-
-                // 抖音音频直链返回的是 AAC/M4A 格式，GPT-4o Audio 不支持
-                // 需要使用 FFmpeg 转换为 MP3 格式
-                if (isVercelEnvironment()) {
-                  // Vercel 环境无法使用 FFmpeg 进行格式转换
-                  throw new Error('音频直链格式(AAC)不兼容，Vercel环境无法转换');
-                }
-
-                sendEvent('progress', {
-                  stage: 'extracting',
-                  message: '正在转换音频格式（AAC→MP3）...',
-                  percent: mapStageProgress('extracting', 50),
-                });
-
-                // 使用 FFmpeg 将 AAC 转换为 MP3
-                audioBuffer = await VideoProcessor.extractAudio(rawAudioBuffer, {
-                  format: 'mp3',
-                  sampleRate: 16000,
-                  channels: 1,
-                  bitrate: '128k',
-                });
-                audioDownloadSuccess = true;
-
-                sendEvent('info', {
-                  stage: 'extracted',
-                  message: '音频格式转换完成（AAC→MP3）',
-                  size: (audioBuffer.length / (1024 * 1024)).toFixed(2) + ' MB',
-                });
-              } finally {
-                clearTimeout(timeoutId);
-                req.signal.removeEventListener('abort', abortHandler);
+              if (!audioResponse.ok) {
+                throw new Error(`音频下载失败: HTTP ${audioResponse.status}`);
               }
-            } catch (error) {
-              // 音频直链下载失败，检查是否可以回退
-              const errorMessage = error instanceof Error ? error.message : String(error);
-              console.warn(`[文案提取] 音频直链下载失败: ${errorMessage}`);
 
-              // 用户取消请求，直接抛出
+              audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+              audioDownloadSuccess = true;
+
+              sendEvent('info', {
+                stage: 'extracted',
+                message: '音频提取完成（云端服务）',
+                size: (audioBuffer.length / (1024 * 1024)).toFixed(2) + ' MB',
+                taskId: extractResult.taskId,
+              });
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              console.error(`[文案提取] 302.AI音频提取失败: ${errorMessage}`);
+
               if (req.signal.aborted) {
                 throw new Error('用户取消请求');
               }
 
-              // 超时错误
-              if (error instanceof Error && error.name === 'AbortError') {
-                // Vercel 环境无法回退
-                if (isVercelEnvironment()) {
-                  throw new Error('音频下载超时且无法回退 (Vercel环境)');
-                }
-                console.info('[文案提取] 音频下载超时，回退到传统 FFmpeg 流程');
-              } else if (isVercelEnvironment()) {
-                // Vercel 环境不支持 FFmpeg 回退
-                throw new Error(`音频直链下载失败且无法回退 (Vercel环境): ${errorMessage}`);
-              }
-
-              // 本地环境可以回退
-              console.info('[文案提取] 回退到传统 FFmpeg 流程');
-              sendEvent('progress', {
-                stage: 'downloading',
-                message: '音频直链失败，回退到视频下载...',
-                percent: mapStageProgress('downloading', 10),
-              });
+              throw new Error(`云端音频提取失败: ${errorMessage}`);
             }
           }
 
-          // 如果音频直链下载失败或没有音频直链，使用传统流程
-          if (!audioDownloadSuccess) {
-            // Vercel 环境检查
-            if (!videoSource.audioUrl && isVercelEnvironment()) {
-              throw new Error('未找到音频直链，Vercel环境不支持FFmpeg');
-            }
+          // 本地环境：尝试音频直链或 FFmpeg
+          if (!isVercel && !audioDownloadSuccess) {
+            // 检查是否有音频直链
+            if (videoSource.audioUrl) {
+              // 尝试直接下载音频（跳过视频下载和 FFmpeg）
+              sendEvent('progress', {
+                stage: 'downloading',
+                message: '发现音频直链，正在下载音频...',
+                percent: mapStageProgress('downloading', 50),
+              });
 
+              try {
+                // 创建带超时的 AbortController
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), DOUYIN_PIPELINE_LIMITS.DOWNLOAD_TIMEOUT_MS);
+                const abortHandler = () => controller.abort();
+                req.signal.addEventListener('abort', abortHandler);
+
+                try {
+                  const audioResponse = await fetch(videoSource.audioUrl, {
+                    headers: DOUYIN_DEFAULT_HEADERS,
+                    signal: controller.signal,
+                  });
+
+                  if (!audioResponse.ok) {
+                    throw new Error(`HTTP ${audioResponse.status}`);
+                  }
+
+                  const rawAudioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+
+                  sendEvent('info', {
+                    stage: 'downloaded',
+                    message: '音频下载完成（使用音频直链）',
+                    size: (rawAudioBuffer.length / (1024 * 1024)).toFixed(2) + ' MB',
+                  });
+
+                  sendEvent('progress', {
+                    stage: 'extracting',
+                    message: '正在转换音频格式（AAC→MP3）...',
+                    percent: mapStageProgress('extracting', 50),
+                  });
+
+                  // 使用 FFmpeg 将 AAC 转换为 MP3
+                  audioBuffer = await VideoProcessor.extractAudio(rawAudioBuffer, {
+                    format: 'mp3',
+                    sampleRate: 16000,
+                    channels: 1,
+                    bitrate: '128k',
+                  });
+                  audioDownloadSuccess = true;
+
+                  sendEvent('info', {
+                    stage: 'extracted',
+                    message: '音频格式转换完成（AAC→MP3）',
+                    size: (audioBuffer.length / (1024 * 1024)).toFixed(2) + ' MB',
+                  });
+                } finally {
+                  clearTimeout(timeoutId);
+                  req.signal.removeEventListener('abort', abortHandler);
+                }
+              } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                console.warn(`[文案提取] 音频直链下载失败: ${errorMessage}`);
+
+                if (req.signal.aborted) {
+                  throw new Error('用户取消请求');
+                }
+
+                console.info('[文案提取] 回退到传统 FFmpeg 流程');
+                sendEvent('progress', {
+                  stage: 'downloading',
+                  message: '音频直链失败，回退到视频下载...',
+                  percent: mapStageProgress('downloading', 10),
+                });
+              }
+            }
+          }
+
+          // 如果音频直链下载失败或没有音频直链，使用传统流程（仅本地环境）
+          if (!audioDownloadSuccess && !isVercel) {
             // 备用：下载视频 + FFmpeg 提取
             sendEvent('progress', {
               stage: 'downloading',
