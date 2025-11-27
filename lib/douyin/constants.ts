@@ -12,32 +12,32 @@ export const DOUYIN_DEFAULT_HEADERS = {
  * Vercel 部署限制配置
  *
  * Vercel Serverless Functions 限制：
- * - 执行时间：免费版10s，Pro版60s，Enterprise可配置
+ * - 执行时间：Hobby 60s，Pro 300s，Enterprise 900s
  * - 内存：1024MB（默认），最大3008MB
  * - 请求体大小：4.5MB（Hobby），100MB（Pro）
  * - 响应体大小：4.5MB（Hobby），100MB（Pro）
  *
- * 为安全起见，设置保守的限制：
- * - 视频时长：2分钟（120秒）
- * - 视频文件大小：50MB
- * - 音频文件大小：10MB
- * - 下载超时：30秒
+ * 当前配置放宽限制，适用于 Pro 计划：
+ * - 视频时长：5分钟（300秒）
+ * - 视频文件大小：100MB
+ * - 音频文件大小：50MB
+ * - 下载超时：120秒
  */
 export const DOUYIN_PIPELINE_LIMITS = {
   /** 最大视频时长（秒），超过此时长拒绝处理 */
-  MAX_VIDEO_DURATION_SECONDS: 120,
+  MAX_VIDEO_DURATION_SECONDS: 300,
 
-  /** 最大视频文件大小（字节），50MB */
-  MAX_VIDEO_SIZE_BYTES: 50 * 1024 * 1024,
+  /** 最大视频文件大小（字节），100MB */
+  MAX_VIDEO_SIZE_BYTES: 100 * 1024 * 1024,
 
-  /** 最大音频文件大小（字节），10MB */
-  MAX_AUDIO_SIZE_BYTES: 10 * 1024 * 1024,
+  /** 最大音频文件大小（字节），50MB */
+  MAX_AUDIO_SIZE_BYTES: 50 * 1024 * 1024,
 
-  /** 下载超时时间（毫秒），30秒 */
-  DOWNLOAD_TIMEOUT_MS: 30_000,
+  /** 下载超时时间（毫秒），120秒 */
+  DOWNLOAD_TIMEOUT_MS: 120_000,
 
-  /** TikHub API 请求超时（毫秒），10秒 */
-  TIKHUB_TIMEOUT_MS: 10_000,
+  /** TikHub API 请求超时（毫秒），30秒 */
+  TIKHUB_TIMEOUT_MS: 30_000,
 
   /** 是否启用限制（可通过环境变量禁用，用于自托管环境） */
   get ENABLED(): boolean {
