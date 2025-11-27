@@ -174,6 +174,20 @@ export class QuotaManager {
       const adjustment = totalActual - estimatedTokens
 
       await prisma.$transaction(async (tx) => {
+        // ✅ 先检查对话是否存在，避免外键约束错误
+        const conversation = await tx.conversation.findUnique({
+          where: { id: messageData.conversationId },
+          select: { id: true, userId: true }
+        })
+
+        if (!conversation) {
+          throw new Error(`对话不存在: ${messageData.conversationId}`)
+        }
+
+        if (conversation.userId !== userId) {
+          throw new Error(`对话不属于当前用户`)
+        }
+
         // 构建metadata对象
         const metadata: Record<string, any> = {}
 

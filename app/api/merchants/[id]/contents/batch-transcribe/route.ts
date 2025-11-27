@@ -94,8 +94,24 @@ async function transcribeContent(
             throw new Error(`HTTP ${audioResponse.status}`)
           }
 
-          audioBuffer = Buffer.from(await audioResponse.arrayBuffer())
-          console.info(`[批量转录] 音频下载完成，大小: ${(audioBuffer.length / 1024).toFixed(2)} KB`)
+          const rawAudioBuffer = Buffer.from(await audioResponse.arrayBuffer())
+          console.info(`[批量转录] 音频下载完成，大小: ${(rawAudioBuffer.length / 1024).toFixed(2)} KB`)
+
+          // 抖音音频直链返回的是 AAC/M4A 格式，GPT-4o Audio 不支持
+          // 需要使用 FFmpeg 转换为 MP3 格式
+          if (isVercelEnvironment()) {
+            // Vercel 环境无法使用 FFmpeg 进行格式转换
+            throw new Error('音频直链格式(AAC)不兼容，Vercel环境无法转换')
+          }
+
+          console.info('[批量转录] 正在转换音频格式（AAC→MP3）...')
+          audioBuffer = await VideoProcessor.extractAudio(rawAudioBuffer, {
+            format: 'mp3',
+            sampleRate: 16000,
+            channels: 1,
+            bitrate: '128k',
+          })
+          console.info(`[批量转录] 音频转换完成，大小: ${(audioBuffer.length / 1024).toFixed(2)} KB`)
         } finally {
           clearTimeout(timeoutId)
         }

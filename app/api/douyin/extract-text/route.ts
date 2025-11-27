@@ -112,24 +112,39 @@ export async function POST(req: NextRequest) {
                   throw new Error(`HTTP ${audioResponse.status}`);
                 }
 
-                audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
-                audioDownloadSuccess = true;
+                const rawAudioBuffer = Buffer.from(await audioResponse.arrayBuffer());
 
                 sendEvent('info', {
                   stage: 'downloaded',
                   message: '音频下载完成（使用音频直链）',
-                  size: (audioBuffer.length / (1024 * 1024)).toFixed(2) + ' MB',
+                  size: (rawAudioBuffer.length / (1024 * 1024)).toFixed(2) + ' MB',
                 });
+
+                // 抖音音频直链返回的是 AAC/M4A 格式，GPT-4o Audio 不支持
+                // 需要使用 FFmpeg 转换为 MP3 格式
+                if (isVercelEnvironment()) {
+                  // Vercel 环境无法使用 FFmpeg 进行格式转换
+                  throw new Error('音频直链格式(AAC)不兼容，Vercel环境无法转换');
+                }
 
                 sendEvent('progress', {
                   stage: 'extracting',
-                  message: '使用音频直链，跳过提取步骤',
-                  percent: mapStageProgress('extracting', 100),
+                  message: '正在转换音频格式（AAC→MP3）...',
+                  percent: mapStageProgress('extracting', 50),
                 });
+
+                // 使用 FFmpeg 将 AAC 转换为 MP3
+                audioBuffer = await VideoProcessor.extractAudio(rawAudioBuffer, {
+                  format: 'mp3',
+                  sampleRate: 16000,
+                  channels: 1,
+                  bitrate: '128k',
+                });
+                audioDownloadSuccess = true;
 
                 sendEvent('info', {
                   stage: 'extracted',
-                  message: '已跳过（使用音频直链）',
+                  message: '音频格式转换完成（AAC→MP3）',
                   size: (audioBuffer.length / (1024 * 1024)).toFixed(2) + ' MB',
                 });
               } finally {
