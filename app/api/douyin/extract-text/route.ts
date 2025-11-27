@@ -83,6 +83,7 @@ export async function POST(req: NextRequest) {
           // 2. 获取音频
           let audioBuffer!: Buffer;  // 使用断言，因为下面的逻辑保证了赋值
           let audioDownloadSuccess = false;
+          let audioFormat: 'mp3' | 'aac' | 'wav' | 'flac' | 'ogg' = 'mp3';  // 跟踪音频格式
           const isVercel = isVercelEnvironment();
 
           // Vercel 环境：使用 302.AI 视频工具提取音频
@@ -143,8 +144,63 @@ export async function POST(req: NextRequest) {
                 throw new Error('用户取消请求');
               }
 
-              throw new Error(`云端音频提取失败: ${errorMessage}`);
+              // 302.AI失败时，尝试音频直链作为备选
+              console.info('[文案提取] 302.AI不可用，尝试音频直链备选方案');
+              sendEvent('progress', {
+                stage: 'extracting',
+                message: '云端服务暂不可用，尝试备选方案...',
+                percent: mapStageProgress('extracting', 20),
+              });
             }
+          }
+
+          // Vercel环境备选：尝试音频直链（302.AI失败时）
+          if (isVercel && !audioDownloadSuccess && videoSource.audioUrl) {
+            sendEvent('progress', {
+              stage: 'downloading',
+              message: '使用音频直链下载...',
+              percent: mapStageProgress('downloading', 30),
+            });
+
+            try {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), DOUYIN_PIPELINE_LIMITS.DOWNLOAD_TIMEOUT_MS);
+              const abortHandler = () => controller.abort();
+              req.signal.addEventListener('abort', abortHandler);
+
+              try {
+                const audioResponse = await fetch(videoSource.audioUrl, {
+                  headers: DOUYIN_DEFAULT_HEADERS,
+                  signal: controller.signal,
+                });
+
+                if (!audioResponse.ok) {
+                  throw new Error(`HTTP ${audioResponse.status}`);
+                }
+
+                // 直接使用原始音频（Vercel无法转换格式，但GPT-4o支持多种格式）
+                audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+                audioDownloadSuccess = true;
+                audioFormat = 'aac';  // 抖音音频直链通常是AAC格式
+
+                sendEvent('info', {
+                  stage: 'downloaded',
+                  message: '音频下载完成（直链备选）',
+                  size: (audioBuffer.length / (1024 * 1024)).toFixed(2) + ' MB',
+                });
+              } finally {
+                clearTimeout(timeoutId);
+                req.signal.removeEventListener('abort', abortHandler);
+              }
+            } catch (fallbackError) {
+              const fallbackMsg = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+              console.error(`[文案提取] 音频直链备选也失败: ${fallbackMsg}`);
+            }
+          }
+
+          // Vercel环境：所有方案都失败
+          if (isVercel && !audioDownloadSuccess) {
+            throw new Error('Vercel环境音频提取失败：302.AI服务暂不可用且无可用音频直链。请稍后重试或联系管理员。');
           }
 
           // 本地环境：尝试音频直链或 FFmpeg
@@ -331,7 +387,7 @@ export async function POST(req: NextRequest) {
                       type: 'input_audio',
                       input_audio: {
                         data: base64Audio,
-                        format: 'mp3',
+                        format: audioFormat,
                       },
                     },
                   ],
