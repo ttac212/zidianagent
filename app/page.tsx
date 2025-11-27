@@ -71,7 +71,7 @@ export default function HomePage() {
 
         <div className="max-w-6xl mx-auto">
           <div className="max-w-3xl md:max-w-4xl mx-auto md:mx-0 text-center md:text-left">
-            <Badge variant="secondary" className="mb-6 bg-primary/10 text-primary border-primary/20 text-sm px-4 py-2">
+            <Badge variant="secondary" className="mb-6 bg-primary/15 text-primary border-primary/20 text-sm px-4 py-2">
               AI驱动的创作平台
             </Badge>
 
@@ -209,7 +209,7 @@ export default function HomePage() {
       <section className="py-16 px-4">
         <div className="max-w-6xl mx-auto">
           <div className="mb-10 text-center">
-            <Badge variant="secondary" className="mb-3 bg-primary/10 text-primary border-primary/20 px-3 py-1">
+            <Badge variant="secondary" className="mb-3 bg-primary/15 text-primary border-primary/20 px-3 py-1">
               核心优势
             </Badge>
             <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">为什么选择我们</h2>

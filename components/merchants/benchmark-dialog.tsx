@@ -197,7 +197,7 @@ export function BenchmarkDialog({ merchantId, merchantName }: BenchmarkDialogPro
                       key={merchant.id}
                       onClick={() => setSelectedBenchmarkId(merchant.id)}
                       className={`w-full text-left p-2 rounded-md hover:bg-muted transition-colors ${
-                        selectedBenchmarkId === merchant.id ? 'bg-primary/10 border border-primary' : 'border border-transparent'
+                        selectedBenchmarkId === merchant.id ? 'bg-primary/15 border border-primary' : 'border border-transparent'
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">

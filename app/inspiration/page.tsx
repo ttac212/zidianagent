@@ -61,7 +61,7 @@ export default function InspirationPage() {
             return (
               <Card key={section.title} className="h-full flex flex-col">
                 <CardHeader className="space-y-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/15 text-primary">
                     <Icon className="h-5 w-5" />
                   </div>
                   <div>

@@ -80,7 +80,7 @@ export const ChatHeader = React.memo<ChatHeaderProps>(({
                 {(() => {
                   const currentModel = getCurrentConversationModel()
                   return currentModel ? (
-                    <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-xs font-medium truncate max-w-16" title={getModelDisplayName(currentModel)}>
+                    <span className="bg-primary/15 text-primary px-1.5 py-0.5 rounded text-xs font-medium truncate max-w-16" title={getModelDisplayName(currentModel)}>
                       {getModelDisplayName(currentModel).split(' ')[0]}
                     </span>
                   ) : null

@@ -1,0 +1,41 @@
+content_script.js:7193 
+ Immersive Translate ERROR: UnknownError: Model not available
+error	@	content_script.js:7193
+zv	@	content_script.js:7231
+await in zv		
+yc	@	content_script.js:7231
+Be	@	content_script.js:7231
+await in Be		
+E1	@	content_script.js:7312
+_L	@	content_script.js:7903
+JD	@	content_script.js:10526
+await in JD		
+o5	@	content_script.js:10525
+await in o5		
+oP	@	content_script.js:10526
+(匿名)	@	content_script.js:10528
+Promise.then		
+(匿名)	@	content_script.js:10528
+Promise.then		
+cX	@	content_script.js:10528
+await in cX		
+(匿名)	@	content_script.js:10528
+(匿名)	@	content_script.js:10528
+content_script.js:7193 Immersive Translate INFO: [entry] can not detect a valid body:  https://vercel.live/_next-live/feedback/feedback.html?dpl=dpl_CupQ3EHGp7mrHrPKSeZyxTNueJ4d
+
+﻿
+Elements must meet minimum color contrast ratio thresholds
+Ensures the contrast between foreground and background colorsmeets WCAG 2 AA minimum contrast ratio thresholds. Learn More 
+alaria-current="page"]> span
+hover:bg-primary
+bg-primaryV/10
+div[data-message-id"cmifm1z700011704a8f9yxcj"]
+.max-w-\[95\%1.sml:max-w-\[90\%\].1g\:max-w-
+[80\%>.duration-500.rounded-br-md.rounded-2x1 >
+10.relative >.whitespace-pre-wrap.leading-relaxed
+div[data-message-id"cmifmxdsh000517041o4hrk74"]
+.max-w-1[95\%1.sml:max-w-\[90\%1.1g\:max-w-
+[80\%>.duration-500.rounded-br-md.rounded-2x1 >
+10.relative >.whitespace-pre-wrap.leading-relaxed
+#_r_n--helper > .sm\:inline.hidden
+-counter

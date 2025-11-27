@@ -297,7 +297,7 @@ export const MessageItem = React.memo<MessageItemProps>(({
                   <span>•</span>
                   <span className={cn(
                     "px-1.5 py-0.5 rounded text-xs bg-muted/50 border border-muted/20 transition-all duration-200",
-                    shouldGlow && isAssistant ? "bg-primary/10 border-primary/20 text-primary" : "text-muted-foreground"
+                    shouldGlow && isAssistant ? "bg-primary/15 border-primary/20 text-primary" : "text-muted-foreground"
                   )} title={`使用 ${getModelProvider(message.metadata.model).name} 模型`}>
                     {getModelDisplayName(message.metadata.model).split(' ')[0]}
                   </span>

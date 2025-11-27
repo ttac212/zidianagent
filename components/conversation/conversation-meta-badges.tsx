@@ -35,7 +35,7 @@ export function ConversationMetaBadges({
       {showPinned && conversation.isPinned && (
         <Badge
           variant="secondary"
-          className="h-5 px-1.5 text-[10px] bg-primary/10 text-primary border-primary/20"
+          className="h-5 px-1.5 text-[10px] bg-primary/15 text-primary border-primary/20"
         >
           <Pin className="w-2.5 h-2.5 mr-0.5" />
           {!isCompact && '已固定'}

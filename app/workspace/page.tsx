@@ -20,12 +20,8 @@ import {
 } from "@/components/ui/alert-dialog"
 import { toast } from '@/lib/toast/toast'
 import { ChevronRight } from "lucide-react"
-import dynamic from "next/dynamic"
-import { ChatCenterSkeleton } from "@/components/skeletons/chat-center-skeleton"
-const SmartChatCenterV2 = dynamic(
-  () => import("@/components/chat/smart-chat-center").then(m => m.SmartChatCenter),
-  { ssr: false, loading: () => <ChatCenterSkeleton /> }
-)
+// 移除 dynamic import - SmartChatCenter 是 LCP 元素，不应延迟加载
+import { SmartChatCenter } from "@/components/chat/smart-chat-center"
 import { Header } from "@/components/header"
 import { WorkspaceSkeleton } from "@/components/skeletons/workspace-skeleton"
 import { ConversationSidebar } from "@/components/conversation/conversation-sidebar"
@@ -368,7 +364,7 @@ export default function WorkspacePage() {
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <div className="flex-1 flex justify-center px-4 md:px-6 min-h-0 overflow-hidden">
             <div className="w-full max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl flex flex-col h-full">
-              <SmartChatCenterV2
+              <SmartChatCenter
                 conversationId={currentConversationId || undefined}
                 onUpdateConversation={handleUpdateConversation}
                 onCreateConversation={handleCreateConversation}

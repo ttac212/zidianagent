@@ -705,7 +705,7 @@ export default function MerchantDetailPage() {
                             : 'border-2 border-transparent'
                         } ${
                           isSelected
-                            ? 'bg-primary/10 border-primary shadow-sm'
+                            ? 'bg-primary/15 border-primary shadow-sm'
                             : 'bg-background border-border/40'
                         }`}
                         onClick={() => {

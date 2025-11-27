@@ -34,7 +34,7 @@ export default function HelpPage() {
       <Header />
       <main className="container mx-auto px-4 py-10 space-y-10">
         <section className="max-w-3xl space-y-4">
-          <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/10">
+          <Badge variant="secondary" className="bg-primary/15 text-primary border-primary/15">
             使用指南
           </Badge>
           <h1 className="text-3xl font-semibold text-foreground">所有入口都在这</h1>
