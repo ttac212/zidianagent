@@ -277,10 +277,10 @@ export default function MerchantsPage() {
       {/* 商家列表 */}
       <div className="space-y-4">
         {loading ? (
-          // 加载骨架屏
+          // 加载骨架屏 - 添加固定高度避免布局偏移
           <div className="grid gap-4">
             {Array.from({ length: 6 }).map((_, i) => (
-              <Card key={i}>
+              <Card key={i} className="h-[140px]">
                 <CardHeader>
                   <Skeleton className="h-6 w-3/4" />
                   <Skeleton className="h-4 w-1/2" />

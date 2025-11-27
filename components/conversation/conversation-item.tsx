@@ -1,10 +1,10 @@
 /**
  * 对话项组件
  * 重构后的对话列表项，支持固定、编辑、删除等操作
+ * 移除入场动画以减少列表加载时的布局抖动
  */
 
 import React from 'react'
-import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -87,18 +87,10 @@ export function ConversationItem({
   }
 
   return (
-    <motion.div
-      className="relative w-full group"
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -10 }}
-      transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-      whileHover={{ x: 4 }}
-      whileTap={{ scale: 0.98 }}
-    >
+    <div className="relative w-full group">
       <div
         data-active={isSelected}
-        className={`w-full justify-start text-left h-auto p-3 transition-all duration-200 cursor-pointer rounded-md ${
+        className={`w-full justify-start text-left h-auto p-3 transition-colors duration-150 cursor-pointer rounded-md ${
           isSelected
             ? 'bg-secondary/80 ring-1 ring-primary/30 border-l-2 border-l-primary'
             : 'hover:bg-accent/80 active:bg-accent'
@@ -188,6 +180,6 @@ export function ConversationItem({
           </div>
         </div>
       </div>
-    </motion.div>
+    </div>
   )
 }

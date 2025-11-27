@@ -1,23 +1,10 @@
-"use client"
-
-import { motion } from 'framer-motion'
-
 /**
- * 全局页面过渡动画模板
- * 自动应用于所有路由切换
+ * 全局页面模板
+ * 移除过渡动画以消除页面加载时的"突然出现"抖动
+ * 之前使用 framer-motion 的 initial/animate 会导致：
+ * 1. 首屏渲染时内容从透明+偏移位置动画到正常位置
+ * 2. 与水合过程叠加造成明显的布局跳变
  */
 export default function Template({ children }: { children: React.ReactNode }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      transition={{
-        duration: 0.2,
-        ease: [0.4, 0, 0.2, 1] // ease-in-out cubic-bezier
-      }}
-    >
-      {children}
-    </motion.div>
-  )
+  return <>{children}</>
 }

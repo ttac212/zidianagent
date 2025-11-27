@@ -26,9 +26,9 @@ export const DouyinProgress = memo(({ progress }: DouyinProgressProps) => {
 
   // 视频信息slot
   const videoInfoSlot = progress.videoInfo ? (
-    <div className="mt-4 rounded-md border border-dashed border-muted-foreground/30 bg-background/60 p-3">
+    <div className="mt-3 space-y-1 pl-3 border-l border-border/60">
       <p className="text-xs font-semibold text-muted-foreground">视频信息</p>
-      <p className="mt-1 text-sm font-medium text-foreground">{progress.videoInfo.title}</p>
+      <p className="text-sm font-medium text-foreground">{progress.videoInfo.title}</p>
       <p className="text-xs text-muted-foreground">作者 {progress.videoInfo.author}</p>
       <p className="text-xs text-muted-foreground">
         时长 {progress.videoInfo.duration ? `${progress.videoInfo.duration.toFixed(1)} 秒` : '未知'}
@@ -45,7 +45,7 @@ export const DouyinProgress = memo(({ progress }: DouyinProgressProps) => {
           sections.push(
             <div
               key="transcript"
-              className={cn(styles.container, 'border-blue-300/40 bg-blue-500/5')}
+              className={cn(styles.container, 'text-blue-800 dark:text-blue-200')}
             >
               <p className={styles.title}>转录文本（实时）</p>
               <div className={styles.content}>
@@ -59,7 +59,7 @@ export const DouyinProgress = memo(({ progress }: DouyinProgressProps) => {
           sections.push(
             <div
               key="markdown-preview"
-              className={cn(styles.container, 'border-muted-foreground/20 bg-background/60')}
+              className={cn(styles.container, 'text-foreground')}
             >
               <p className={styles.title}>实时生成中</p>
               <div className={styles.content}>

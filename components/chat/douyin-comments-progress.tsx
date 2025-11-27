@@ -5,6 +5,7 @@ import type { DouyinCommentsProgressState } from '@/types/chat'
 import { PipelineProgressSkeleton, type PreviewSlotStyles } from './pipeline-progress-skeleton'
 import { PIPELINE_CONFIGS } from './pipeline-progress-config'
 import { DOUYIN_COMMENTS_PIPELINE_STEPS } from '@/lib/douyin/comments-pipeline-steps'
+import { cn } from '@/lib/utils'
 
 interface DouyinCommentsProgressProps {
   progress: DouyinCommentsProgressState
@@ -25,12 +26,12 @@ export const DouyinCommentsProgress = memo(({ progress }: DouyinCommentsProgress
 
   // 视频信息slot（带统计数据）
   const videoInfoSlot = progress.videoInfo ? (
-    <div className="mt-4 rounded-md border border-dashed border-muted-foreground/30 bg-background/60 p-3">
+    <div className="mt-3 space-y-2 pl-3 border-l border-border/60">
       <p className="text-xs font-semibold text-muted-foreground">视频信息</p>
-      <p className="mt-1 text-sm font-medium text-foreground">{progress.videoInfo.title}</p>
+      <p className="text-sm font-medium text-foreground">{progress.videoInfo.title}</p>
       <p className="text-xs text-muted-foreground">作者: {progress.videoInfo.author}</p>
       {progress.statistics && (
-        <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+        <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
           <div>
             <span className="text-muted-foreground">播放量:</span>
             <span className="ml-1 font-medium text-foreground">
@@ -57,7 +58,7 @@ export const DouyinCommentsProgress = memo(({ progress }: DouyinCommentsProgress
   // AI分析实时预览slot
   const previewSlot = progress.analysisPreview
     ? (styles: PreviewSlotStyles) => (
-        <div className={styles.container}>
+        <div className={cn(styles.container, 'text-purple-900 dark:text-purple-200')}>
           <p className={styles.title}>AI 分析（实时）</p>
           <div className={styles.content}>
             {progress.analysisPreview}

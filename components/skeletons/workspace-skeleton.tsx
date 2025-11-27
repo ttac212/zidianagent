@@ -24,14 +24,14 @@ function MessageSkeleton({ align = "left" as "left" | "right" }) {
 export function WorkspaceSkeleton() {
   return (
     <div data-testid="workspace-skeleton" className="flex-1 flex overflow-hidden min-h-0 animate-pulse relative">
-      {/* 左侧列表骨架 */}
+      {/* 左侧列表骨架 - 添加固定高度避免布局偏移 */}
       <div className="bg-card border-r border-border flex flex-col min-h-0 w-80 hidden md:flex">
-        <div className="flex-shrink-0 p-4 border-b border-border">
+        <div className="flex-shrink-0 p-4 border-b border-border h-[88px]">
           <SkeletonLine className="h-5 w-28" />
         </div>
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {Array.from({ length: 10 }).map((_, i) => (
-            <div key={i} className="p-3 rounded border border-border bg-background/50">
+            <div key={i} className="p-3 rounded border border-border bg-background/50 h-[72px]">
               <SkeletonLine className="h-4 w-3/4 mb-2" />
               <SkeletonLine className="h-3 w-1/3" />
             </div>
@@ -39,10 +39,10 @@ export function WorkspaceSkeleton() {
         </div>
       </div>
 
-      {/* 主区域骨架 */}
+      {/* 主区域骨架 - 添加固定高度避免布局偏移 */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        {/* 顶部工具条 */}
-        <div className="flex items-center justify-between py-3 px-4 md:px-6 border-b border-border">
+        {/* 顶部工具条 - 固定高度 */}
+        <div className="flex items-center justify-between py-3 px-4 md:px-6 border-b border-border h-[56px]">
           <div className="flex items-center gap-3">
             <SkeletonLine className="h-6 w-32" />
             <SkeletonLine className="h-6 w-20" />
@@ -63,8 +63,8 @@ export function WorkspaceSkeleton() {
           <MessageSkeleton align="left" />
         </div>
 
-        {/* 底部输入区 */}
-        <div className="border-t border-border p-3">
+        {/* 底部输入区 - 固定高度 */}
+        <div className="border-t border-border p-3 h-[100px]">
           <div className="flex items-center gap-2">
             <SkeletonLine className="h-10 flex-1" />
             <SkeletonLine className="h-10 w-16 rounded-md" />

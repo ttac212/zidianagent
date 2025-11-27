@@ -40,10 +40,9 @@ export default function WorkspacePage() {
 
   // UI 状态
   const { selectedModel } = useModelState()
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    if (typeof window !== 'undefined') return window.innerWidth < 768
-    return false
-  })
+  // 侧边栏初始状态：SSR和CSR都默认折叠，避免水合时状态反转导致布局抖动
+  // 桌面端会在useEffect中根据窗口宽度展开
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
 
   // 编辑状态
   const [editingConvId, setEditingConvId] = useState<string | null>(null)
@@ -100,8 +99,13 @@ export default function WorkspacePage() {
     } catch (_e) { /* 忽略 */ }
   }, [searchParams])
 
-  // 响应式窗口监听
+  // 响应式窗口监听 - 初始化时根据窗口宽度设置侧边栏状态
   useEffect(() => {
+    // 首次挂载时，桌面端展开侧边栏
+    if (window.innerWidth >= 768) {
+      setSidebarCollapsed(false)
+    }
+
     const handleResize = () => {
       setSidebarCollapsed(window.innerWidth < 768)
     }

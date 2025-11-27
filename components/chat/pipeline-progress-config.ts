@@ -28,7 +28,7 @@ export interface PipelineProgressConfig {
   /** 实时预览区域样式（可选） */
   previewStyles?: {
     border: string
-    background: string
+    background?: string
   }
 }
 
@@ -46,12 +46,11 @@ export const PIPELINE_CONFIGS: Record<PipelineType, PipelineProgressConfig> = {
       failed: 'bg-red-100 text-red-800 dark:bg-red-500/10 dark:text-red-200'
     },
     activeStepColor: {
-      badge: 'border-primary text-primary',
-      background: 'border-primary/40 bg-primary/5'
+      badge: 'bg-primary/10 text-primary ring-primary/40 dark:bg-primary/10',
+      background: 'border-l-2 border-primary/60 bg-primary/5'
     },
     previewStyles: {
-      border: 'border-blue-300/40',
-      background: 'bg-blue-500/5'
+      border: 'border-l-2 border-blue-300/70'
     }
   },
   comments: {
@@ -67,12 +66,11 @@ export const PIPELINE_CONFIGS: Record<PipelineType, PipelineProgressConfig> = {
       failed: 'bg-red-100 text-red-800 dark:bg-red-500/10 dark:text-red-200'
     },
     activeStepColor: {
-      badge: 'border-purple-500 text-purple-600 dark:border-purple-400 dark:text-purple-300',
-      background: 'border-purple-400/40 bg-purple-500/5'
+      badge: 'bg-purple-500/10 text-purple-700 ring-purple-300/60 dark:text-purple-200 dark:ring-purple-400/50',
+      background: 'border-l-2 border-purple-400/60 bg-purple-500/5'
     },
     previewStyles: {
-      border: 'border-purple-300/40',
-      background: 'bg-purple-500/5'
+      border: 'border-l-2 border-purple-300/70'
     }
   }
 }
