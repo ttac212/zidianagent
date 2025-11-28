@@ -958,27 +958,9 @@ function SmartChatCenterInternal({
     if (settings.modelId) {
       setSelectedModel(settings.modelId)
 
-      // 如果切换到深度思考模式，自动启用中等推理强度
-      if (settings.modelId.includes(':thinking') && !composerSettings.reasoning_effort) {
-        dispatch({
-          type: 'SET_SETTINGS',
-          payload: {
-            reasoning_effort: 'medium',
-            reasoning: { enabled: true }
-          }
-        })
-      }
-
-      // 如果切换到标准模式，禁用推理
-      if (!settings.modelId.includes(':thinking') && composerSettings.reasoning_effort) {
-        dispatch({
-          type: 'SET_SETTINGS',
-          payload: {
-            reasoning_effort: undefined,
-            reasoning: { enabled: false }
-          }
-        })
-      }
+      // 注意：已移除模型切换时自动调整推理强度的逻辑
+      // 现在默认始终保持高思考程度，用户可通过设置手动调整
+      // 推理功能不再与模型的:thinking后缀绑定
 
       // 如果是在现有对话中切换模型，持久化到后端
       if (conversationId && onUpdateConversation) {
@@ -1004,7 +986,7 @@ function SmartChatCenterInternal({
         }
       }
     }
-  }, [setSelectedModel, conversationId, onUpdateConversation, conversation, queryClient, dispatch, composerSettings])
+  }, [setSelectedModel, conversationId, onUpdateConversation, conversation, queryClient, dispatch])
 
   // 滚动管理
   const { scrollAreaRef, scrollToBottom: _scrollToBottom } = useChatScroll({

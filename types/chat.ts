@@ -531,6 +531,9 @@ export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
   temperature: 1.0,
   contextAware: false,
   maxTokens: 4096,
+  // 默认启用高强度推理模式
+  reasoning_effort: 'high',
+  reasoning: { enabled: true },
 }
 
 export const DEFAULT_CHAT_STATE: ChatState = {
