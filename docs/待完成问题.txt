@@ -1,0 +1,91 @@
+Largest Contentful Paint
+
+6.97
+
+s
+
+P75
+
+Poor
+
+Above 4s
+
+Less than 75% of visits scored a great LCP.
+
+Measures loading performance. To provide a good user experience, LCP should occur within 2.5s of when the page first starts loading.
+
+Learn more about LCP
+ P75
+ P90
+ P95
+ P99
+Combobox Menu
+Last 7 Days
+Routes
+Paths
+Selectors
+LCP
+Poor
+
+>4s
+
+
+/
+18
+4.16 s
+
+/workspace
+16
+9.76 s
+
+/merchants/[id]
+12
+4.6 s
+
+/login
+2
+8.68 s
+Needs Improvement
+
+2.5 - 4s
+
+No needs improvement scores
+
+Great
+
+<2.5s
+
+
+/cmd_sco
+1
+0.22 s
+Countries
+
+Poor
+
+>4s
+
+
+Hong Kong
+31
+7.58 s
+
+People's Republic of China
+11
+5.69 s
+
+Taiwan
+3
+9.8 s
+
+Needs Improvement
+
+2.5 - 4s
+
+
+Great
+
+<2.5s
+
+This report is based on 49 data points
+Updated just now

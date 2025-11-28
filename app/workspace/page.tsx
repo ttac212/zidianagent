@@ -23,13 +23,13 @@ import { ChevronRight } from "lucide-react"
 // 移除 dynamic import - SmartChatCenter 是 LCP 元素，不应延迟加载
 import { SmartChatCenter } from "@/components/chat/smart-chat-center"
 import { Header } from "@/components/header"
-import { WorkspaceSkeleton } from "@/components/skeletons/workspace-skeleton"
 import { ConversationSidebar } from "@/components/conversation/conversation-sidebar"
 import { toggleConversationPinned, type DerivedConversation } from "@/lib/utils/conversation-list"
 import type { Conversation } from '@/types/chat'
 import * as dt from '@/lib/utils/date-toolkit'
 import { CHAT_HISTORY_CONFIG } from '@/lib/config/chat-config'
 import { STORAGE_KEYS } from "@/lib/storage"
+import { ChatCenterSkeleton } from "@/components/skeletons/chat-center-skeleton"
 
 export default function WorkspacePage() {
   const searchParams = useSearchParams()
@@ -67,6 +67,7 @@ export default function WorkspacePage() {
     deleteConversation,
     loadMore,
     hasMore,
+    refreshConversations,
   } = useConversations(currentConversationId)
 
   // 使用 memoized selector 处理分组和过滤
@@ -74,6 +75,11 @@ export default function WorkspacePage() {
     conversations,
     deferredSearchQuery
   )
+
+  // 首屏占位与错误状态判定，避免加载阻塞 LCP
+  const isBootstrapping = loading && conversations.length === 0
+  const showChatSkeleton = isBootstrapping && !currentConversationId
+  const showBlockingError = Boolean(error && conversations.length === 0)
 
   // URL 参数处理 - 对话链接
   useEffect(() => {
@@ -285,34 +291,23 @@ export default function WorkspacePage() {
   }, [])
 
   // 加载状态
-  if (loading) {
-    return (
-      <div className="h-screen flex flex-col bg-background">
-        <Header />
-        <WorkspaceSkeleton />
-      </div>
-    )
-  }
-
-  // 错误状态
-  if (error) {
-    return (
-      <div className="h-screen flex flex-col bg-background">
-        <Header />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center space-y-4">
-            <p className="text-destructive text-lg font-semibold">加载对话失败</p>
-            <p className="text-muted-foreground">{error || '网络错误，请检查连接'}</p>
-            <Button onClick={() => window.location.reload()}>重试</Button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="h-screen flex flex-col bg-background">
       <Header />
+
+      {error && (
+        <div className="px-4 md:px-6 py-2 bg-destructive/10 border-b border-destructive/30 text-destructive text-sm flex items-center justify-between gap-3">
+          <span className="truncate">{error || '网络错误，请检查连接'}</span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="shrink-0"
+            onClick={() => refreshConversations()}
+          >
+            重试
+          </Button>
+        </div>
+      )}
 
       <div className="flex-1 flex overflow-hidden min-h-0 relative">
         {/* 移动端遮罩层 */}
@@ -328,9 +323,9 @@ export default function WorkspacePage() {
           collapsed={sidebarCollapsed}
           onCollapse={() => setSidebarCollapsed(true)}
           loading={loading}
-          sections={conversationSections}
-          filteredConversations={filteredConversations}
-          isSearching={isSearching}
+          sections={isBootstrapping ? [] : conversationSections}
+          filteredConversations={isBootstrapping ? [] : filteredConversations}
+          isSearching={isBootstrapping ? false : isSearching}
           currentConversationId={currentConversation?.id}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -368,16 +363,28 @@ export default function WorkspacePage() {
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <div className="flex-1 flex justify-center px-4 md:px-6 min-h-0 overflow-hidden">
             <div className="w-full max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl flex flex-col h-full">
-              <SmartChatCenter
-                conversationId={currentConversationId || undefined}
-                onUpdateConversation={handleUpdateConversation}
-                onCreateConversation={handleCreateConversation}
-                onSelectConversation={handleSelectConversation}
-                onDeleteConversation={handleOpenDeleteConfirm}
-                prefillMessage={prefillPayload?.message}
-                prefillTitle={prefillPayload?.title}
-                prefillId={prefillPayload?.key}
-              />
+              {showBlockingError ? (
+                <div className="flex flex-1 items-center justify-center text-center">
+                  <div className="space-y-3">
+                    <p className="text-destructive text-lg font-semibold">加载对话失败</p>
+                    <p className="text-muted-foreground">请检查网络后重试</p>
+                    <Button onClick={() => refreshConversations()}>重新加载</Button>
+                  </div>
+                </div>
+              ) : showChatSkeleton ? (
+                <ChatCenterSkeleton />
+              ) : (
+                <SmartChatCenter
+                  conversationId={currentConversationId || undefined}
+                  onUpdateConversation={handleUpdateConversation}
+                  onCreateConversation={handleCreateConversation}
+                  onSelectConversation={handleSelectConversation}
+                  onDeleteConversation={handleOpenDeleteConfirm}
+                  prefillMessage={prefillPayload?.message}
+                  prefillTitle={prefillPayload?.title}
+                  prefillId={prefillPayload?.key}
+                />
+              )}
             </div>
           </div>
         </div>

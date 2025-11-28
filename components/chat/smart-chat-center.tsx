@@ -13,6 +13,7 @@ import { ChatInput } from './chat-input'
 import { useChatActions } from '@/hooks/use-chat-actions'
 import { useConversationQuery, conversationApi, matchesConversationDetailKey } from '@/hooks/api/use-conversations-query'
 import { useModelState } from '@/hooks/use-model-state'
+import { ALLOWED_MODELS } from '@/lib/ai/models'
 import { useChatScroll } from '@/hooks/use-chat-scroll'
 import { useChatKeyboard } from '@/hooks/use-chat-keyboard'
 import { useChatFocus } from '@/hooks/use-chat-focus'
@@ -233,12 +234,22 @@ function SmartChatCenterInternal({
       }
     })
 
+    // 同步对话模型到当前选择
+    // 重要：只有当对话模型在白名单中时才同步，否则使用当前默认模型
     if (conversation.model) {
-      dispatch({
-        type: 'SET_SETTINGS',
-        payload: { modelId: conversation.model }
-      })
-      setSelectedModel(conversation.model)
+      // setSelectedModel 内部会验证模型是否在白名单中
+      // 如果不在白名单，会静默忽略，保持当前默认模型
+      const isValidModel = ALLOWED_MODELS.some(m => m.id === conversation.model)
+      if (isValidModel) {
+        dispatch({
+          type: 'SET_SETTINGS',
+          payload: { modelId: conversation.model }
+        })
+        setSelectedModel(conversation.model)
+      } else {
+        // 历史对话使用的模型不在当前白名单中，保持默认模型
+        console.info(`[ChatCenter] 对话 ${conversation.id} 的模型 ${conversation.model} 不在白名单中，使用默认模型`)
+      }
     }
   }, [
     conversationId,

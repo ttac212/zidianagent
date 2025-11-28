@@ -1,0 +1,111 @@
+{
+  "env": [
+    {
+      "key": "NEXTAUTH_URL",
+      "value": "https://your-domain.vercel.app",
+      "type": "plain",
+      "target": ["production", "preview"],
+      "comment": "替换为你的实际域名"
+    },
+    {
+      "key": "NEXTAUTH_SECRET",
+      "value": "REPLACE_WITH_OPENSSL_RAND_HEX_32",
+      "type": "sensitive",
+      "target": ["production", "preview"],
+      "comment": "运行 openssl rand -hex 32 生成"
+    },
+    {
+      "key": "DATABASE_URL",
+      "value": "postgresql://user:password@host:5432/database?schema=public",
+      "type": "sensitive",
+      "target": ["production", "preview"],
+      "comment": "PostgreSQL连接字符串，推荐使用Neon/Supabase/Railway"
+    },
+    {
+      "key": "ZENMUX_API_BASE",
+      "value": "https://zenmux.ai/api/v1",
+      "type": "plain",
+      "target": ["production", "preview"]
+    },
+    {
+      "key": "ZENMUX_API_KEY",
+      "value": "YOUR_ZENMUX_API_KEY",
+      "type": "sensitive",
+      "target": ["production", "preview"],
+      "comment": "从 https://zenmux.ai 获取"
+    },
+    {
+      "key": "ZENMUX_DEFAULT_MODEL",
+      "value": "anthropic/claude-opus-4.5",
+      "type": "plain",
+      "target": ["production", "preview"]
+    },
+    {
+      "key": "MODEL_ALLOWLIST",
+      "value": "anthropic/claude-opus-4.5",
+      "type": "plain",
+      "target": ["production", "preview"],
+      "comment": "默认仅Claude Opus 4.5，可添加更多模型用逗号分隔"
+    },
+    {
+      "key": "NEXT_PUBLIC_MODEL_ALLOWLIST",
+      "value": "anthropic/claude-opus-4.5",
+      "type": "plain",
+      "target": ["production", "preview"],
+      "comment": "前端模型选择器使用，与MODEL_ALLOWLIST保持一致"
+    },
+    {
+      "key": "LLM_API_BASE",
+      "value": "https://api.302.ai/v1",
+      "type": "plain",
+      "target": ["production", "preview"]
+    },
+    {
+      "key": "LLM_API_KEY",
+      "value": "YOUR_302AI_API_KEY",
+      "type": "sensitive",
+      "target": ["production", "preview"],
+      "comment": "302.AI备选服务，可选"
+    },
+    {
+      "key": "DOUBAO_ASR_API_URL",
+      "value": "https://api.302.ai/doubao/largemodel/recognize",
+      "type": "plain",
+      "target": ["production", "preview"],
+      "comment": "抖音视频文案提取功能需要"
+    },
+    {
+      "key": "TIKHUB_API_BASE_URL",
+      "value": "https://api.tikhub.io",
+      "type": "plain",
+      "target": ["production", "preview"],
+      "comment": "Vercel部署在海外，使用.io域名"
+    },
+    {
+      "key": "TIKHUB_API_KEY",
+      "value": "YOUR_TIKHUB_API_KEY",
+      "type": "sensitive",
+      "target": ["production", "preview"],
+      "comment": "从 https://user.tikhub.io 获取"
+    },
+    {
+      "key": "ADMIN_LOGIN_PASSWORD",
+      "value": "YOUR_ADMIN_PASSWORD",
+      "type": "sensitive",
+      "target": ["production", "preview"],
+      "comment": "生产环境登录密码"
+    },
+    {
+      "key": "NEXT_PUBLIC_CONNECTION_MONITORING",
+      "value": "enabled",
+      "type": "plain",
+      "target": ["production", "preview"]
+    },
+    {
+      "key": "NEXT_PUBLIC_APP_NAME",
+      "value": "支点有星辰",
+      "type": "plain",
+      "target": ["production", "preview"]
+    }
+  ]
+}

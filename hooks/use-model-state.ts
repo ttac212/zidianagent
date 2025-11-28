@@ -46,12 +46,15 @@ export function useModelState(initialModel?: string): UseModelStateReturn {
   }, [])
   
   // 从localStorage同步模型状态
+  // 重要：如果保存的模型不在白名单中，自动清除并使用默认模型
   const syncWithStorage = useCallback(() => {
     // 确保在客户端环境
     if (!LocalStorage.isAvailable()) return
 
     try {
       const savedModel = LocalStorage.getItem<string>(STORAGE_KEY, '')
+
+      // 检查保存的模型是否仍在白名单中
       if (savedModel && validateModel(savedModel)) {
         const newModel = savedModel
         setState(prev => ({
@@ -61,7 +64,7 @@ export function useModelState(initialModel?: string): UseModelStateReturn {
           lastSyncTime: dt.timestamp()
         }))
         currentModelRef.current = newModel
-        } else if (initialModel && validateModel(initialModel)) {
+      } else if (initialModel && validateModel(initialModel)) {
         const newModel = initialModel
         setState(prev => ({
           ...prev,
@@ -71,8 +74,13 @@ export function useModelState(initialModel?: string): UseModelStateReturn {
         }))
         currentModelRef.current = newModel
         LocalStorage.setItem(STORAGE_KEY, newModel)
-        } else {
-        // 使用默认模型
+      } else {
+        // 保存的模型不在白名单中或无效，清除并使用默认模型
+        if (savedModel) {
+          console.info(`[ModelState] 清除无效的保存模型: ${savedModel}，使用默认模型`)
+          LocalStorage.removeItem(STORAGE_KEY)
+        }
+
         const allowedIds = ALLOWED_MODELS.map(m => m.id)
         const defaultModel = allowedIds.length > 0 ? allowedIds[0] : DEFAULT_MODEL
         setState(prev => ({
@@ -83,7 +91,7 @@ export function useModelState(initialModel?: string): UseModelStateReturn {
         }))
         currentModelRef.current = defaultModel
         LocalStorage.setItem(STORAGE_KEY, defaultModel)
-        }
+      }
     } catch (_error) {
       // 降级到默认模型
       const allowedIds = ALLOWED_MODELS.map(m => m.id)

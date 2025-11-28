@@ -74,6 +74,8 @@ export function ConversationSidebar({
   onLoadMore,
   hasMore = false
 }: ConversationSidebarProps) {
+  const showListSkeleton = loading && sections.length === 0 && !isSearching
+
   return (
     <AnimatePresence mode="wait">
       {!collapsed && (
@@ -120,23 +122,37 @@ export function ConversationSidebar({
               onChange={onSearchChange}
             />
 
-            <ConversationList
-              sections={sections}
-              filteredConversations={filteredConversations}
-              isSearching={isSearching}
-              currentConversationId={currentConversationId}
-              editingConvId={editingConvId}
-              editTitle={editTitle}
-              onSelect={onSelect}
-              onStartEdit={onStartEdit}
-              onSaveTitle={onSaveTitle}
-              onCancelEdit={onCancelEdit}
-              onEditTitleChange={onEditTitleChange}
-              onTogglePin={onTogglePin}
-              onExport={onExport}
-              onCopyLink={onCopyLink}
-              onDelete={onDelete}
-            />
+            {showListSkeleton ? (
+              <div className="mt-2 space-y-2">
+                {Array.from({ length: 6 }).map((_, idx) => (
+                  <div
+                    key={idx}
+                    className="rounded border border-border bg-muted/30 p-3 space-y-2 animate-pulse"
+                  >
+                    <div className="h-4 w-3/4 rounded bg-muted" />
+                    <div className="h-3 w-1/2 rounded bg-muted/70" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <ConversationList
+                sections={sections}
+                filteredConversations={filteredConversations}
+                isSearching={isSearching}
+                currentConversationId={currentConversationId}
+                editingConvId={editingConvId}
+                editTitle={editTitle}
+                onSelect={onSelect}
+                onStartEdit={onStartEdit}
+                onSaveTitle={onSaveTitle}
+                onCancelEdit={onCancelEdit}
+                onEditTitleChange={onEditTitleChange}
+                onTogglePin={onTogglePin}
+                onExport={onExport}
+                onCopyLink={onCopyLink}
+                onDelete={onDelete}
+              />
+            )}
 
             {/* 加载更多按钮 */}
             {!isSearching && hasMore && onLoadMore && (
