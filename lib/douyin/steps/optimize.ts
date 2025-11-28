@@ -3,16 +3,14 @@
  *
  * 职责：
  * - 基础清理转录文本（去重、合并、去空行）
- *
- * 注意：LLM智能优化功能已移除，当前只提供基础清理
- * 原因：
- * 1. LLM优化增加延迟和成本
- * 2. ASR转录质量已足够，基础清理满足需求
- * 3. 避免误导用户（界面不再显示"AI优化"）
+ * - 使用 LLM 添加标点符号和断句
  */
 
 import type { DouyinPipelineEmitter } from '@/lib/douyin/pipeline'
 import type { DouyinVideoInfo } from '@/lib/douyin/pipeline-steps'
+
+const LLM_ENDPOINT = 'https://api.302.ai/v1/chat/completions'
+const LLM_OPTIMIZE_TIMEOUT_MS = 60_000
 
 export interface OptimizeTranscriptContext {
   transcript: string
@@ -31,7 +29,7 @@ export interface OptimizeTranscriptResult {
  * - 去除首尾空白
  * - 合并连续空行
  */
-function optimizeTranscript(text: string): string {
+function basicCleanup(text: string): string {
   return text
     .split('\n')
     .map((line) => line.trim())
@@ -40,18 +38,87 @@ function optimizeTranscript(text: string): string {
 }
 
 /**
- * 优化转录文本步骤（仅基础清理）
+ * 使用 LLM 添加标点符号
+ */
+async function addPunctuationWithLLM(
+  transcript: string,
+  apiKey: string,
+  signal?: AbortSignal
+): Promise<string> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), LLM_OPTIMIZE_TIMEOUT_MS)
+
+  // 合并外部信号
+  if (signal) {
+    signal.addEventListener('abort', () => controller.abort(), { once: true })
+  }
+
+  try {
+    const response = await fetch(LLM_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        max_tokens: 4000,
+        temperature: 0.1,
+        messages: [
+          {
+            role: 'system',
+            content: `你是一个专业的中文文本处理助手。你的任务是为没有标点符号的转录文本添加合适的标点符号。
+
+规则：
+1. 根据语义和语气添加标点符号（句号、逗号、问号、感叹号等）
+2. 保持原文内容不变，不要修改任何文字
+3. 不要添加任何解释或说明
+4. 直接输出添加标点后的文本`
+          },
+          {
+            role: 'user',
+            content: `请为以下转录文本添加合适的标点符号：
+
+${transcript}`
+          }
+        ]
+      }),
+      signal: controller.signal
+    })
+
+    clearTimeout(timeoutId)
+
+    if (!response.ok) {
+      throw new Error(`LLM API 错误: ${response.status}`)
+    }
+
+    const data = await response.json()
+    const result = data.choices?.[0]?.message?.content?.trim()
+
+    if (!result) {
+      throw new Error('LLM 未返回有效结果')
+    }
+
+    return result
+  } catch (error) {
+    clearTimeout(timeoutId)
+    throw error
+  }
+}
+
+/**
+ * 优化转录文本步骤
  *
  * @param context 上下文（包含转录文本和视频信息）
  * @param emit 事件发射器
- * @param _optimizeApiKey 已废弃，保留参数兼容性
+ * @param optimizeApiKey API Key
  * @param _optimizeModelId 已废弃，保留参数兼容性
  * @param signal 中止信号
  */
 export async function optimizeTranscriptStep(
   context: OptimizeTranscriptContext,
   emit: DouyinPipelineEmitter,
-  _optimizeApiKey?: string,
+  optimizeApiKey?: string,
   _optimizeModelId?: string,
   signal?: AbortSignal
 ): Promise<OptimizeTranscriptResult> {
@@ -59,18 +126,50 @@ export async function optimizeTranscriptStep(
     throw new Error('操作已取消')
   }
 
+  // 基础清理
+  const cleanedTranscript = basicCleanup(context.transcript)
+
+  // 如果没有 API Key，只做基础清理
+  if (!optimizeApiKey) {
+    return {
+      optimizedTranscript: cleanedTranscript,
+      optimizationUsed: false
+    }
+  }
+
   await emit({
     type: 'progress',
     step: 'optimize',
     status: 'active',
-    detail: '正在清理转录文本...'
+    detail: '正在添加标点符号...'
   } as any)
 
-  // 基础清理
-  const cleanedTranscript = optimizeTranscript(context.transcript)
+  try {
+    const optimizedTranscript = await addPunctuationWithLLM(
+      cleanedTranscript,
+      optimizeApiKey,
+      signal
+    )
 
-  return {
-    optimizedTranscript: cleanedTranscript,
-    optimizationUsed: false  // 始终返回false，因为只是基础清理
+    // 输出优化后的文本
+    await emit({
+      type: 'partial',
+      key: 'optimized',
+      data: optimizedTranscript,
+      append: false
+    })
+
+    return {
+      optimizedTranscript,
+      optimizationUsed: true
+    }
+  } catch (error) {
+    // LLM 优化失败，返回基础清理结果
+    console.warn('[optimize] LLM 优化失败，使用基础清理结果:', error)
+
+    return {
+      optimizedTranscript: cleanedTranscript,
+      optimizationUsed: false
+    }
   }
 }

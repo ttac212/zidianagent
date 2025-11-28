@@ -5,6 +5,7 @@
  * - 调用ASR服务转录音频
  * - 支持流式输出
  * - 支持重试机制
+ * - 支持直接从视频文件转录（Whisper API，无需提取音频）
  */
 
 import { DouyinPipelineStepError } from '@/lib/douyin/pipeline'
@@ -12,7 +13,9 @@ import type { DouyinPipelineEmitter } from '@/lib/douyin/pipeline'
 import { processSSEStream } from '@/lib/utils/sse-parser'
 
 const ASR_ENDPOINT = 'https://api.302.ai/v1/chat/completions'
+const WHISPER_ENDPOINT = 'https://api.302.ai/v1/audio/transcriptions'
 const DEFAULT_ASR_TIMEOUT_MS = 120_000
+const DEFAULT_WHISPER_TIMEOUT_MS = 180_000  // Whisper 处理视频需要更长时间
 const ASR_MAX_RETRIES = 2
 
 export interface TranscribeAudioContext {
@@ -280,4 +283,141 @@ export async function transcribeAudio(
   return {
     transcript
   }
+}
+
+/**
+ * 使用 Whisper API 直接转录视频文件
+ *
+ * 302.AI 的 Whisper API 支持直接处理视频文件（MP4），
+ * 无需本地 FFmpeg 提取音频，适合 Vercel 等 serverless 环境。
+ *
+ * 注意：这是非流式 API，会一次性返回完整转录结果
+ */
+export interface TranscribeVideoContext {
+  videoBuffer: Buffer
+}
+
+export interface TranscribeVideoResult {
+  transcript: string
+}
+
+export async function transcribeVideoWithWhisper(
+  context: TranscribeVideoContext,
+  emit: DouyinPipelineEmitter,
+  apiKey: string,
+  signal?: AbortSignal
+): Promise<TranscribeVideoResult> {
+  if (signal?.aborted) {
+    throw new Error('操作已取消')
+  }
+
+  await emit({
+    type: 'partial',
+    key: 'transcript',
+    data: '正在使用 Whisper 转录视频...',
+    append: false
+  })
+
+  let attempt = 0
+
+  while (attempt <= ASR_MAX_RETRIES) {
+    if (signal?.aborted) {
+      throw new Error('操作已取消')
+    }
+
+    const { signal: whisperSignal, cleanup } = createAbortableSignal(
+      DEFAULT_WHISPER_TIMEOUT_MS,
+      'Whisper 请求超时',
+      signal
+    )
+
+    try {
+      // 构建 FormData
+      const formData = new FormData()
+      // 将 Buffer 转换为 Uint8Array 以兼容 Blob
+      const videoBlob = new Blob([new Uint8Array(context.videoBuffer)], { type: 'video/mp4' })
+      formData.append('file', videoBlob, 'video.mp4')
+      formData.append('model', 'whisper-1')
+      formData.append('response_format', 'text')
+      formData.append('language', 'zh')  // 指定中文提高识别准确率
+
+      const response = await fetch(WHISPER_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: formData,
+        signal: whisperSignal
+      })
+
+      cleanup()
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        const errorMessage = `Whisper转录失败: ${response.status} - ${errorText}`
+
+        if (response.status >= 500 && attempt < ASR_MAX_RETRIES) {
+          await emit({
+            type: 'progress',
+            step: 'transcribe-audio',
+            status: 'active',
+            detail: `Whisper 服务响应异常 (${response.status})，准备重试 ${attempt + 2}/${ASR_MAX_RETRIES + 1}`
+          } as any)
+          attempt += 1
+          continue
+        }
+
+        throw new DouyinPipelineStepError(errorMessage, 'transcribe-audio')
+      }
+
+      const transcript = await response.text()
+
+      if (!transcript || transcript.trim().length === 0) {
+        throw new DouyinPipelineStepError('Whisper转录失败,未返回文本', 'transcribe-audio')
+      }
+
+      // 输出转录结果
+      await emit({
+        type: 'partial',
+        key: 'transcript',
+        data: transcript.trim(),
+        append: false
+      })
+
+      return {
+        transcript: transcript.trim()
+      }
+    } catch (error) {
+      cleanup()
+
+      if (signal?.aborted) {
+        throw new Error('操作已取消')
+      }
+
+      if (error instanceof DouyinPipelineStepError) {
+        throw error
+      }
+
+      const errorMessage = error instanceof Error ? error.message : '未知错误'
+
+      if (attempt < ASR_MAX_RETRIES) {
+        await emit({
+          type: 'progress',
+          step: 'transcribe-audio',
+          status: 'active',
+          detail: `Whisper 请求失败（${errorMessage}），准备重试 ${attempt + 2}/${ASR_MAX_RETRIES + 1}`
+        } as any)
+        attempt += 1
+        continue
+      }
+
+      throw new DouyinPipelineStepError(
+        `Whisper转录失败: ${errorMessage}`,
+        'transcribe-audio',
+        error
+      )
+    }
+  }
+
+  throw new DouyinPipelineStepError('Whisper API请求失败', 'transcribe-audio')
 }

@@ -16,7 +16,6 @@ import {
   type DouyinPipelineProgress,
   type DouyinVideoInfo
 } from '@/lib/douyin/pipeline-steps'
-import { selectApiKey } from '@/lib/ai/key-manager'
 import { DOUYIN_DEFAULT_HEADERS, DOUYIN_PIPELINE_LIMITS } from '@/lib/douyin/constants'
 import { withAbortableTimeout, TimeoutError } from '@/lib/utils/abort-utils'
 
@@ -25,6 +24,7 @@ import {
   parseShareLink,
   fetchVideoDetail,
   transcribeAudio,
+  transcribeVideoWithWhisper,
   optimizeTranscriptStep,
   summarize
 } from '@/lib/douyin/steps'
@@ -148,8 +148,10 @@ interface PipelineContext {
   videoId?: string
   videoInfo?: DouyinVideoInfo
   audioUrl?: string | null  // 音频直链
+  playUrl?: string  // 视频播放URL（用于回退方案）
   awemeDetail?: any
   audioBuffer?: Buffer
+  videoBuffer?: Buffer  // 视频文件（用于Whisper直接转录）
   transcript?: string
   optimizedTranscript?: string
   markdown?: string
@@ -182,8 +184,8 @@ export async function runDouyinPipeline(
     throw error
   }
 
-  const optimizeModelId = 'claude-sonnet-4-5-20250929'
-  const { apiKey: optimizeApiKey } = selectApiKey(optimizeModelId)
+  // 优化步骤使用 302.AI 的 API Key
+  const optimizeApiKey = process.env.LLM_API_KEY
 
   // 初始化上下文
   let context: PipelineContext = { shareLink }
@@ -203,75 +205,152 @@ export async function runDouyinPipeline(
     )
     context.videoInfo = detailResult.videoInfo
     context.audioUrl = detailResult.audioUrl  // 音频直链
+    context.playUrl = detailResult.playUrl    // 视频播放URL（用于回退）
     context.awemeDetail = detailResult.awemeDetail
 
     await emit({ type: 'info', videoInfo: context.videoInfo })
     await emitProgress(emit, 'fetch-detail', 'completed')
 
-    // ========== 步骤3: 下载音频 ==========
-    // 仅使用音频直链方案，不再支持FFmpeg回退
-    if (!context.audioUrl) {
-      throw new DouyinPipelineStepError(
-        '未找到音频直链，该视频可能不包含背景音乐或音频不可用',
-        'download-audio'
-      )
+    // ========== 步骤3: 下载音频/视频 ==========
+    // 优先使用音频直链，如果不可用则下载视频用于Whisper转录
+    let useWhisperFallback = false
+
+    if (context.audioUrl) {
+      // 方案A: 音频直链可用，直接下载音频
+      await emitProgress(emit, 'download-audio', 'active', '下载音频文件')
+
+      try {
+        const audioBuffer = await withAbortableTimeout(
+          async (linkedSignal) => {
+            const audioResponse = await fetch(context.audioUrl!, {
+              headers: DOUYIN_DEFAULT_HEADERS,
+              signal: linkedSignal
+            })
+
+            if (!audioResponse.ok) {
+              throw new Error(`HTTP ${audioResponse.status}`)
+            }
+
+            return Buffer.from(await audioResponse.arrayBuffer())
+          },
+          {
+            timeoutMs: DOUYIN_PIPELINE_LIMITS.DOWNLOAD_TIMEOUT_MS,
+            timeoutMessage: '音频下载超时',
+            signal
+          }
+        )
+
+        context.audioBuffer = audioBuffer
+        await emitProgress(emit, 'download-audio', 'completed', `音频下载完成 (${(audioBuffer.length / 1024).toFixed(0)} KB)`)
+      } catch (error) {
+        // 音频下载失败，尝试回退到视频方案
+        const errorMessage = error instanceof Error ? error.message : String(error)
+
+        // 用户主动取消不回退
+        if (signal && signal.aborted) {
+          throw new DouyinPipelineStepError('用户取消请求', 'download-audio', error)
+        }
+
+        console.warn(`[Pipeline] 音频下载失败 (${errorMessage})，尝试下载视频...`)
+        await emit({
+          type: 'partial',
+          key: 'warn',
+          data: `音频下载失败，正在切换到视频转录方案...`,
+          append: false
+        })
+        useWhisperFallback = true
+      }
+    } else {
+      // 方案B: 无音频直链，使用视频方案
+      console.info('[Pipeline] 无音频直链，使用视频转录方案')
+      await emit({
+        type: 'partial',
+        key: 'warn',
+        data: '该视频无音频直链，正在使用视频转录方案...',
+        append: false
+      })
+      useWhisperFallback = true
     }
 
-    await emitProgress(emit, 'download-audio', 'active', '下载音频文件')
-
-    try {
-      const audioBuffer = await withAbortableTimeout(
-        async (linkedSignal) => {
-          const audioResponse = await fetch(context.audioUrl!, {
-            headers: DOUYIN_DEFAULT_HEADERS,
-            signal: linkedSignal
-          })
-
-          if (!audioResponse.ok) {
-            throw new Error(`HTTP ${audioResponse.status}`)
-          }
-
-          return Buffer.from(await audioResponse.arrayBuffer())
-        },
-        {
-          timeoutMs: DOUYIN_PIPELINE_LIMITS.DOWNLOAD_TIMEOUT_MS,
-          timeoutMessage: '音频下载超时',
-          signal
-        }
-      )
-
-      context.audioBuffer = audioBuffer
-      await emitProgress(emit, 'download-audio', 'completed', `音频下载完成 (${(audioBuffer.length / 1024).toFixed(0)} KB)`)
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-
-      // 用户主动取消
-      if (signal && signal.aborted) {
-        throw new DouyinPipelineStepError('用户取消请求', 'download-audio', error)
+    // 如果需要使用Whisper回退方案，下载视频
+    if (useWhisperFallback) {
+      if (!context.playUrl) {
+        throw new DouyinPipelineStepError(
+          '无法获取视频播放地址，转录失败',
+          'download-audio'
+        )
       }
 
-      // 超时或其他错误
-      const isTimeout = error instanceof TimeoutError
-      throw new DouyinPipelineStepError(
-        isTimeout ? '音频下载超时，请稍后重试' : `音频下载失败: ${errorMessage}`,
-        'download-audio',
-        error
-      )
+      await emitProgress(emit, 'download-audio', 'active', '下载视频文件（Whisper方案）')
+
+      try {
+        const videoBuffer = await withAbortableTimeout(
+          async (linkedSignal) => {
+            const videoResponse = await fetch(context.playUrl!, {
+              headers: DOUYIN_DEFAULT_HEADERS,
+              signal: linkedSignal
+            })
+
+            if (!videoResponse.ok) {
+              throw new Error(`HTTP ${videoResponse.status}`)
+            }
+
+            return Buffer.from(await videoResponse.arrayBuffer())
+          },
+          {
+            timeoutMs: DOUYIN_PIPELINE_LIMITS.DOWNLOAD_TIMEOUT_MS * 2,  // 视频下载给更多时间
+            timeoutMessage: '视频下载超时',
+            signal
+          }
+        )
+
+        context.videoBuffer = videoBuffer
+        await emitProgress(emit, 'download-audio', 'completed', `视频下载完成 (${(videoBuffer.length / 1024 / 1024).toFixed(1)} MB)`)
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+
+        if (signal && signal.aborted) {
+          throw new DouyinPipelineStepError('用户取消请求', 'download-audio', error)
+        }
+
+        const isTimeout = error instanceof TimeoutError
+        throw new DouyinPipelineStepError(
+          isTimeout ? '视频下载超时，请稍后重试' : `视频下载失败: ${errorMessage}`,
+          'download-audio',
+          error
+        )
+      }
     }
 
-    // ========== 步骤5: 转录音频 ==========
-    await emitProgress(emit, 'transcribe-audio', 'active', '正在向ASR服务请求转录')
-    const transcribeResult = await transcribeAudio(
-      { audioBuffer: context.audioBuffer! },
-      emit,
-      asrApiKey,
-      signal
-    )
-    context.transcript = transcribeResult.transcript
+    // ========== 步骤4: 转录 ==========
+    await emitProgress(emit, 'transcribe-audio', 'active', useWhisperFallback ? '使用Whisper转录视频' : '正在向ASR服务请求转录')
+
+    if (useWhisperFallback && context.videoBuffer) {
+      // 使用 Whisper API 直接转录视频
+      const transcribeResult = await transcribeVideoWithWhisper(
+        { videoBuffer: context.videoBuffer },
+        emit,
+        asrApiKey,
+        signal
+      )
+      context.transcript = transcribeResult.transcript
+    } else if (context.audioBuffer) {
+      // 使用原有的音频转录方案
+      const transcribeResult = await transcribeAudio(
+        { audioBuffer: context.audioBuffer },
+        emit,
+        asrApiKey,
+        signal
+      )
+      context.transcript = transcribeResult.transcript
+    } else {
+      throw new DouyinPipelineStepError('无可用的音频或视频数据', 'transcribe-audio')
+    }
+
     await emitProgress(emit, 'transcribe-audio', 'completed', '转录完成')
 
-    // ========== 步骤6: 优化文本 ==========
-    await emitProgress(emit, 'optimize', 'active', '正在清理转录文本...')
+    // ========== 步骤5: 优化文本 ==========
+    await emitProgress(emit, 'optimize', 'active', '正在添加标点符号...')
     const optimizeResult = await optimizeTranscriptStep(
       {
         transcript: context.transcript!,
@@ -280,7 +359,7 @@ export async function runDouyinPipeline(
       },
       emit,
       optimizeApiKey,
-      optimizeModelId,
+      undefined,  // modelId 已废弃
       signal
     )
     context.optimizedTranscript = optimizeResult.optimizedTranscript
@@ -288,7 +367,7 @@ export async function runDouyinPipeline(
       emit,
       'optimize',
       'completed',
-      optimizeResult.optimizationUsed ? 'AI优化完成' : '基础清理完成'
+      optimizeResult.optimizationUsed ? '标点符号添加完成' : '基础清理完成'
     )
 
     // ========== 步骤7: 生成Markdown ==========
