@@ -108,7 +108,6 @@ function SmartChatCenterInternal({
   const queryClient = useQueryClient()
   const { state, dispatch } = useChatState()
   const streamedResultMessageIds = useRef<Set<string>>(new Set())
-  const resetReasoningHistoryRef = useRef<Set<string>>(new Set())
   const isFirstMountRef = useRef(true) // 跟踪首次挂载
   const prefillHandledRef = useRef(false)
   const { selectedModel: currentModel, setSelectedModel } = useModelState()
@@ -119,8 +118,6 @@ function SmartChatCenterInternal({
   const messages = selectMessages(state)
   const composerInput = selectComposerInput(state)
   const composerSettings = selectComposerSettings(state)
-  const composerReasoningEffort = composerSettings.reasoning_effort
-  const composerReasoningEnabled = composerSettings.reasoning?.enabled ?? false
   const editingTitle = selectComposerEditingTitle(state)
   const tempTitle = selectComposerTempTitle(state)
   const hasMoreBefore = selectHistoryHasMoreBefore(state)
@@ -253,31 +250,9 @@ function SmartChatCenterInternal({
     messages
   ])
 
-  useEffect(() => {
-    if (!conversation || !conversation.id) {
-      return
-    }
-
-    const hasMessages = Array.isArray(conversation.messages) && conversation.messages.length > 0
-
-    if (hasMessages) {
-      resetReasoningHistoryRef.current.delete(conversation.id)
-      return
-    }
-
-    if (resetReasoningHistoryRef.current.has(conversation.id)) {
-      return
-    }
-
-    resetReasoningHistoryRef.current.add(conversation.id)
-
-    if (composerReasoningEffort || composerReasoningEnabled) {
-      dispatch({
-        type: 'SET_SETTINGS',
-        payload: { reasoning_effort: undefined, reasoning: { enabled: false } }
-      })
-    }
-  }, [conversation, dispatch, composerReasoningEffort, composerReasoningEnabled])
+  // 注意：已移除新对话自动重置推理设置的逻辑
+  // 现在默认使用高思考程度，且用户界面已隐藏推理开关
+  // 推理设置将保持用户的默认配置（高思考程度）
 
   // 事件处理函数 - 简化版本，使用统一的UPDATE_MESSAGE_STREAM
   const handleChatEvent = useCallback((event: ChatEvent) => {
@@ -880,15 +855,7 @@ function SmartChatCenterInternal({
         if (onSelectConversation) {
           onSelectConversation(targetConversationId)
         }
-        if (newConversation?.id) {
-          resetReasoningHistoryRef.current.add(newConversation.id)
-          if (composerReasoningEffort || composerReasoningEnabled) {
-            dispatch({
-              type: 'SET_SETTINGS',
-              payload: { reasoning_effort: undefined, reasoning: { enabled: false } }
-            })
-          }
-        }
+        // 注意：已移除新对话重置推理设置的逻辑，保持默认高思考程度
       } catch (_error) {
         toast.error('创建对话失败，请重试')
         dispatch({
@@ -927,8 +894,6 @@ function SmartChatCenterInternal({
     activeConversation,
     onCreateConversation,
     onSelectConversation,
-    composerReasoningEffort,
-    composerReasoningEnabled,
     currentModel,
     sendMessage,
     dispatch

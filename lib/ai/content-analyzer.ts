@@ -280,13 +280,31 @@ async function callLLMAPI(userPrompt: string, signal?: AbortSignal) {
     throw new Error('未配置ZENMUX_API_KEY')
   }
 
-  // 使用统一的请求构建函数，自动处理ZenMux参数规范
-  const requestBody = buildLLMRequestAuto({
-    model: MODEL_ID,
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: userPrompt }
-    ],
+  // 超时控制：120秒
+  const TIMEOUT_MS = 120000
+  const timeoutController = new AbortController()
+  const timeoutId = setTimeout(() => {
+    console.warn('[ContentAnalyzer] 请求超时，正在取消...')
+    timeoutController.abort()
+  }, TIMEOUT_MS)
+
+  // 合并外部 signal 和超时 signal
+  const abortHandler = () => {
+    clearTimeout(timeoutId)
+    timeoutController.abort()
+  }
+  if (signal) {
+    signal.addEventListener('abort', abortHandler)
+  }
+
+  try {
+    // 使用统一的请求构建函数，自动处理ZenMux参数规范
+    const requestBody = buildLLMRequestAuto({
+      model: MODEL_ID,
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt }
+      ],
     maxTokens: 2000,
     temperature: 0.3,  // 较低温度，保证分析稳定性
     // 使用简单的JSON模式，避免严格Schema导致字段命名问题
@@ -302,7 +320,7 @@ async function callLLMAPI(userPrompt: string, signal?: AbortSignal) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(requestBody),
-    signal // 传递中断信号
+    signal: timeoutController.signal // 使用超时控制的 signal
   })
 
   if (!response.ok) {
@@ -320,6 +338,12 @@ async function callLLMAPI(userPrompt: string, signal?: AbortSignal) {
   return {
     content: data.choices[0].message.content,
     usage: data.usage || { total_tokens: 0, prompt_tokens: 0, completion_tokens: 0 }
+  }
+  } finally {
+    clearTimeout(timeoutId)
+    if (signal) {
+      signal.removeEventListener('abort', abortHandler)
+    }
   }
 }
 

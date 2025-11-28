@@ -132,15 +132,18 @@ export async function GET(
     ])
 
     // 处理内容数据，解析JSON字段，并对 totalEngagement = 0 的记录动态计算
+    // 使用加权公式：点赞×1 + 评论×2 + 收藏×3 + 分享×4（与前端getEngagementScore一致）
     let processedContents = contents.map(content => {
-      // 动态计算 totalEngagement（兼容历史数据）
-      const calculatedEngagement = content.totalEngagement === 0
-        ? content.diggCount + content.commentCount + content.collectCount + content.shareCount
-        : content.totalEngagement
+      // 动态计算 totalEngagement（使用加权公式，与前端一致）
+      const calculatedEngagement =
+        content.diggCount +
+        content.commentCount * 2 +
+        content.collectCount * 3 +
+        content.shareCount * 4
 
       return {
         ...content,
-        totalEngagement: calculatedEngagement, // 使用计算值覆盖
+        totalEngagement: calculatedEngagement, // 使用加权计算值
         parsedTags: (() => {
           try {
             return JSON.parse(content.tags)

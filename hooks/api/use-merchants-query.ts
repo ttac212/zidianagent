@@ -91,7 +91,7 @@ async function fetchMerchantDetail(id: string, signal?: AbortSignal): Promise<Me
 
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(`��ȡ�̼���Ϣʧ��: ${errorText}`)
+    throw new Error(`获取商家信息失败: ${errorText}`)
   }
 
   const result = await response.json()
@@ -132,7 +132,7 @@ async function fetchMerchantContents(
 
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(`��ȡ�����б�ʧ��: ${errorText}`)
+    throw new Error(`获取内容列表失败: ${errorText}`)
   }
 
   const result = await response.json()

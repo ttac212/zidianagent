@@ -1,0 +1,32 @@
+当前商家详情页核心链路被登录拦截（线上 307 跳转到 /login），无法直接验证功能；代码里有多处可预见的用户可见
+  故障（导出无错误提示、互动指标前后端不一致、无分页导致数据缺失），需要尽快修正再回归。
+
+  【关键洞察】
+
+  - 数据结构：前端展示的互动评分在 app/merchants/[id]/page.tsx 使用 digg+评论×2+收藏×3+分享×4，而后端 app/api/merchants/
+    [id]/contents/route.ts 的 totalEngagement 计算只做简单求和，排序/过滤依据与展示不一致，用户会看到顺序和分数对不上。
+  - 复杂度：内容列表状态里有 page/limit 但 UI 无任何分页/“加载更多”控件，永远只取前 20 条，merchant.totalContentCount >
+    20 时实际不可见，属于隐藏的边界情况。
+  - 风险点：线上未登录直接 307 到登录页，无法确认部署是否正常工作；handleExport 失败分支为空（同文件），导出接口 4xx/5xx    时用户无反馈，use-merchants-query.ts 的错误文案是乱码（????????），调试体验差。
+
+  【Linus式方案】
+
+  1. 先打通验证：提供测试账号或在 Vercel 打开 E2E bypass（E2E_BYPASS_AUTH）以便确认线上是否可用。
+  2. 统一互动指标：后端计算 totalEngagement 时引入同样的权重，或前端展示用后端字段，保证排序/显示一致。
+  3. 补齐分页：在 app/merchants/[id]/page.tsx 给 contentsQuery 增加分页/“加载更多”，同步把 hasMore/total 用起来，避免只
+     看见前 20 条。
+  4. 错误提示：handleExport 的 else/catch 补 toast；hooks/api/use-merchants-query.ts 修正常量字符串编码，确保报错可读。
+  5. 回归检查：登录后验证同步、导出、标签分析、AI 对齐、内容筛选/排序流程，在有/无管理员权限下各跑一遍。
+
+  【代码审查输出】
+  品味评分：凑合（功能堆积、边界处理缺席，错误被吞掉）。
+  致命问题：
+
+  - 互动分数前后端定义不一致，列表排序会误导用户（app/merchants/[id]/page.tsx vs app/api/merchants/[id]/contents/
+    route.ts）。
+  - 无分页控件，超过 20 条内容直接“丢失”在 UI（app/merchants/[id]/page.tsx）。
+  - 导出失败静默，用户看不到错误（同上）。
+    改进方向：
+  - “把这个特殊情况消除掉”：把分页真正做完，别硬编码前 20。
+  - “这10行可以变成3行”：导出失败分支直接 toast.error(res.statusText || '导出失败')。
+  - “数据结构错了”：统一 totalEngagement 定义，否则排序逻辑毫无意义。

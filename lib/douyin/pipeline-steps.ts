@@ -1,13 +1,14 @@
 /**
  * 抖音处理流水线的步骤定义
  * 纯数据模块，可在服务端和客户端之间共享
+ *
+ * 2025年简化：仅使用音频直链方案，移除FFmpeg相关步骤
  */
 
 export type DouyinPipelineStep =
   | 'parse-link'
   | 'fetch-detail'
-  | 'download-video'
-  | 'extract-audio'
+  | 'download-audio'
   | 'transcribe-audio'
   | 'optimize'
   | 'summarize'
@@ -48,17 +49,12 @@ export const DOUYIN_PIPELINE_STEPS: DouyinPipelineStepDefinition[] = [
   {
     key: 'fetch-detail',
     label: '获取详情',
-    description: '获取视频元数据'
+    description: '获取视频元数据和音频地址'
   },
   {
-    key: 'download-video',
-    label: '下载视频',
-    description: '根据播放地址下载原始视频'
-  },
-  {
-    key: 'extract-audio',
-    label: '提取音频',
-    description: '从视频中分离音频轨'
+    key: 'download-audio',
+    label: '下载音频',
+    description: '从音频直链下载音频文件'
   },
   {
     key: 'transcribe-audio',

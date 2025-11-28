@@ -4,7 +4,7 @@
 
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
@@ -87,7 +87,39 @@ export default function MerchantDetailPage() {
   const merchantLoading = merchantQuery.status === 'pending'
   const loading = merchantLoading
   const contentsQuery = useMerchantContentsQuery(merchantId, contentFilters)
-  const contents = contentsQuery.data?.contents ?? []
+  // 累积加载的内容（用于分页追加模式）
+  const [accumulatedContents, setAccumulatedContents] = useState<MerchantContent[]>([])
+  const prevFiltersRef = useRef(contentFilters)
+
+  // 当筛选/排序条件变化时重置累积内容，当翻页时追加内容
+  useEffect(() => {
+    const newContents = contentsQuery.data?.contents ?? []
+    const prevFilters = prevFiltersRef.current
+
+    // 判断是否只是翻页（其他条件都相同）
+    const isOnlyPageChange =
+      prevFilters.search === contentFilters.search &&
+      prevFilters.contentType === contentFilters.contentType &&
+      prevFilters.sortBy === contentFilters.sortBy &&
+      prevFilters.sortOrder === contentFilters.sortOrder &&
+      prevFilters.page !== contentFilters.page
+
+    if (isOnlyPageChange && (contentFilters.page ?? 1) > 1) {
+      // 翻页：追加新内容（去重）
+      setAccumulatedContents(prev => {
+        const existingIds = new Set(prev.map(c => c.id))
+        const uniqueNew = newContents.filter(c => !existingIds.has(c.id))
+        return [...prev, ...uniqueNew]
+      })
+    } else {
+      // 筛选/排序变化或首次加载：重置为新内容
+      setAccumulatedContents(newContents)
+    }
+
+    prevFiltersRef.current = contentFilters
+  }, [contentsQuery.data?.contents, contentFilters])
+
+  const contents = accumulatedContents
   const contentsInitialLoading = contentsQuery.status === 'pending' && !contentsQuery.data
   const contentsFetching = contentsQuery.isFetching
   const contentLoading = contentsInitialLoading || contentsFetching
@@ -287,9 +319,15 @@ export default function MerchantDetailPage() {
         window.URL.revokeObjectURL(url)
         document.body.removeChild(a)
       } else {
-        }
-    } catch (_error) {
-      } finally {
+        toast.error('导出失败', {
+          description: response.statusText || '无法导出数据，请稍后重试'
+        })
+      }
+    } catch (error: any) {
+      toast.error('导出失败', {
+        description: error?.message || '网络错误，请稍后重试'
+      })
+    } finally {
       setExportLoading(false)
     }
   }
@@ -851,6 +889,24 @@ export default function MerchantDetailPage() {
                     </div>
                     )
                   })}
+                </div>
+              )}
+
+              {/* 分页信息和加载更多 */}
+              {!contentLoading && contents.length > 0 && (
+                <div className="mt-4 flex flex-col items-center gap-2">
+                  <div className="text-sm text-muted-foreground">
+                    显示 {contents.length} / {contentsQuery.data?.total ?? 0} 条内容
+                  </div>
+                  {contentsQuery.data?.hasMore && (
+                    <Button
+                      variant="outline"
+                      onClick={() => setContentFilters(prev => ({ ...prev, page: (prev.page || 1) + 1 }))}
+                      disabled={contentsFetching}
+                    >
+                      {contentsFetching ? '加载中...' : '加载更多'}
+                    </Button>
+                  )}
                 </div>
               )}
             </CardContent>

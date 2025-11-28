@@ -7,10 +7,10 @@ import type { ChatSettings } from '@/types/chat'
 
 const STORAGE_KEY = 'chatSettings'
 
-// 默认设置
+// 默认设置：高思考程度
 const DEFAULT_SETTINGS: Partial<ChatSettings> = {
-  reasoning_effort: undefined,
-  reasoning: { enabled: false }
+  reasoning_effort: 'high',
+  reasoning: { enabled: true }
 }
 
 /**

@@ -71,6 +71,7 @@ export interface DouyinCommentsPipelineOptions {
   signal?: AbortSignal
   maxComments?: number  // 最大采集评论数，默认100
   maxPages?: number     // 最大采集页数，默认5
+  fastMode?: boolean    // 快速模式：使用更快的Haiku模型，分析更简洁
 }
 
 export interface DouyinCommentsPipelineResult {
@@ -192,7 +193,7 @@ function buildMarkdown(
   _locationStats: LocationStat[]
 ): string {
   return [
-    '📊 **抖音视频评论分析报告**',
+    '## 抖音视频评论分析报告',
     '',
     '## 视频信息',
     `- **标题**: ${videoInfo.title}`,
@@ -213,16 +214,15 @@ function buildMarkdown(
 
 /**
  * 调用 LLM 分析评论数据
+ * 使用统一的 LLM 客户端
  */
 async function analyzeWithLLM(
   data: DouyinCommentsAnalysisData,
-  apiKey: string,
   modelId: string,
   emit: DouyinCommentsPipelineEmitter,
   signal?: AbortSignal
 ): Promise<string> {
-  // 使用 ZenMux API 替代 302.AI
-  const apiBase = process.env.ZENMUX_API_BASE || 'https://zenmux.ai/api/v1'
+  const { callLLMStreamWithTimeout } = await import('@/lib/ai/llm-client')
 
   // 构建分析提示词
   const prompt = `请分析以下抖音视频的评论数据，给出专业的洞察报告：
@@ -265,111 +265,20 @@ ${data.locationStats.map(({ location, count }) => `- ${location}: ${count}条`).
 
 请用中文简洁地输出分析结果，使用markdown格式。`
 
-  const response = await fetch(`${apiBase}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: modelId,  // 使用上面定义的modelId
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      max_tokens: 4000,
-      temperature: 0.7,
-      stream: true  // 启用流式输出
-    }),
-    signal
-  })
-
-  if (!response.ok) {
-    let errorText = ''
-    let errorDetail = ''
-
-    try {
-      errorText = await response.text()
-      // 尝试解析JSON错误
-      try {
-        const errorJson = JSON.parse(errorText)
-        errorDetail = errorJson.error?.message || errorJson.message || errorText
-      } catch {
-        errorDetail = errorText
-      }
-    } catch {
-      errorDetail = '无法读取错误详情'
+  return callLLMStreamWithTimeout({
+    prompt,
+    modelId,
+    maxTokens: 4000,
+    signal,
+    onChunk: async (delta) => {
+      await emit({
+        type: 'partial',
+        key: 'analysis',
+        data: delta,
+        append: true
+      })
     }
-
-    const errorMessage = errorDetail
-      ? `LLM API错误: ${response.status} - ${errorDetail}`
-      : `LLM API错误: HTTP ${response.status} ${response.statusText}`
-
-    throw new Error(errorMessage)
-  }
-
-  // 处理流式响应
-  const reader = response.body?.getReader()
-  if (!reader) {
-    throw new Error('无法读取响应流')
-  }
-
-  const decoder = new TextDecoder()
-  let fullText = ''
-  let buffer = ''
-
-  try {
-    while (true) {
-      ensureActive(signal)
-      const { done, value } = await reader.read()
-
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        if (!line.trim()) continue
-
-        // ZenMux 的格式是 "data:[DONE]" (没有空格)
-        if (line.trim() === 'data:[DONE]' || line.trim() === 'data: [DONE]') continue
-
-        // ZenMux 使用 "data:" 而不是 "data: " (注意没有空格)
-        if (line.startsWith('data:')) {
-          try {
-            // 移除 "data:" 前缀（可能有或没有空格）
-            const jsonStr = line.startsWith('data: ') ? line.slice(6) : line.slice(5)
-            const data = JSON.parse(jsonStr)
-            const delta = data.choices?.[0]?.delta?.content
-
-            if (delta) {
-              fullText += delta
-              // 实时发送分析片段
-              await emit({
-                type: 'partial',
-                key: 'analysis',
-                data: delta,
-                append: true
-              })
-            }
-          } catch (_parseError) {
-            // 忽略解析错误
-          }
-        }
-      }
-    }
-  } finally {
-    reader.releaseLock()
-  }
-
-  if (!fullText) {
-    throw new Error('LLM 分析失败，未返回文本')
-  }
-
-  return fullText
+  }, 180000) // 180秒超时，与 audience-analysis-pipeline 保持一致
 }
 
 /**
@@ -383,22 +292,30 @@ export async function runDouyinCommentsPipeline(
   const signal = options.signal
   const maxComments = options.maxComments || 100
   const maxPages = options.maxPages || 5
+  const fastMode = options.fastMode || false
 
-  // 使用 ZenMux API
-  const modelId = process.env.ZENMUX_DEFAULT_MODEL || 'anthropic/claude-sonnet-4.5'
-  const apiKey = process.env.ZENMUX_API_KEY
+  // 使用统一的配置模块
+  const { validateAIConfig, selectModel } = await import('@/lib/config/ai-config')
 
-  if (!apiKey) {
-    const error = new DouyinCommentsPipelineStepError(
-      `未配置 ZENMUX_API_KEY 环境变量，请检查 .env.local 配置`,
+  let modelId: string
+  try {
+    validateAIConfig()
+    modelId = selectModel(fastMode)
+  } catch (error) {
+    const err = new DouyinCommentsPipelineStepError(
+      error instanceof Error ? error.message : '配置错误',
       'parse-link'
     )
     await emit({
       type: 'error',
-      message: error.message,
-      step: error.step
+      message: err.message,
+      step: err.step
     })
-    throw error
+    throw err
+  }
+
+  if (fastMode) {
+    console.info('[COMMENTS] 启用快速模式，使用 Haiku 模型')
   }
 
   try {
@@ -423,23 +340,28 @@ export async function runDouyinCommentsPipeline(
     }
     await emitProgress(emit, 'parse-link', 'completed')
 
-    // 步骤2: 获取视频详情
-    await emitProgress(emit, 'fetch-detail', 'active')
+    // 性能优化：步骤2和3并发执行（获取视频详情和统计数据）
+    await emitProgress(emit, 'fetch-detail', 'active', '正在并发获取视频信息...')
     const tikhubClient = getTikHubClient()
-    let videoDetail
-    try {
-      videoDetail = await tikhubClient.getVideoDetail({
-        aweme_id: shareResult.videoId
-      })
-    } catch (error) {
-      throw new DouyinCommentsPipelineStepError(
-        error instanceof Error ? error.message : 'TikHub API调用失败',
-        'fetch-detail',
-        error
-      )
-    }
+
+    // 并发请求视频详情和统计数据
+    const [videoDetailResult, statsResult] = await Promise.allSettled([
+      tikhubClient.getVideoDetail({ aweme_id: shareResult.videoId }),
+      tikhubClient.getVideoStatistics({ aweme_ids: shareResult.videoId })
+    ])
+
     ensureActive(signal)
 
+    // 处理视频详情结果
+    if (videoDetailResult.status === 'rejected') {
+      throw new DouyinCommentsPipelineStepError(
+        videoDetailResult.reason instanceof Error ? videoDetailResult.reason.message : 'TikHub API调用失败',
+        'fetch-detail',
+        videoDetailResult.reason
+      )
+    }
+
+    const videoDetail = videoDetailResult.value
     const awemeDetail = videoDetail?.aweme_detail
     if (!awemeDetail) {
       throw new DouyinCommentsPipelineStepError(
@@ -462,68 +384,42 @@ export async function runDouyinCommentsPipeline(
     })
     await emitProgress(emit, 'fetch-detail', 'completed')
 
-    // 步骤3: 获取播放数据
-    await emitProgress(emit, 'fetch-statistics', 'active', '正在获取视频统计数据...')
+    // 步骤3: 处理统计数据（已并发获取）
+    await emitProgress(emit, 'fetch-statistics', 'active', '正在处理统计数据...')
     let statistics: DouyinCommentsStatistics | null = null
     let usedFallback = false
 
-    // 首先尝试使用专门的统计 API
-    try {
-      console.info(`[COMMENTS_STATS] 正在获取视频统计数据，videoId: ${shareResult.videoId}`)
-
-      const statsResponse = await tikhubClient.getVideoStatistics({
-        aweme_ids: shareResult.videoId
-      })
-
+    // 处理统计数据结果
+    if (statsResult.status === 'fulfilled') {
+      const statsResponse = statsResult.value
       console.info('[COMMENTS_STATS] API响应:', JSON.stringify({
         hasStatisticsList: !!(statsResponse as any).statistics_list,
         hasStatistics: !!statsResponse.statistics,
-        response: statsResponse
       }, null, 2))
 
-      // TikHub API 返回的字段名可能是 statistics_list 或 statistics
       const statisticsList =
         (statsResponse as { statistics_list?: typeof statsResponse.statistics } | undefined)
           ?.statistics_list ?? statsResponse.statistics
 
-      if (!statisticsList || statisticsList.length === 0) {
-        console.warn('[COMMENTS_STATS] API未返回统计数据，将使用降级方案')
-        throw new Error('API未返回统计数据')
-      }
-
-      const stats = statisticsList[0]
-      const normalizedStats = normalizeStatisticsData(stats)
-
-      if (normalizedStats) {
-        statistics = normalizedStats
-        console.info('[COMMENTS_STATS] 统计数据处理成功:', statistics)
-      } else {
-        console.warn('[COMMENTS_STATS] 统计数据字段不完整，将使用降级方案')
-      }
-    } catch (error) {
-      console.warn('[COMMENTS_STATS] 获取统计数据失败，尝试降级方案:', error)
-
-      // 详细记录错误信息用于调试
-      if (error && typeof error === 'object' && 'code' in error) {
-        const apiError = error as any
-        console.error(`[COMMENTS_STATS] TikHub API错误 (code: ${apiError.code}): ${apiError.message}`)
-        if (apiError.details) {
-          console.error('[COMMENTS_STATS] 错误详情:', apiError.details)
+      if (statisticsList && statisticsList.length > 0) {
+        const normalizedStats = normalizeStatisticsData(statisticsList[0])
+        if (normalizedStats) {
+          statistics = normalizedStats
+          console.info('[COMMENTS_STATS] 统计数据处理成功')
         }
       }
+    } else {
+      console.warn('[COMMENTS_STATS] 获取统计数据失败，尝试降级方案:', statsResult.reason)
     }
 
     // 降级方案：使用视频详情中的统计数据
     if (!statistics) {
-      await emitProgress(emit, 'fetch-statistics', 'active', '使用视频详情中的统计数据...')
       const fallbackStatistics = normalizeStatisticsData(awemeDetail.statistics)
-
       if (fallbackStatistics) {
         statistics = fallbackStatistics
         usedFallback = true
-        console.info('[COMMENTS_STATS] 成功使用降级数据源:', statistics)
+        console.info('[COMMENTS_STATS] 成功使用降级数据源')
       } else {
-        // 如果降级方案也失败,抛出错误
         throw new DouyinCommentsPipelineStepError(
           '无法获取视频统计数据（主API和降级方案均失败）',
           'fetch-statistics'
@@ -532,7 +428,6 @@ export async function runDouyinCommentsPipeline(
     }
     ensureActive(signal)
 
-    // 完成统计数据获取步骤
     const completionDetail = usedFallback
       ? '已获取统计数据（使用降级数据源）'
       : '已获取统计数据'
@@ -560,11 +455,13 @@ export async function runDouyinCommentsPipeline(
       }
 
       // 继续获取更多评论
-      if (commentsPage1.has_more && allComments.length < maxComments) {
-        let cursor = commentsPage1.cursor
-        let pageCount = 1
+      // 注意：只看 has_more 和上限条件，不对 cursor 做布尔判断
+      // 因为 cursor=0 是合法值，代表第一页后的游标
+      let hasMore = commentsPage1.has_more
+      let cursor = commentsPage1.cursor
+      let pageCount = 1
 
-        while (pageCount < maxPages && cursor && allComments.length < maxComments) {
+      while (hasMore && pageCount < maxPages && allComments.length < maxComments) {
           ensureActive(signal)
 
           try {
@@ -586,17 +483,19 @@ export async function runDouyinCommentsPipeline(
               )
             }
 
-            if (!nextPage.has_more) break
-            cursor = nextPage.cursor
+            if (!nextPage.has_more) {
+              hasMore = false
+            } else {
+              cursor = nextPage.cursor
+            }
 
-            // 避免请求过快
-            await new Promise(resolve => setTimeout(resolve, 500))
+            // 减少请求间隔（从500ms降到200ms）
+            await new Promise(resolve => setTimeout(resolve, 200))
           } catch (error) {
             // 单页失败不中断整个流程
             console.warn('采集评论页失败:', error)
             break
           }
-        }
       }
     } catch (error) {
       throw new DouyinCommentsPipelineStepError(
@@ -655,7 +554,7 @@ export async function runDouyinCommentsPipeline(
 
     let analysisText: string
     try {
-      analysisText = await analyzeWithLLM(analysisData, apiKey, modelId, emit, signal)
+      analysisText = await analyzeWithLLM(analysisData, modelId, emit, signal)
     } catch (error) {
       throw new DouyinCommentsPipelineStepError(
         error instanceof Error ? error.message : 'LLM 分析失败',

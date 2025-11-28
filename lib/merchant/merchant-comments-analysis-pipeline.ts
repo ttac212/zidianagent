@@ -74,6 +74,7 @@ export type MerchantAnalysisPipelineEmitter = (
 export interface MerchantAnalysisPipelineOptions {
   signal?: AbortSignal
   maxComments?: number    // 最大分析评论数，默认100
+  fastMode?: boolean      // 快速模式：使用更快的Haiku模型
 }
 
 export interface MerchantAnalysisPipelineResult {
@@ -154,7 +155,7 @@ function buildMarkdown(
   commentSource: 'db' | 'tikhub'
 ): string {
   return [
-    '📊 **商家视频评论分析报告**',
+    '## 商家视频评论分析报告',
     '',
     '## 视频信息',
     `- **标题**: ${videoInfo.title}`,
@@ -176,15 +177,15 @@ function buildMarkdown(
 
 /**
  * 调用 LLM 分析评论数据
+ * 使用统一的 LLM 客户端
  */
 async function analyzeWithLLM(
   data: MerchantCommentAnalysisData,
-  apiKey: string,
   modelId: string,
   emit: MerchantAnalysisPipelineEmitter,
   signal?: AbortSignal
 ): Promise<string> {
-  const apiBase = process.env.ZENMUX_API_BASE || 'https://zenmux.ai/api/v1'
+  const { callLLMStreamWithTimeout } = await import('@/lib/ai/llm-client')
 
   // 构建分析提示词（适配商家场景）
   const prompt = `请分析以下商家视频的评论数据，给出专业的洞察报告：
@@ -225,106 +226,20 @@ ${data.locationStats.map(({ location, count }) => `- ${location}: ${count}条`).
 
 请用中文简洁地输出分析结果，使用markdown格式。`
 
-  const response = await fetch(`${apiBase}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: modelId,
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      max_tokens: 4000,
-      temperature: 0.7,
-      stream: true
-    }),
-    signal
-  })
-
-  if (!response.ok) {
-    let errorDetail = ''
-
-    try {
-      const errorText = await response.text()
-      try {
-        const errorJson = JSON.parse(errorText)
-        errorDetail = errorJson.error?.message || errorJson.message || errorText
-      } catch {
-        errorDetail = errorText
-      }
-    } catch {
-      errorDetail = '无法读取错误详情'
+  return callLLMStreamWithTimeout({
+    prompt,
+    modelId,
+    maxTokens: 4000,
+    signal,
+    onChunk: async (delta) => {
+      await emit({
+        type: 'partial',
+        key: 'analysis',
+        data: delta,
+        append: true
+      })
     }
-
-    const errorMessage = errorDetail
-      ? `LLM API错误: ${response.status} - ${errorDetail}`
-      : `LLM API错误: HTTP ${response.status} ${response.statusText}`
-
-    throw new Error(errorMessage)
-  }
-
-  // 处理流式响应
-  const reader = response.body?.getReader()
-  if (!reader) {
-    throw new Error('无法读取响应流')
-  }
-
-  const decoder = new TextDecoder()
-  let fullText = ''
-  let buffer = ''
-
-  try {
-    while (true) {
-      ensureActive(signal)
-      const { done, value } = await reader.read()
-
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        if (!line.trim()) continue
-
-        if (line.trim() === 'data:[DONE]' || line.trim() === 'data: [DONE]') continue
-
-        if (line.startsWith('data:')) {
-          try {
-            const jsonStr = line.startsWith('data: ') ? line.slice(6) : line.slice(5)
-            const data = JSON.parse(jsonStr)
-            const delta = data.choices?.[0]?.delta?.content
-
-            if (delta) {
-              fullText += delta
-              // 实时发送分析片段
-              await emit({
-                type: 'partial',
-                key: 'analysis',
-                data: delta,
-                append: true
-              })
-            }
-          } catch {
-            // 忽略解析错误
-          }
-        }
-      }
-    }
-  } finally {
-    reader.releaseLock()
-  }
-
-  if (!fullText) {
-    throw new Error('LLM 分析失败，未返回文本')
-  }
-
-  return fullText
+  }, 180000) // 180秒超时
 }
 
 /**
@@ -347,22 +262,30 @@ export async function runMerchantCommentAnalysis(
 ): Promise<MerchantAnalysisPipelineResult> {
   const signal = options.signal
   const maxComments = options.maxComments || 100
+  const fastMode = options.fastMode || false
 
-  // 使用 ZenMux API
-  const modelId = process.env.ZENMUX_DEFAULT_MODEL || 'anthropic/claude-sonnet-4.5'
-  const apiKey = process.env.ZENMUX_API_KEY
+  // 使用统一的配置模块
+  const { validateAIConfig, selectModel } = await import('@/lib/config/ai-config')
 
-  if (!apiKey) {
-    const error = new MerchantAnalysisPipelineStepError(
-      `未配置 ZENMUX_API_KEY 环境变量，请检查 .env.local 配置`,
+  let modelId: string
+  try {
+    validateAIConfig()
+    modelId = selectModel(fastMode)
+  } catch (error) {
+    const err = new MerchantAnalysisPipelineStepError(
+      error instanceof Error ? error.message : '配置错误',
       'load-video'
     )
     await emit({
       type: 'error',
-      message: error.message,
-      step: error.step
+      message: err.message,
+      step: err.step
     })
-    throw error
+    throw err
+  }
+
+  if (fastMode) {
+    console.info('[MERCHANT_COMMENTS] 启用快速模式，使用 Haiku 模型')
   }
 
   try {
@@ -434,7 +357,7 @@ export async function runMerchantCommentAnalysis(
       emit,
       'fetch-comments',
       'completed',
-      `已加载 ${commentSource.total} 条评论（数据库）`
+      `已加载 ${commentSource.total} 条评论（${commentSource.source === 'db' ? '数据库' : 'TikHub实时抓取'}）`
     )
 
     // 步骤3: 清理评论（已由 comments-source-manager 完成，这里只是标记进度）
@@ -456,7 +379,7 @@ export async function runMerchantCommentAnalysis(
 
     let analysisText: string
     try {
-      analysisText = await analyzeWithLLM(analysisData, apiKey, modelId, emit, signal)
+      analysisText = await analyzeWithLLM(analysisData, modelId, emit, signal)
     } catch (error) {
       throw new MerchantAnalysisPipelineStepError(
         error instanceof Error ? error.message : 'LLM 分析失败',

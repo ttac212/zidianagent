@@ -20,8 +20,14 @@ import { TranscriptionRequiredError } from '@/lib/errors/transcription-errors'
 
 // 使用Claude Opus 4.5模型(ZenMux API)
 const MODEL_ID = 'anthropic/claude-opus-4.5'
-const API_BASE = process.env.ZENMUX_API_BASE || 'https://zenmux.ai/api/v1'
-const API_KEY = process.env.ZENMUX_API_KEY || ''
+
+// 注意：不在模块顶层读取环境变量，避免在模块加载时环境变量尚未初始化的问题
+function getApiConfig() {
+  return {
+    apiBase: process.env.ZENMUX_API_BASE || 'https://zenmux.ai/api/v1',
+    apiKey: process.env.ZENMUX_API_KEY || ''
+  }
+}
 
 /**
  * 档案生成进度事件类型
@@ -453,17 +459,37 @@ function translateVariety(variety: string): string {
  * 调用LLM API (ZenMux) - 使用结构化输出
  */
 async function callLLMAPI(userPrompt: string, signal?: AbortSignal) {
-  if (!API_KEY) {
+  const { apiBase, apiKey } = getApiConfig()
+
+  if (!apiKey) {
     throw new Error('未配置ZENMUX_API_KEY')
   }
 
-  // 使用统一的请求构建函数，自动处理ZenMux参数规范
-  const requestBody = buildLLMRequestAuto({
-    model: MODEL_ID,
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: userPrompt }
-    ],
+  // 超时控制：180秒（生成档案内容较多，需要更长时间）
+  const TIMEOUT_MS = 180000
+  const timeoutController = new AbortController()
+  const timeoutId = setTimeout(() => {
+    console.warn('[ProfileGenerator] 请求超时，正在取消...')
+    timeoutController.abort()
+  }, TIMEOUT_MS)
+
+  // 合并外部 signal 和超时 signal
+  const abortHandler = () => {
+    clearTimeout(timeoutId)
+    timeoutController.abort()
+  }
+  if (signal) {
+    signal.addEventListener('abort', abortHandler)
+  }
+
+  try {
+    // 使用统一的请求构建函数，自动处理ZenMux参数规范
+    const requestBody = buildLLMRequestAuto({
+      model: MODEL_ID,
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt }
+      ],
     maxTokens: 30000,
     temperature: 0.7,
     // 使用结构化输出确保返回格式严格符合schema
@@ -517,30 +543,36 @@ async function callLLMAPI(userPrompt: string, signal?: AbortSignal) {
     }
   });
 
-  const response = await fetch(`${API_BASE}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(requestBody),
-    signal // 传递中断信号
-  })
+    const response = await fetch(`${apiBase}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody),
+      signal: timeoutController.signal // 使用超时控制的 signal
+    })
 
-  if (!response.ok) {
-    const errorText = await response.text()
-    console.error('[ProfileGenerator] API错误:', response.status, errorText)
-    throw new Error(`LLM API调用失败: ${response.status}`)
-  }
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('[ProfileGenerator] API错误:', response.status, errorText)
+      throw new Error(`LLM API调用失败: ${response.status}`)
+    }
 
-  const data = await response.json()
+    const data = await response.json()
 
-  if (!data.choices || data.choices.length === 0) {
-    throw new Error('LLM API返回格式错误')
-  }
+    if (!data.choices || data.choices.length === 0) {
+      throw new Error('LLM API返回格式错误')
+    }
 
-  return {
-    content: data.choices[0].message.content,
-    usage: data.usage || { total_tokens: 0, prompt_tokens: 0, completion_tokens: 0 }
+    return {
+      content: data.choices[0].message.content,
+      usage: data.usage || { total_tokens: 0, prompt_tokens: 0, completion_tokens: 0 }
+    }
+  } finally {
+    clearTimeout(timeoutId)
+    if (signal) {
+      signal.removeEventListener('abort', abortHandler)
+    }
   }
 }

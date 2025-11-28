@@ -41,7 +41,7 @@ export function useConversations(currentConversationId?: string | null) {
   } | null>(null)
 
   // 数据层 - 不要使用默认空数组！让React Query的错误状态正常传播
-  const { data, isLoading: isQueryLoading, error: queryError, refetch } = useConversationsSummary({ page, limit: 20 })
+  const { data, isLoading: isQueryLoading, error: queryError, refetch } = useConversationsSummary({ page, limit: 10 })
 
   // 更新合并的对话列表
   useEffect(() => {

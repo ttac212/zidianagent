@@ -71,8 +71,8 @@ export const PAGINATION_CONFIG = {
 
 // 对话历史加载配置
 export const CHAT_HISTORY_CONFIG = {
-  // 首次加载和分页请求的默认窗口大小
-  initialWindow: 100,
+  // 首次加载的消息窗口大小（优化首屏加载速度）
+  initialWindow: 20,
   // 单次请求允许的最大窗口，防止一次取太多消息
   maxWindow: 200,
 } as const;

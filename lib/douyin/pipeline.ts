@@ -17,15 +17,13 @@ import {
   type DouyinVideoInfo
 } from '@/lib/douyin/pipeline-steps'
 import { selectApiKey } from '@/lib/ai/key-manager'
-import { DOUYIN_DEFAULT_HEADERS, DOUYIN_PIPELINE_LIMITS, isVercelEnvironment } from '@/lib/douyin/constants'
+import { DOUYIN_DEFAULT_HEADERS, DOUYIN_PIPELINE_LIMITS } from '@/lib/douyin/constants'
 import { withAbortableTimeout, TimeoutError } from '@/lib/utils/abort-utils'
 
 // 导入步骤函数
 import {
   parseShareLink,
   fetchVideoDetail,
-  downloadVideo,
-  extractAudio,
   transcribeAudio,
   optimizeTranscriptStep,
   summarize
@@ -149,10 +147,8 @@ interface PipelineContext {
   shareLink: string
   videoId?: string
   videoInfo?: DouyinVideoInfo
-  playUrl?: string
-  audioUrl?: string | null  // 音频直链（可跳过FFmpeg）
+  audioUrl?: string | null  // 音频直链
   awemeDetail?: any
-  videoBuffer?: Buffer
   audioBuffer?: Buffer
   transcript?: string
   optimizedTranscript?: string
@@ -206,113 +202,61 @@ export async function runDouyinPipeline(
       signal
     )
     context.videoInfo = detailResult.videoInfo
-    context.playUrl = detailResult.playUrl
-    context.audioUrl = detailResult.audioUrl  // 音频直链（用于跳过FFmpeg）
+    context.audioUrl = detailResult.audioUrl  // 音频直链
     context.awemeDetail = detailResult.awemeDetail
 
     await emit({ type: 'info', videoInfo: context.videoInfo })
     await emitProgress(emit, 'fetch-detail', 'completed')
 
-    // ========== 步骤3&4: 获取音频 ==========
-    // 优先使用音频直链（跳过视频下载和FFmpeg提取，解决Vercel部署问题）
-    let audioDownloadSuccess = false
-
-    if (context.audioUrl) {
-      // 尝试直接下载音频（跳过视频下载和FFmpeg）
-      await emitProgress(emit, 'download-video', 'active', '发现音频直链，直接下载音频')
-
-      try {
-        // 使用超时控制和请求头下载音频
-        const audioBuffer = await withAbortableTimeout(
-          async (linkedSignal) => {
-            const audioResponse = await fetch(context.audioUrl!, {
-              headers: DOUYIN_DEFAULT_HEADERS,
-              signal: linkedSignal
-            })
-
-            if (!audioResponse.ok) {
-              throw new Error(`HTTP ${audioResponse.status}`)
-            }
-
-            return Buffer.from(await audioResponse.arrayBuffer())
-          },
-          {
-            timeoutMs: DOUYIN_PIPELINE_LIMITS.DOWNLOAD_TIMEOUT_MS,
-            timeoutMessage: '音频下载超时',
-            signal
-          }
-        )
-
-        context.audioBuffer = audioBuffer
-        audioDownloadSuccess = true
-        await emitProgress(emit, 'download-video', 'completed', '音频下载完成')
-
-        // 跳过FFmpeg提取步骤
-        await emitProgress(emit, 'extract-audio', 'active', '使用音频直链，无需提取')
-        await emitProgress(emit, 'extract-audio', 'completed', '已跳过（使用音频直链）')
-      } catch (error) {
-        // 音频直链下载失败，检查是否可以回退
-        const errorMessage = error instanceof Error ? error.message : String(error)
-        console.warn(`[Pipeline] 音频直链下载失败: ${errorMessage}`)
-
-        // 用户主动取消，直接抛出
-        if (signal && signal.aborted) {
-          throw new DouyinPipelineStepError(
-            '用户取消请求',
-            'download-video',
-            error
-          )
-        }
-
-        // Vercel 环境不支持 FFmpeg 回退，直接抛出
-        if (isVercelEnvironment()) {
-          const isTimeout = error instanceof TimeoutError
-          throw new DouyinPipelineStepError(
-            isTimeout
-              ? '音频下载超时且无法回退 (Vercel环境)'
-              : `音频直链下载失败且无法回退 (Vercel环境): ${errorMessage}`,
-            'download-video',
-            error
-          )
-        }
-
-        // 本地环境：无论超时还是其他错误都可以回退到 FFmpeg 流程
-        console.info('[Pipeline] 回退到传统FFmpeg流程')
-        await emitProgress(emit, 'download-video', 'active', '音频直链失败，回退到视频下载')
-      }
+    // ========== 步骤3: 下载音频 ==========
+    // 仅使用音频直链方案，不再支持FFmpeg回退
+    if (!context.audioUrl) {
+      throw new DouyinPipelineStepError(
+        '未找到音频直链，该视频可能不包含背景音乐或音频不可用',
+        'download-audio'
+      )
     }
 
-    // 如果音频直链下载失败或没有音频直链，使用传统流程
-    if (!audioDownloadSuccess) {
-      // Vercel 环境不支持 FFmpeg，应该早停并给出清晰提示
-      if (isVercelEnvironment()) {
-        throw new DouyinPipelineStepError(
-          '未找到音频直链，Vercel环境不支持FFmpeg提取音频',
-          'download-video'
-        )
+    await emitProgress(emit, 'download-audio', 'active', '下载音频文件')
+
+    try {
+      const audioBuffer = await withAbortableTimeout(
+        async (linkedSignal) => {
+          const audioResponse = await fetch(context.audioUrl!, {
+            headers: DOUYIN_DEFAULT_HEADERS,
+            signal: linkedSignal
+          })
+
+          if (!audioResponse.ok) {
+            throw new Error(`HTTP ${audioResponse.status}`)
+          }
+
+          return Buffer.from(await audioResponse.arrayBuffer())
+        },
+        {
+          timeoutMs: DOUYIN_PIPELINE_LIMITS.DOWNLOAD_TIMEOUT_MS,
+          timeoutMessage: '音频下载超时',
+          signal
+        }
+      )
+
+      context.audioBuffer = audioBuffer
+      await emitProgress(emit, 'download-audio', 'completed', `音频下载完成 (${(audioBuffer.length / 1024).toFixed(0)} KB)`)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+
+      // 用户主动取消
+      if (signal && signal.aborted) {
+        throw new DouyinPipelineStepError('用户取消请求', 'download-audio', error)
       }
 
-      // 本地环境：回退到传统流程：下载视频 → FFmpeg提取音频
-      if (!context.audioUrl) {
-        console.warn('[Pipeline] 未找到音频直链，使用传统FFmpeg流程')
-      }
-
-      await emitProgress(emit, 'download-video', 'active', '准备下载视频文件')
-      const downloadResult = await downloadVideo(
-        { playUrl: context.playUrl! },
-        emit,
-        signal
+      // 超时或其他错误
+      const isTimeout = error instanceof TimeoutError
+      throw new DouyinPipelineStepError(
+        isTimeout ? '音频下载超时，请稍后重试' : `音频下载失败: ${errorMessage}`,
+        'download-audio',
+        error
       )
-      context.videoBuffer = downloadResult.videoBuffer
-      await emitProgress(emit, 'download-video', 'completed', '下载完成')
-
-      await emitProgress(emit, 'extract-audio', 'active')
-      const audioResult = await extractAudio(
-        { videoBuffer: context.videoBuffer! },
-        signal
-      )
-      context.audioBuffer = audioResult.audioBuffer
-      await emitProgress(emit, 'extract-audio', 'completed')
     }
 
     // ========== 步骤5: 转录音频 ==========

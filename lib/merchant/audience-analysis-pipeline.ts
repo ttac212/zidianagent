@@ -118,6 +118,7 @@ export interface AudienceAnalysisPipelineOptions {
   signal?: AbortSignal
   topN?: number               // 分析TOP N个视频，默认5
   maxCommentsPerVideo?: number // 每个视频最多采集评论数，默认100
+  fastMode?: boolean          // 快速模式：使用更快的Haiku模型
 }
 
 export interface AudienceAnalysisPipelineResult {
@@ -195,18 +196,18 @@ function cleanCommentText(text: string): string {
 
 /**
  * 调用 LLM 分析客群画像
+ * 使用统一的 LLM 客户端
  */
 async function analyzeAudienceWithLLM(
   merchantName: string,
   videoStats: VideoCommentStats[],
   locationStats: LocationStat[],
   allComments: CleanedComment[],
-  apiKey: string,
   modelId: string,
   emit: AudienceAnalysisPipelineEmitter,
   signal?: AbortSignal
 ): Promise<string> {
-  const apiBase = process.env.ZENMUX_API_BASE || 'https://zenmux.ai/api/v1'
+  const { callLLMStreamWithTimeout } = await import('@/lib/ai/llm-client')
 
   // 构建分析提示词
   const prompt = `请分析以下抖音商家的客群画像，基于多个热门视频的评论数据：
@@ -272,130 +273,20 @@ ${allComments.slice(0, 50).map((c, i) => {
 - 不要输出具体的产品定价、转化话术、渠道运营细节、KPI指标监控等执行层面内容
 - 保持分析的深度和专业性，数据和结论要有理有据`
 
-  // 创建带超时的AbortController（180秒）
-  const fetchController = new AbortController()
-  const timeoutId = setTimeout(() => {
-    console.warn('[Audience Analysis] LLM fetch timeout (180s), aborting...')
-    fetchController.abort()
+  return callLLMStreamWithTimeout({
+    prompt,
+    modelId,
+    maxTokens: 6000,
+    signal,
+    onChunk: async (delta) => {
+      await emit({
+        type: 'partial',
+        key: 'analysis',
+        data: delta,
+        append: true
+      })
+    }
   }, 180000) // 180秒超时
-
-  // 如果传入了外部signal，也监听它
-  const abortHandler = () => {
-    clearTimeout(timeoutId)
-    fetchController.abort()
-  }
-  if (signal) {
-    signal.addEventListener('abort', abortHandler)
-  }
-
-  try {
-    const response = await fetch(`${apiBase}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: modelId,
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-        max_tokens: 6000,
-        temperature: 0.7,
-        stream: true
-      }),
-      signal: fetchController.signal
-    })
-
-    if (!response.ok) {
-      let errorDetail = ''
-
-      try {
-        const errorText = await response.text()
-        try {
-          const errorJson = JSON.parse(errorText)
-          errorDetail = errorJson.error?.message || errorJson.message || errorText
-        } catch {
-          errorDetail = errorText
-        }
-      } catch {
-        errorDetail = '无法读取错误详情'
-      }
-
-      const errorMessage = errorDetail
-        ? `LLM API错误: ${response.status} - ${errorDetail}`
-        : `LLM API错误: HTTP ${response.status} ${response.statusText}`
-
-      throw new Error(errorMessage)
-    }
-
-  // 处理流式响应
-  const reader = response.body?.getReader()
-  if (!reader) {
-    throw new Error('无法读取响应流')
-  }
-
-  const decoder = new TextDecoder()
-  let fullText = ''
-  let buffer = ''
-
-  try {
-    while (true) {
-      ensureActive(signal)
-      const { done, value } = await reader.read()
-
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        if (!line.trim()) continue
-
-        if (line.trim() === 'data:[DONE]' || line.trim() === 'data: [DONE]') continue
-
-        if (line.startsWith('data:')) {
-          try {
-            const jsonStr = line.startsWith('data: ') ? line.slice(6) : line.slice(5)
-            const data = JSON.parse(jsonStr)
-            const delta = data.choices?.[0]?.delta?.content
-
-            if (delta) {
-              fullText += delta
-              // 实时发送分析片段
-              await emit({
-                type: 'partial',
-                key: 'analysis',
-                data: delta,
-                append: true
-              })
-            }
-          } catch {
-            // 忽略解析错误
-          }
-        }
-      }
-    }
-  } finally {
-    reader.releaseLock()
-  }
-
-  if (!fullText) {
-    throw new Error('LLM 分析失败，未返回文本')
-  }
-
-  return fullText
-  } finally {
-    // 清理timeout和signal监听器
-    clearTimeout(timeoutId)
-    if (signal) {
-      signal.removeEventListener('abort', abortHandler)
-    }
-  }
 }
 
 /**
@@ -409,7 +300,7 @@ function buildMarkdown(
   totalComments: number
 ): string {
   return [
-    '📊 **商家客群分析报告**',
+    '## 商家客群分析报告',
     '',
     '## 基本信息',
     `- **商家**: ${merchantName}`,
@@ -452,22 +343,30 @@ export async function runAudienceAnalysisPipeline(
   const signal = options.signal
   const topN = options.topN || 5
   const maxCommentsPerVideo = options.maxCommentsPerVideo || 100
+  const fastMode = options.fastMode || false
 
-  // 使用 ZenMux API
-  const modelId = process.env.ZENMUX_DEFAULT_MODEL || 'anthropic/claude-sonnet-4.5'
-  const apiKey = process.env.ZENMUX_API_KEY
+  // 使用统一的配置模块
+  const { validateAIConfig, selectModel } = await import('@/lib/config/ai-config')
 
-  if (!apiKey) {
-    const error = new AudienceAnalysisPipelineStepError(
-      `未配置 ZENMUX_API_KEY 环境变量，请检查 .env.local 配置`,
+  let modelId: string
+  try {
+    validateAIConfig()
+    modelId = selectModel(fastMode)
+  } catch (error) {
+    const err = new AudienceAnalysisPipelineStepError(
+      error instanceof Error ? error.message : '配置错误',
       'select-videos'
     )
     await emit({
       type: 'error',
-      message: error.message,
-      step: error.step
+      message: err.message,
+      step: err.step
     })
-    throw error
+    throw err
+  }
+
+  if (fastMode) {
+    console.info('[AUDIENCE] 启用快速模式，使用 Haiku 模型')
   }
 
   try {
@@ -535,20 +434,9 @@ export async function runAudienceAnalysisPipeline(
       apiKey: process.env.TIKHUB_API_KEY,
       baseURL: process.env.TIKHUB_API_BASE_URL
     })
-    const videoStatsArray: VideoCommentStats[] = []
-    let totalCommentsFetched = 0
 
-    for (let i = 0; i < topVideos.length; i++) {
-      ensureActive(signal)
-      const video = topVideos[i]
-
-      await emitProgress(
-        emit,
-        'fetch-comments',
-        'active',
-        `正在采集第${i + 1}/${topVideos.length}个视频的评论...`
-      )
-
+    // 性能优化：并发采集所有视频的评论
+    const fetchVideoComments = async (video: typeof topVideos[0], index: number): Promise<VideoCommentStats | null> => {
       try {
         // 调用 TikHub API 获取评论（包含 ip_label）
         const commentsResponse = await tikhubClient.getVideoComments({
@@ -560,12 +448,14 @@ export async function runAudienceAnalysisPipeline(
         let allComments: DouyinComment[] = commentsResponse.comments || []
 
         // 分页获取更多评论
-        if (commentsResponse.has_more && allComments.length < maxCommentsPerVideo) {
-          let cursor = commentsResponse.cursor
-          let pageCount = 1
-          const maxPages = Math.ceil(maxCommentsPerVideo / 20)
+        // 注意：只看 has_more 和上限条件，不对 cursor 做布尔判断
+        // 因为 cursor=0 是合法值，代表第一页后的游标
+        let hasMore = commentsResponse.has_more
+        let cursor = commentsResponse.cursor
+        let pageCount = 1
+        const maxPages = Math.ceil(maxCommentsPerVideo / 20)
 
-          while (pageCount < maxPages && cursor && allComments.length < maxCommentsPerVideo) {
+        while (hasMore && pageCount < maxPages && allComments.length < maxCommentsPerVideo) {
             ensureActive(signal)
 
             try {
@@ -580,17 +470,19 @@ export async function runAudienceAnalysisPipeline(
                 pageCount++
               }
 
-              if (!nextPage.has_more) break
-              cursor = nextPage.cursor
+              if (!nextPage.has_more) {
+                hasMore = false
+              } else {
+                cursor = nextPage.cursor
+              }
 
-              // 避免请求过快
-              await new Promise(resolve => setTimeout(resolve, 500))
+              // 减少请求间隔（从500ms降到200ms）
+              await new Promise(resolve => setTimeout(resolve, 200))
             } catch (error) {
               console.warn(`采集视频 ${video.title} 的第${pageCount}页评论失败:`, error)
               break
             }
           }
-        }
 
         // 清理评论
         const cleanedComments: CleanedComment[] = allComments
@@ -608,21 +500,35 @@ export async function runAudienceAnalysisPipeline(
           })
           .filter((c): c is CleanedComment => c !== null)
 
-        videoStatsArray.push({
+        // 发送单个视频的进度
+        await emitProgress(
+          emit,
+          'fetch-comments',
+          'active',
+          `正在采集第${index + 1}/${topVideos.length}个视频的评论...`
+        )
+
+        return {
           videoId: video.externalId,
           title: video.title,
           commentCount: cleanedComments.length,
           comments: cleanedComments
-        })
-
-        totalCommentsFetched += cleanedComments.length
+        }
 
       } catch (error) {
         console.warn(`采集视频 ${video.title} 的评论失败:`, error)
-        // 单个视频失败不中断整个流程
-        continue
+        return null
       }
     }
+
+    // 并发执行所有视频的评论采集
+    const results = await Promise.all(
+      topVideos.map((video, index) => fetchVideoComments(video, index))
+    )
+
+    // 过滤失败的结果
+    const videoStatsArray: VideoCommentStats[] = results.filter((r): r is VideoCommentStats => r !== null)
+    const totalCommentsFetched = videoStatsArray.reduce((sum, v) => sum + v.commentCount, 0)
 
     if (totalCommentsFetched === 0) {
       throw new AudienceAnalysisPipelineStepError(
@@ -682,7 +588,6 @@ export async function runAudienceAnalysisPipeline(
         videoStatsArray,
         locationStats,
         allComments,
-        apiKey,
         modelId,
         emit,
         signal
