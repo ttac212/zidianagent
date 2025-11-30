@@ -9,7 +9,12 @@
  * 2. 使用默认测试（需要你手动提供一个有效的sec_uid）
  */
 
-const TIKHUB_API_KEY = process.env.TIKHUB_API_KEY || 'nasQXM88xWilwWy0O6/F5DftDxaSfaA9vSPz62eARtiKgAucPXmRZzaxaA=='
+const TIKHUB_API_KEY = process.env.TIKHUB_API_KEY
+if (!TIKHUB_API_KEY) {
+  console.error('❌ TIKHUB_API_KEY 环境变量未配置')
+  console.error('   请运行: TIKHUB_API_KEY="your_key" npx tsx scripts/view-tikhub-data-format.ts')
+  process.exit(1)
+}
 const TIKHUB_API_BASE = 'https://api.tikhub.io'
 const TEST_SEC_UID = process.env.SEC_UID
 

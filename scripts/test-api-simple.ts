@@ -2,7 +2,12 @@
  * 简化的API测试 - 直接使用已知用户UID
  */
 
-const TIKHUB_API_KEY = process.env.TIKHUB_API_KEY || 'nasQXM88xWilwWy0O6/F5DftDxaSfaA9vSPz62eARtiKgAucPXmRZzaxaA=='
+const TIKHUB_API_KEY = process.env.TIKHUB_API_KEY
+if (!TIKHUB_API_KEY) {
+  console.error('❌ TIKHUB_API_KEY 环境变量未配置')
+  console.error('   请运行: TIKHUB_API_KEY="your_key" npx tsx scripts/test-api-simple.ts')
+  process.exit(1)
+}
 const TIKHUB_API_BASE = 'https://api.tikhub.io'
 
 // 示例：使用一个公开的知名抖音账号进行测试
