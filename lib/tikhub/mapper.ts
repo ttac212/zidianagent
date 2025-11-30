@@ -126,6 +126,9 @@ export function mapVideoToMerchantContent(
     avgWatchDuration: null, // 需要单独获取
     isSuspicious: false,
     suspiciousReason: null,
+    // AI分析缓存（初始为空）
+    cachedAIAnalysis: null,
+    cachedAnalysisAt: null,
     tags: JSON.stringify(tags),
     textExtra: JSON.stringify(textExtra),
     publishedAt: resolvedCreatedAt,

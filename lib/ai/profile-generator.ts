@@ -21,6 +21,22 @@ import { TranscriptionRequiredError } from '@/lib/errors/transcription-errors'
 // 使用Claude Opus 4.5模型(ZenMux API)
 const MODEL_ID = 'anthropic/claude-opus-4.5'
 
+// AI分析缓存有效期（天）
+const CACHE_VALID_DAYS = 7
+
+/**
+ * 检查AI分析缓存是否有效
+ */
+function isCacheValid(
+  cachedAnalysis: string | null | undefined,
+  cachedAt: Date | string | null | undefined,
+  validDays = CACHE_VALID_DAYS
+): boolean {
+  if (!cachedAnalysis || !cachedAt) return false
+  const threshold = new Date(Date.now() - validDays * 24 * 60 * 60 * 1000)
+  return new Date(cachedAt) > threshold
+}
+
 // 注意：不在模块顶层读取环境变量，避免在模块加载时环境变量尚未初始化的问题
 function getApiConfig() {
   return {
@@ -156,8 +172,18 @@ export async function generateMerchantProfile(
       throw new Error('生成被取消')
     }
 
-    // 2. AI分析TOP10内容质量（批量并发）
-    onProgress?.({ type: 'step', data: { step: 'content_analysis', status: 'started', message: '正在进行AI内容质量分析...' } })
+    // 2. AI分析TOP10内容质量（批量并发，带缓存优化）
+    const cachedCount = (merchant.contents || []).filter((c: any) =>
+      isCacheValid(c.cachedAIAnalysis, c.cachedAnalysisAt)
+    ).length
+    const totalCount = merchant.contents?.length || 0
+    const needAnalysisCount = totalCount - cachedCount
+
+    // 根据缓存情况调整提示消息
+    const analysisMessage = cachedCount > 0
+      ? `正在进行AI内容质量分析...（${cachedCount}条使用缓存，${needAnalysisCount}条需要分析）`
+      : '正在进行AI内容质量分析...'
+    onProgress?.({ type: 'step', data: { step: 'content_analysis', status: 'started', message: analysisMessage } })
     console.info('[ProfileGenerator] 开始AI内容质量分析...')
 
     // 创建内容分析进度回调
@@ -175,8 +201,12 @@ export async function generateMerchantProfile(
     }
 
     const contentsWithAnalysis = await analyzeContentsQualityWithProgress(merchant.contents || [], analysisProgressCallback, signal)
-    console.info('[ProfileGenerator] AI分析完成，成功分析:', contentsWithAnalysis.filter(c => c.aiAnalysis).length, '条')
-    onProgress?.({ type: 'step', data: { step: 'content_analysis', status: 'completed', message: `AI分析完成，成功分析 ${contentsWithAnalysis.filter(c => c.aiAnalysis).length} 条内容` } })
+    const successCount = contentsWithAnalysis.filter(c => c.aiAnalysis).length
+    const completionMessage = cachedCount > 0
+      ? `AI分析完成，${successCount}条内容（${cachedCount}条来自缓存）`
+      : `AI分析完成，成功分析 ${successCount} 条内容`
+    console.info('[ProfileGenerator] AI分析完成，成功分析:', successCount, '条')
+    onProgress?.({ type: 'step', data: { step: 'content_analysis', status: 'completed', message: completionMessage } })
 
     // 检查是否已中断
     if (signal?.aborted) {
@@ -242,7 +272,12 @@ export async function generateMerchantProfile(
 }
 
 /**
- * AI分析内容质量（带进度回调和中断支持）
+ * AI分析内容质量（带进度回调、中断支持和缓存优化）
+ *
+ * 优化策略：
+ * 1. 优先使用数据库缓存的分析结果（7天内有效）
+ * 2. 只对缺失缓存或缓存过期的内容调用AI分析
+ * 3. 分析完成后将结果写入缓存
  */
 async function analyzeContentsQualityWithProgress(
   contents: any[],
@@ -251,8 +286,44 @@ async function analyzeContentsQualityWithProgress(
 ) {
   if (contents.length === 0) return []
 
-  // 准备分析数据
-  const analysisInput = contents.map(c => ({
+  const now = new Date()
+
+  // 分离有缓存和需要分析的内容
+  const cachedContents: any[] = []
+  const needsAnalysis: any[] = []
+
+  for (const c of contents) {
+    if (isCacheValid(c.cachedAIAnalysis, c.cachedAnalysisAt)) {
+      try {
+        const cached = JSON.parse(c.cachedAIAnalysis)
+        cachedContents.push({ ...c, aiAnalysis: cached })
+        console.info(`[ProfileGenerator] 使用缓存分析: ${c.title.substring(0, 20)}...`)
+      } catch {
+        needsAnalysis.push(c)
+      }
+    } else {
+      needsAnalysis.push(c)
+    }
+  }
+
+  console.info(`[ProfileGenerator] 分析缓存命中: ${cachedContents.length}/${contents.length}，需分析: ${needsAnalysis.length}`)
+
+  // 如果所有内容都有缓存，直接返回
+  if (needsAnalysis.length === 0) {
+    for (let i = 0; i < cachedContents.length; i++) {
+      onProgress?.({
+        current: i + 1,
+        total: cachedContents.length,
+        contentId: cachedContents[i].id,
+        contentTitle: cachedContents[i].title,
+        status: 'completed'
+      })
+    }
+    return cachedContents
+  }
+
+  // 准备需要分析的数据
+  const analysisInput = needsAnalysis.map(c => ({
     id: c.id,
     title: c.title,
     transcript: c.transcript
@@ -261,11 +332,45 @@ async function analyzeContentsQualityWithProgress(
   // 批量调用AI分析（并发控制=10，带进度回调和中断支持）
   const analysisResults = await analyzeContentQualityBatch(analysisInput, 10, onProgress, signal)
 
-  // 合并分析结果
-  return contents.map(c => ({
+  // 将分析结果写入数据库缓存（并发控制，最多3个同时写入）
+  const writeCache = async (contentId: string, analysis: any) => {
+    try {
+      await prisma.merchantContent.update({
+        where: { id: contentId },
+        data: {
+          cachedAIAnalysis: JSON.stringify(analysis),
+          cachedAnalysisAt: now
+        }
+      })
+      return { id: contentId, success: true }
+    } catch (err) {
+      console.warn(`[ProfileGenerator] 缓存写入失败: ${contentId}`, err)
+      return { id: contentId, success: false, error: err }
+    }
+  }
+
+  // 使用 Promise.allSettled 并发写入，收集失败结果
+  const cacheWritePromises = needsAnalysis
+    .filter(c => analysisResults.has(c.id))
+    .map(c => writeCache(c.id, analysisResults.get(c.id)))
+
+  // 异步执行缓存写入，但跟踪失败数量
+  Promise.allSettled(cacheWritePromises).then(results => {
+    const failed = results.filter(r =>
+      r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success)
+    )
+    if (failed.length > 0) {
+      console.warn(`[ProfileGenerator] ${failed.length}/${results.length} 条分析结果缓存写入失败`)
+    }
+  })
+
+  // 合并分析结果（已缓存 + 新分析）
+  const analyzedContents = needsAnalysis.map(c => ({
     ...c,
     aiAnalysis: analysisResults.get(c.id) || null
   }))
+
+  return [...cachedContents, ...analyzedContents]
 }
 
 /**

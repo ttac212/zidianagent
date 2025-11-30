@@ -241,6 +241,9 @@ model MerchantContent {
   // 刷量检测
   isSuspicious      Boolean                  @default(false)   // 疑似刷量
   suspiciousReason  String?                                    // 标记原因
+  // AI质量分析缓存（用于档案生成优化）
+  cachedAIAnalysis  String?                                    // 缓存的AI质量分析结果(JSON)
+  cachedAnalysisAt  DateTime?                                  // 分析缓存时间
   tags              String                   @default("[]")
   textExtra         String                   @default("[]")
   publishedAt       DateTime?

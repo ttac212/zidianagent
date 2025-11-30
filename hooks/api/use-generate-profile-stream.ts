@@ -127,8 +127,25 @@ export function useGenerateProfileStream(merchantId: string): UseGenerateProfile
           isGenerating: false,
           steps: prev.steps.map(step => ({ ...step, status: 'completed' as const }))
         }))
-        // 更新React Query缓存
-        queryClient.invalidateQueries({ queryKey: profileKeys.detail(merchantId) })
+        // 直接更新 React Query 缓存，使用 setQueryData 立即显示结果
+        // 注意：不再调用 invalidateQueries，避免竞态条件
+        if (event.data?.profile) {
+          queryClient.setQueryData(
+            profileKeys.detail(merchantId),
+            (old: any) => {
+              if (!old) {
+                return {
+                  profile: event.data.profile,
+                  merchant: null
+                }
+              }
+              return {
+                ...old,
+                profile: event.data.profile
+              }
+            }
+          )
+        }
         break
 
       case 'error':
