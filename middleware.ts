@@ -2,6 +2,116 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 
+// ============================================
+// 安全防护：阻止敏感路径和恶意扫描
+// ============================================
+
+// 敏感文件和路径 - 直接返回404
+const BLOCKED_PATHS = [
+  // 环境和配置文件
+  '/.env',
+  '/.env.local',
+  '/.env.production',
+  '/config.json',
+  '/config.yaml',
+  '/config.yml',
+
+  // 版本控制
+  '/.git',
+  '/.svn',
+  '/.hg',
+
+  // IDE和编辑器配置
+  '/.vscode',
+  '/.idea',
+  '/.DS_Store',
+
+  // 服务器状态和调试
+  '/server-status',
+  '/server-info',
+  '/telescope',
+  '/actuator',
+  '/debug',
+  '/_profiler',
+
+  // API文档（防止泄露）
+  '/swagger',
+  '/swagger-ui',
+  '/swagger.json',
+  '/swagger.yaml',
+  '/api-docs',
+  '/v2/api-docs',
+  '/v3/api-docs',
+  '/webjars/swagger-ui',
+
+  // WordPress探测
+  '/wp-admin',
+  '/wp-content',
+  '/wp-includes',
+  '/wordpress',
+  '/wp-login.php',
+  '/xmlrpc.php',
+
+  // PHP文件探测
+  '/info.php',
+  '/phpinfo.php',
+  '/php.ini',
+
+  // 数据库和后端
+  '/_all_dbs',
+  '/phpmyadmin',
+  '/adminer',
+
+  // 其他常见攻击目标
+  '/login.action',      // Confluence/JIRA
+  '/ecp/',              // Exchange
+  '/owa/',              // Outlook Web Access
+  '/autodiscover',
+  '/v2/_catalog',       // Docker Registry
+  '/@vite/env',         // Vite开发服务器
+  '/graphql',           // GraphQL探测（如果不使用）
+  '/api/graphql',
+  '/graphql/api',
+  '/api/gql',
+  '/s/',                // Atlassian CVE路径
+  '/META-INF',
+]
+
+// 恶意扫描器 User-Agent 关键词
+const BLOCKED_USER_AGENTS = [
+  'l9scan',             // LeakIX扫描器
+  'masscan',
+  'nmap',
+  'nikto',
+  'sqlmap',
+  'dirbuster',
+  'gobuster',
+  'wpscan',
+  'nuclei',
+  'zgrab',
+  'censys',
+  'shodan',
+]
+
+// 检查是否为被阻止的路径
+function isBlockedPath(pathname: string): boolean {
+  const lowerPath = pathname.toLowerCase()
+  return BLOCKED_PATHS.some(blocked =>
+    lowerPath === blocked || lowerPath.startsWith(blocked + '/')
+  )
+}
+
+// 检查是否为恶意扫描器
+function isMaliciousScanner(userAgent: string | null): boolean {
+  if (!userAgent) return false
+  const lowerUA = userAgent.toLowerCase()
+  return BLOCKED_USER_AGENTS.some(scanner => lowerUA.includes(scanner))
+}
+
+// ============================================
+// 公开路径配置
+// ============================================
+
 // 公开路径 - 无需认证
 const PUBLIC_PATHS = new Set([
   '/', '/login', '/api/auth'
@@ -42,6 +152,26 @@ function needsAuth(pathname: string): boolean {
 
 export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
+  const userAgent = req.headers.get('user-agent')
+
+  // ============================================
+  // 安全检查（最高优先级）
+  // ============================================
+
+  // 1. 阻止恶意扫描器
+  if (isMaliciousScanner(userAgent)) {
+    // 返回404，不给攻击者任何有用信息
+    return new NextResponse(null, { status: 404 })
+  }
+
+  // 2. 阻止敏感路径访问
+  if (isBlockedPath(pathname)) {
+    return new NextResponse(null, { status: 404 })
+  }
+
+  // ============================================
+  // 正常请求处理
+  // ============================================
 
   // E2E测试模式 - 仅在测试环境启用，需要secret
   const isE2ETest = process.env.NODE_ENV === 'test' &&

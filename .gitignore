@@ -19,6 +19,13 @@ yarn-error.log*
 # env files
 .env*
 
+# IDE and editor settings (may contain API keys)
+.vscode/settings.json
+.idea/
+
+# Claude Code local settings (may contain sensitive data)
+.claude/settings.local.json
+
 # vercel
 .vercel
 
